@@ -1,0 +1,37 @@
+name: Mira
+options:
+  bundleIdPrefix: com.trevonbarbour
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+
+targets:
+  Mira:
+    type: application
+    platform: macOS
+    sources:
+      - path: Mira
+    entitlements:
+      path: Mira/Mira.entitlements
+    info:
+      path: Mira/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: Mira
+        CFBundleName: Mira
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0.0"
+        NSMicrophoneUsageDescription: "Mira listens for voice commands."
+        NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."
+        NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.trevonbarbour.mira
+        PRODUCT_NAME: Mira
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: YES
