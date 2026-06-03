@@ -1,6 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { generateText, stepCountIs } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { Composio } from "@composio/core";
-import { AnthropicProvider } from "@composio/anthropic";
+import { VercelProvider } from "@composio/vercel";
 
 export interface AgentRequest {
   prompt: string;
@@ -11,16 +12,16 @@ export interface AgentRequest {
 export interface AgentResponse {
   reply: string;
   toolsUsed: string[];
-  requiresConfirmation?: ConfirmationRequest;
+  requiresConfirmation?: PendingAction;
 }
 
-export interface ConfirmationRequest {
+export interface PendingAction {
   toolName: string;
   description: string;
-  toolCall: Anthropic.ToolUseBlock;
+  params: Record<string, unknown>;
 }
 
-// Write/external actions always need user confirmation
+// Write/external actions that always need user confirmation first
 const CONFIRM_BEFORE_RUN = new Set([
   "GMAIL_SEND_EMAIL",
   "GMAIL_REPLY_TO_THREAD",
@@ -31,107 +32,95 @@ const CONFIRM_BEFORE_RUN = new Set([
   "SLACK_SENDS_A_MESSAGE_AS_THE_APP",
 ]);
 
+const SYSTEM_PROMPT = `You are Mira, a screen-aware Mac assistant. Be concise and direct.
+Lead with the answer. No preamble.
+Use tools only when the user explicitly requests an action.
+For write actions the system will confirm with the user before anything is sent or changed.`;
+
 function makeComposio() {
   return new Composio({
     apiKey: process.env.COMPOSIO_API_KEY!,
-    provider: new AnthropicProvider(),
+    provider: new VercelProvider(),
   });
+}
+
+// Wrap confirmation-gated tools so they signal "needs confirmation" instead of executing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function wrapTools(rawTools: Record<string, any>): Record<string, any> {
+  return Object.fromEntries(
+    Object.entries(rawTools).map(([name, tool]) => {
+      if (!CONFIRM_BEFORE_RUN.has(name)) return [name, tool];
+      return [name, {
+        ...tool,
+        execute: async (params: Record<string, unknown>) => ({
+          __pending_confirmation: true,
+          toolName: name,
+          description: describe(name, params),
+          params,
+        }),
+      }];
+    })
+  );
 }
 
 export async function runAgent(req: AgentRequest): Promise<AgentResponse> {
   const composio = makeComposio();
-  const anthropic = new Anthropic({ apiKey: req.claudeApiKey });
+  const anthropic = createAnthropic({ apiKey: req.claudeApiKey });
 
-  // Get Anthropic-format tools for this user's connected apps
-  const tools = await composio.tools.get(req.userId, {
-    toolkits: ["gmail", "googlecalendar", "notion"],
-  }) as Anthropic.Tool[];
+  // Tool router session — Composio manages execution + routing
+  const session = await composio.create(req.userId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawTools = await session.tools() as Record<string, any>;
+  const tools = wrapTools(rawTools);
 
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: req.prompt },
-  ];
+  const result = await generateText({
+    model: anthropic("claude-haiku-4-5-20251001"),
+    system: SYSTEM_PROMPT,
+    prompt: req.prompt,
+    tools,
+    stopWhen: stepCountIs(5),
+  });
 
-  const toolsUsed: string[] = [];
-
-  for (let i = 0; i < 5; i++) {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: `You are Mira, a screen-aware Mac assistant. Be concise and direct.
-Lead with the answer. No preamble.
-Use tools only when the user explicitly requests an action.
-Always confirm before sending emails, creating events, or anything externally visible.`,
-      tools,
-      messages,
-    });
-
-    const replyText = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-
-    if (response.stop_reason === "end_turn") {
-      return { reply: replyText, toolsUsed };
-    }
-
-    const toolCalls = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
-    );
-
-    if (toolCalls.length === 0) {
-      return { reply: replyText, toolsUsed };
-    }
-
-    messages.push({ role: "assistant", content: response.content });
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-    for (const call of toolCalls) {
-      toolsUsed.push(call.name);
-
-      // Gate write actions — return to Swift for confirmation
-      if (CONFIRM_BEFORE_RUN.has(call.name)) {
+  // Scan all steps for a pending confirmation signal
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const output = (toolResult as any).output ?? (toolResult as any).result;
+      if (output?.__pending_confirmation) {
         return {
-          reply: replyText || `Ready to ${describe(call.name, call.input as Record<string, unknown>)}. Confirm?`,
-          toolsUsed,
+          reply: `Ready to ${output.description as string}. Confirm?`,
+          toolsUsed: [],
           requiresConfirmation: {
-            toolName: call.name,
-            description: describe(call.name, call.input as Record<string, unknown>),
-            toolCall: call,
+            toolName: output.toolName as string,
+            description: output.description as string,
+            params: output.params as Record<string, unknown>,
           },
         };
       }
-
-      // Safe read-only tools execute immediately via Composio
-      const composioCall = { type: "tool_use" as const, id: call.id, name: call.name, input: call.input as Record<string, unknown> };
-      const result = await composio.provider.executeToolCall(req.userId, composioCall);
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: call.id,
-        content: typeof result === "string" ? result : JSON.stringify(result),
-      });
     }
-
-    messages.push({ role: "user", content: toolResults });
   }
 
-  return { reply: "Done.", toolsUsed };
+  const toolsUsed = result.steps.flatMap(s =>
+    s.toolCalls.map(c => c.toolName)
+  );
+
+  return { reply: result.text, toolsUsed };
 }
 
-export async function executeConfirmedCall(
-  toolCall: Anthropic.ToolUseBlock,
+export async function executeConfirmed(
+  toolName: string,
+  params: Record<string, unknown>,
   userId: string
 ): Promise<unknown> {
   const composio = makeComposio();
-  const composioCall = { type: "tool_use" as const, id: toolCall.id, name: toolCall.name, input: toolCall.input as Record<string, unknown> };
-  return composio.provider.executeToolCall(userId, composioCall);
+  const session = await composio.create(userId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (session as any).executeAction(toolName, params);
 }
 
-// authConfigId = the Composio integration ID for the app (e.g. "gmail_default")
-// Users look this up once from the Composio dashboard
-export async function getConnectUrl(authConfigId: string, userId: string): Promise<string> {
+export async function getConnectUrl(app: string, userId: string): Promise<string> {
   const composio = makeComposio();
-  const conn = await composio.connectedAccounts.initiate(userId, authConfigId);
+  const conn = await composio.connectedAccounts.initiate(userId, app.toUpperCase());
   return (conn as { redirectUrl?: string }).redirectUrl ?? "";
 }
 

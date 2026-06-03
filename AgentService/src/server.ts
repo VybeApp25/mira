@@ -1,7 +1,5 @@
 import express from "express";
-import { runAgent, executeConfirmedCall, getConnectUrl } from "./agent";
-import type { ConfirmationRequest } from "./agent";
-import type Anthropic from "@anthropic-ai/sdk";
+import { runAgent, executeConfirmed, getConnectUrl } from "./agent";
 
 const app = express();
 app.use(express.json());
@@ -12,21 +10,19 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "mira-agent" });
 });
 
-// Swift → run agent with prompt
 app.post("/agent/run", async (req, res) => {
   const { prompt, userId, claudeApiKey } = req.body as {
-    prompt: string;
-    userId: string;
-    claudeApiKey: string;
+    prompt?: string;
+    userId?: string;
+    claudeApiKey?: string;
   };
 
   if (!prompt || !userId || !claudeApiKey) {
     res.status(400).json({ error: "Missing prompt, userId, or claudeApiKey" });
     return;
   }
-
   if (!process.env.COMPOSIO_API_KEY) {
-    res.status(500).json({ error: "COMPOSIO_API_KEY not set" });
+    res.status(500).json({ error: "COMPOSIO_API_KEY not set in .env" });
     return;
   }
 
@@ -35,25 +31,25 @@ app.post("/agent/run", async (req, res) => {
     res.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[agent/run]", msg);
+    console.error("[/agent/run]", msg);
     res.status(500).json({ error: msg });
   }
 });
 
-// Swift → user confirmed an action — execute it
 app.post("/agent/confirm", async (req, res) => {
-  const { toolCall, userId } = req.body as {
-    toolCall: Anthropic.ToolUseBlock;
-    userId: string;
+  const { toolName, params, userId } = req.body as {
+    toolName?: string;
+    params?: Record<string, unknown>;
+    userId?: string;
   };
 
-  if (!toolCall || !userId) {
-    res.status(400).json({ error: "Missing toolCall or userId" });
+  if (!toolName || !userId) {
+    res.status(400).json({ error: "Missing toolName or userId" });
     return;
   }
 
   try {
-    const result = await executeConfirmedCall(toolCall, userId);
+    const result = await executeConfirmed(toolName, params ?? {}, userId);
     res.json({ success: true, result });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -61,7 +57,6 @@ app.post("/agent/confirm", async (req, res) => {
   }
 });
 
-// Swift → open browser to connect an app (Gmail, Notion, etc.)
 app.get("/connect/:app", async (req, res) => {
   const { userId } = req.query as { userId?: string };
   if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }

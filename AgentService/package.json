@@ -13,9 +13,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
     "@anthropic-ai/sdk": "^0.100.1",
     "@composio/anthropic": "^0.9.2",
     "@composio/core": "^0.10.0",
+    "@composio/vercel": "^0.9.2",
+    "ai": "^6.0.195",
     "express": "^5.2.1"
   },
   "devDependencies": {

@@ -14,8 +14,11 @@ struct MiraPanel: View {
     @State private var response = ""
     @State private var showSettings = false
     @State private var showPointerFeedback = false
+    @State private var pendingAction: PendingAction? = nil
+    @State private var agentServiceOnline = false
 
     private var claude: ClaudeService { ClaudeService(apiKey: state.apiKey) }
+    private let agent = AgentService.shared
 
     var body: some View {
         ZStack {
@@ -27,7 +30,9 @@ struct MiraPanel: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        if !response.isEmpty {
+                        if let action = pendingAction {
+                            confirmationCard(action)
+                        } else if !response.isEmpty {
                             responseCard
                         } else if state.isLoading {
                             loadingCard
@@ -37,10 +42,11 @@ struct MiraPanel: View {
 
                         if let err = state.errorMessage {
                             errorBanner(err)
-                }
+                        }
                     }
                     .padding(14)
                 }
+                .task { agentServiceOnline = await agent.checkHealth() }
 
                 Divider().background(Color.white.opacity(0.07))
                 inputBar
@@ -148,6 +154,51 @@ struct MiraPanel: View {
         .cornerRadius(10)
     }
 
+    private func confirmationCard(_ action: PendingAction) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 12))
+                Text("Confirm Action")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.orange)
+            }
+
+            Text("Ready to **\(action.description)**.")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.85))
+
+            HStack(spacing: 8) {
+                Button(action: { Task { await confirmAction(action) } }) {
+                    Text("Confirm")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(miraBlue)
+                        .cornerRadius(7)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { pendingAction = nil; response = "Cancelled." }) {
+                    Text("Cancel")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.07))
+                        .cornerRadius(7)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.08))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.25)))
+        .cornerRadius(10)
+    }
+
     private func errorBanner(_ msg: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -206,35 +257,61 @@ struct MiraPanel: View {
         guard !prompt.isEmpty, !state.isLoading else { return }
 
         guard state.canUse else {
-            state.errorMessage = state.apiKey.isEmpty ? MiraError.noKey.localizedDescription : MiraError.limitReached.localizedDescription
+            state.errorMessage = state.apiKey.isEmpty
+                ? MiraError.noKey.localizedDescription
+                : MiraError.limitReached.localizedDescription
             return
         }
 
         input = ""
         response = ""
+        pendingAction = nil
         state.isLoading = true
         state.errorMessage = nil
         showPointerFeedback = false
 
         do {
-            let screenshot = try? await capture.captureMainDisplay()
-            let text = try await claude.ask(prompt: prompt, screenshot: screenshot)
-            response = text
-            state.recordUsage()
-            voice.speak(text)
+            if agentServiceOnline {
+                // Route to agent service (Composio tools + Claude)
+                let result = try await agent.run(prompt: prompt, claudeApiKey: state.apiKey)
+                if let pending = result.requiresConfirmation {
+                    pendingAction = pending
+                } else {
+                    response = result.reply
+                    voice.speak(result.reply)
+                }
+            } else {
+                // Fall back to direct Claude with screen vision
+                let screenshot = try? await capture.captureMainDisplay()
+                let text = try await claude.ask(prompt: prompt, screenshot: screenshot)
+                response = text
+                voice.speak(text)
 
-            // Try to locate and point at the element
-            if let img = screenshot, let pt = try? await claude.locateElement(prompt, in: img) {
-                showPointerFeedback = true
-                overlay.show(at: pt, label: "Here")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 6.5) {
-                    showPointerFeedback = false
+                if let img = screenshot, let pt = try? await claude.locateElement(prompt, in: img) {
+                    showPointerFeedback = true
+                    overlay.show(at: pt, label: "Here")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 6.5) { self.showPointerFeedback = false }
                 }
             }
+            state.recordUsage()
         } catch {
             state.errorMessage = error.localizedDescription
         }
 
+        state.isLoading = false
+    }
+
+    @MainActor
+    private func confirmAction(_ action: PendingAction) async {
+        pendingAction = nil
+        state.isLoading = true
+        do {
+            let result = try await agent.confirm(action: action, claudeApiKey: state.apiKey)
+            response = result
+            voice.speak(result)
+        } catch {
+            state.errorMessage = error.localizedDescription
+        }
         state.isLoading = false
     }
 
