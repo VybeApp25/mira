@@ -17,6 +17,7 @@ targets:
       path: Mira/Info.plist
       properties:
         LSUIElement: true
+        NSPrincipalClass: NSApplication
         CFBundleDisplayName: Mira
         CFBundleName: Mira
         CFBundleVersion: "1"

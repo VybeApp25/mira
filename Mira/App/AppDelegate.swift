@@ -6,15 +6,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-
-        // Notch HUD — primary UI on MacBook Pro with notch
         let hud = NotchHUDController()
         hud.setup()
         self.notchHUD = hud
-
-        // Status bar fallback — keeps the eye icon for older Macs / external monitors
-        // Shares the same MiraState so settings are synced
-        statusBarController = StatusBarController(miraState: hud.miraState)
+        self.statusBarController = StatusBarController(miraState: hud.miraState)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

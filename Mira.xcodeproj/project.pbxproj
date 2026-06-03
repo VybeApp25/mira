@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
+		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		6662E3A1A711180F0D5F6856 /* MiraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847AFAFC451130DC3C6A6545 /* MiraApp.swift */; };
 		91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */; };
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
@@ -28,6 +29,7 @@
 
 /* Begin PBXFileReference section */
 		04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDController.swift; sourceTree = "<group>"; };
+		0B0C8CBB3FF39C09431B7076 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		16778FFCF54471FB1ABBB110 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
 		2824EFB7442C6F4AF52C6FBE /* Mira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mira.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		376F1CDCA756B5368F057786 /* AgentTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskStore.swift; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				F06E43F02224F648C3BC05E6 /* AppDelegate.swift */,
+				0B0C8CBB3FF39C09431B7076 /* main.swift */,
 				847AFAFC451130DC3C6A6545 /* MiraApp.swift */,
 			);
 			path = App;
@@ -208,6 +211,7 @@
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
+				517B1FCD0D9E9895B50469C3 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

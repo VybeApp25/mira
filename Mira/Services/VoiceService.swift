@@ -1,7 +1,6 @@
 import Speech
 import AVFoundation
 
-@MainActor
 class VoiceService: NSObject, ObservableObject {
     @Published var isListening = false
     @Published var liveTranscript = ""

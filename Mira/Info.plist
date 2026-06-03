@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mira listens for voice commands.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Mira sees your screen to show you exactly where to click.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -1,7 +1,6 @@
 import Cocoa
 import SwiftUI
 
-@MainActor
 class OverlayWindowController: ObservableObject {
     private var window: NSWindow?
     private var dismissTimer: DispatchWorkItem?
