@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case chat, home, agents }
+enum IslandTab: Equatable { case chat, home, agents, briefing }
 
 // MARK: - Main island view
 
@@ -56,7 +56,12 @@ struct MiraIslandView: View {
     @ObservedObject var voice:     VoiceService
     let geometry: NotchGeometry
 
-    @State private var selectedTab: IslandTab = .chat
+    // Default to briefing on first expansion of the day; Chat every other time
+    @State private var selectedTab: IslandTab = {
+        let last   = UserDefaults.standard.object(forKey: "mira_last_briefing") as? Date
+        let isNew  = last.map { !Calendar.current.isDateInToday($0) } ?? true
+        return isNew ? .briefing : .chat
+    }()
     @State private var showSettings = false
 
     private var isExpanded: Bool { animController.state == .expanded }
@@ -140,6 +145,7 @@ struct MiraIslandView: View {
     private var navBar: some View {
         HStack(spacing: 2) {
             // Left group — primary tabs
+            navTab(icon: "sparkles",     label: "Today",  tab: .briefing)
             navTab(icon: "message.fill", label: "Chat",   tab: .chat)
             navTab(icon: "house.fill",   label: "Home",   tab: .home)
             navTab(icon: "cpu",          label: "Agents", tab: .agents)
@@ -210,6 +216,8 @@ struct MiraIslandView: View {
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
+        case .briefing:
+            BriefingView()
         case .chat:
             IslandChatView(
                 miraState: miraState,

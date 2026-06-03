@@ -17,6 +17,7 @@
 		6662E3A1A711180F0D5F6856 /* MiraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847AFAFC451130DC3C6A6545 /* MiraApp.swift */; };
 		6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2173DE466719E2BE730C2CC /* NowPlayingService.swift */; };
 		7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */; };
+		769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077436ECE19C7096BAC241EC /* BriefingView.swift */; };
 		825EC947F9C5C17BF1B8C8F6 /* MiraIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D4739EA771EF0C39908A69 /* MiraIslandView.swift */; };
 		91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */; };
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
@@ -47,6 +48,7 @@
 
 /* Begin PBXFileReference section */
 		04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDController.swift; sourceTree = "<group>"; };
+		077436ECE19C7096BAC241EC /* BriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingView.swift; sourceTree = "<group>"; };
 		0B0C8CBB3FF39C09431B7076 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStore.swift; sourceTree = "<group>"; };
 		16778FFCF54471FB1ABBB110 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 			isa = PBXGroup;
 			children = (
 				3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */,
+				077436ECE19C7096BAC241EC /* BriefingView.swift */,
 				79790F66243B041B7E65898D /* HomeTabView.swift */,
 				202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */,
 				54D4739EA771EF0C39908A69 /* MiraIslandView.swift */,
@@ -290,6 +293,7 @@
 				B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */,
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
+				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
 				B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */,
 				378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */,

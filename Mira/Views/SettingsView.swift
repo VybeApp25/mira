@@ -207,6 +207,23 @@ struct SettingsView: View {
                 }
             }
 
+            // Confidence breakdown
+            if !memory.memories.isEmpty {
+                HStack(spacing: 12) {
+                    memStatBadge(memory.memories.count, label: "total", color: .white.opacity(0.4))
+                    memStatBadge(memory.memories.filter { $0.confidenceTier == .high   }.count,
+                                 label: "high",   color: Color(red: 0.20, green: 0.84, blue: 0.29))
+                    memStatBadge(memory.memories.filter { $0.confidenceTier == .medium }.count,
+                                 label: "medium", color: Color(red: 1.0,  green: 0.75, blue: 0.20))
+                    memStatBadge(memory.memories.filter { $0.confidenceTier == .low    }.count,
+                                 label: "low",    color: Color(red: 0.75, green: 0.75, blue: 0.75))
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(Color.white.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             if memory.memories.isEmpty {
                 Text("No memories yet. Mira will learn your preferences over time.")
                     .font(.system(size: 11))
@@ -264,6 +281,15 @@ struct SettingsView: View {
         .padding(.vertical, 6)
         .background(Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private func memStatBadge(_ count: Int, label: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text("\(count) \(label)")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.50))
+        }
     }
 
     private func confidenceColor(_ mem: Memory) -> Color {
