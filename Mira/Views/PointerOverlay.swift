@@ -4,10 +4,11 @@ struct PointerOverlay: View {
     let point: CGPoint
     let label: String
     let screenSize: CGSize
+    var color: Color = Color(red: 0.29, green: 0.62, blue: 1.0)
 
     @State private var ring: CGFloat = 1.0
 
-    private let blue = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private var blue: Color { color }
 
     var body: some View {
         ZStack {

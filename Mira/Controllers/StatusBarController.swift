@@ -5,12 +5,13 @@ import SwiftUI
 class StatusBarController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
-    private let state = MiraState()
+    private let state: MiraState
     private let overlay = OverlayWindowController()
     private let capture = ScreenCaptureService()
     private let voice = VoiceService()
 
-    override init() {
+    init(miraState: MiraState = MiraState()) {
+        self.state = miraState
         super.init()
 
         if let btn = statusItem.button {

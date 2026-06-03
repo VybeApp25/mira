@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Combine
 
 class MiraState: ObservableObject {
@@ -21,9 +22,33 @@ class MiraState: ObservableObject {
         !apiKey.isEmpty && (isPro || dailyUsageCount < MiraState.freeLimit)
     }
 
-    init() {
-        loadDailyUsage()
+    // Cursor color for the screen pointer overlay
+    var cursorColorName: String {
+        get { UserDefaults.standard.string(forKey: "mira_cursor_color") ?? "Blue" }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: "mira_cursor_color")
+        }
     }
+
+    var cursorColor: Color {
+        cursorColorOptions.first(where: { $0.name == cursorColorName })?.color
+            ?? Color(red: 0.29, green: 0.62, blue: 1.0)
+    }
+
+    // Connected Composio apps
+    var connectedApps: Set<String> {
+        get {
+            let arr = UserDefaults.standard.stringArray(forKey: "mira_connected_apps") ?? []
+            return Set(arr)
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(Array(newValue), forKey: "mira_connected_apps")
+        }
+    }
+
+    init() { loadDailyUsage() }
 
     func recordUsage() {
         dailyUsageCount += 1
