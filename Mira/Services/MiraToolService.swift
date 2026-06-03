@@ -11,6 +11,64 @@ enum MiraToolService {
     // MARK: - Schema (sent in session.update → tools array)
 
     static let definitions: [[String: Any]] = [
+        // ── Memory tools ──────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "remember",
+            "description": """
+                Store or update something about the user in long-term memory. \
+                Call this proactively when the user states a preference ("I use Safari"), \
+                shares a personal fact ("I'm training for a marathon"), \
+                mentions an ongoing project ("I'm building a workout app"), \
+                reveals a goal ("I want to hit 200 push-ups"), or names a person they mention often. \
+                Use snake_case keys like preferred_browser, current_project, workout_goal.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "key":      ["type": "string",
+                                 "description": "Short snake_case identifier, e.g. preferred_browser"],
+                    "value":    ["type": "string",
+                                 "description": "The value to store, e.g. Safari"],
+                    "category": ["type": "string",
+                                 "enum": ["preference", "project", "person", "fact", "goal"],
+                                 "description": "Memory category"],
+                    "notes":    ["type": "string",
+                                 "description": "Optional supporting context or reason"]
+                ],
+                "required": ["key", "value", "category"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "recall_memories",
+            "description": """
+                Search long-term memory for what Mira knows about the user. \
+                Call this before answering personalised questions, recommending apps/services, \
+                or when the user asks "do you remember" or "what do you know about me".
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "query": ["type": "string",
+                              "description": "Search term, e.g. browser, project, music"]
+                ],
+                "required": ["query"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "forget",
+            "description": "Delete a memory by key. Use when the user says 'forget that' or corrects an outdated preference.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "key": ["type": "string", "description": "The memory key to delete"]
+                ],
+                "required": ["key"]
+            ] as [String: Any]
+        ],
+        // ── Context tool ──────────────────────────────────────────────────────────
         [
             "type": "function",
             "name": "get_current_context",
@@ -111,6 +169,9 @@ enum MiraToolService {
     static func execute(name: String, argsJSON: String) async -> String {
         let args = parse(argsJSON)
         switch name {
+        case "remember":            return await rememberMemory(args)
+        case "recall_memories":     return await recallMemories(args)
+        case "forget":              return await forgetMemory(args)
         case "get_current_context": return await currentContext()
         case "open_application":    return openApplication(args)
         case "get_calendar_events": return await calendarEvents(args)
@@ -125,6 +186,37 @@ enum MiraToolService {
         guard let data = json.data(using: .utf8),
               let obj  = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
+    }
+
+    // MARK: - Memory tools
+
+    private static func rememberMemory(_ args: [String: Any]) async -> String {
+        guard let key   = args["key"]   as? String,
+              let value = args["value"] as? String,
+              let catRaw = args["category"] as? String,
+              let cat   = Memory.Category(rawValue: catRaw) else {
+            return "Missing required fields: key, value, category."
+        }
+        let notes = args["notes"] as? String
+        await MainActor.run {
+            MemoryStore.shared.upsert(key: key, value: value,
+                                      category: cat, source: .explicit,
+                                      confidence: 0.95, notes: notes)
+        }
+        return "Remembered: \(key) = \(value)."
+    }
+
+    private static func recallMemories(_ args: [String: Any]) async -> String {
+        let query = args["query"] as? String ?? ""
+        let results = await MainActor.run { MemoryStore.shared.recall(query: query) }
+        guard !results.isEmpty else { return "No memories found for '\(query)'." }
+        return results.prefix(8).map { "• \($0.key): \($0.value)" }.joined(separator: "\n")
+    }
+
+    private static func forgetMemory(_ args: [String: Any]) async -> String {
+        guard let key = args["key"] as? String else { return "Missing key." }
+        await MainActor.run { MemoryStore.shared.delete(key: key) }
+        return "Forgotten: \(key)."
     }
 
     // MARK: - get_current_context

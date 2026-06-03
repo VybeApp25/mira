@@ -2,10 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var state: MiraState
+    @ObservedObject private var memory = MemoryStore.shared
     @Environment(\.dismiss) var dismiss
-    @State private var keyInput     = ""
-    @State private var saved        = false
-    @State private var showOverride = false
+    @State private var keyInput      = ""
+    @State private var saved         = false
+    @State private var showOverride  = false
     @State private var selectedVoice: MiraVoice = MiraVoice.saved
 
     private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
@@ -24,13 +25,15 @@ struct SettingsView: View {
                         Divider().background(Color.white.opacity(0.08))
                         voiceSection
                         Divider().background(Color.white.opacity(0.08))
+                        memorySection
+                        Divider().background(Color.white.opacity(0.08))
                         usageSection
                     }
                     .padding(18)
                 }
             }
         }
-        .frame(width: 340, height: 520)
+        .frame(width: 340, height: 660)
         .onAppear { keyInput = state.userAPIKey }
     }
 
@@ -183,6 +186,91 @@ struct SettingsView: View {
             Text("OpenAI Realtime API · gpt-4o-realtime-preview")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.25))
+        }
+    }
+
+    // MARK: - Memory section
+
+    @ViewBuilder
+    private var memorySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Memory", systemImage: "brain")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                if !memory.memories.isEmpty {
+                    Button("Clear All") { memory.clear() }
+                        .font(.system(size: 11))
+                        .foregroundColor(.red.opacity(0.7))
+                        .buttonStyle(.plain)
+                }
+            }
+
+            if memory.memories.isEmpty {
+                Text("No memories yet. Mira will learn your preferences over time.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.28))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(spacing: 3) {
+                    ForEach(memory.memories.sorted { $0.confidence > $1.confidence }) { mem in
+                        memoryRow(mem)
+                    }
+                }
+            }
+        }
+    }
+
+    private func memoryRow(_ mem: Memory) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: mem.category.icon)
+                .font(.system(size: 10))
+                .foregroundColor(confidenceColor(mem))
+                .frame(width: 14)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(mem.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.80))
+                Text(mem.value)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.45))
+            }
+
+            Spacer()
+
+            // Confidence bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(confidenceColor(mem).opacity(0.25))
+                .frame(width: 36, height: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(confidenceColor(mem))
+                        .frame(width: 36 * mem.confidence, height: 4),
+                    alignment: .leading
+                )
+
+            Button { memory.delete(id: mem.id) } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.25))
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private func confidenceColor(_ mem: Memory) -> Color {
+        switch mem.confidenceTier {
+        case .high:   return Color(red: 0.20, green: 0.84, blue: 0.29)
+        case .medium: return Color(red: 1.0,  green: 0.75, blue: 0.20)
+        case .low:    return Color(red: 0.75, green: 0.75, blue: 0.75)
         }
     }
 

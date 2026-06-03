@@ -46,30 +46,36 @@ final class ContextService {
         )
     }
 
-    /// Condensed text block for the system prompt. Trims to maxChars to control token cost.
-    func buildPromptBlock(max maxChars: Int = 800) -> String {
+    /// Condensed text block for the system prompt.
+    /// Includes live Mac context + long-term memory. Trims to maxChars to control token cost.
+    func buildPromptBlock(max maxChars: Int = 1200) -> String {
         let ctx = capture()
-        var lines: [String] = ["[Mac Context]"]
+        var parts: [String] = []
 
-        if let app = ctx.activeApp            { lines.append("Active App: \(app)") }
-        if let url = ctx.frontmostURL         { lines.append("URL: \(url.absoluteString)") }
-
+        // ── Live Mac context ───────────────────────────────────────────────────
+        var ctxLines: [String] = ["[Mac Context]"]
+        if let app = ctx.activeApp            { ctxLines.append("Active App: \(app)") }
+        if let url = ctx.frontmostURL         { ctxLines.append("URL: \(url.absoluteString)") }
         if let sel = ctx.selectedText, !sel.isEmpty {
             let s = sel.count > 400 ? String(sel.prefix(400)) + "…" : sel
-            lines.append("Selected: \(s)")
+            ctxLines.append("Selected: \(s)")
         }
         if let clip = ctx.clipboardText, !clip.isEmpty {
             let c = clip.count > 300 ? String(clip.prefix(300)) + "…" : clip
-            lines.append("Clipboard: \(c)")
+            ctxLines.append("Clipboard: \(c)")
         }
         if let pct = ctx.batteryPercent {
-            lines.append("Battery: \(pct)% (\(ctx.batteryCharging ? "charging" : "on battery"))")
+            ctxLines.append("Battery: \(pct)% (\(ctx.batteryCharging ? "charging" : "on battery"))")
         }
-
         let fmt = Date.FormatStyle().month(.abbreviated).day().hour().minute()
-        lines.append("Time: \(ctx.currentDate.formatted(fmt))")
+        ctxLines.append("Time: \(ctx.currentDate.formatted(fmt))")
+        parts.append(ctxLines.joined(separator: "\n"))
 
-        let result = lines.joined(separator: "\n")
+        // ── Long-term memory ───────────────────────────────────────────────────
+        let memBlock = MemoryStore.shared.buildPromptBlock()
+        if !memBlock.isEmpty { parts.append(memBlock) }
+
+        let result = parts.joined(separator: "\n\n")
         return result.count <= maxChars ? result : String(result.prefix(maxChars))
     }
 
