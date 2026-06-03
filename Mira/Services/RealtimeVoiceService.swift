@@ -172,7 +172,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             setupPlayback()
             state = .recording
 
-        // ── Barge-in: user spoke while Mira was talking ────────────────────────
+        // ── Barge-in + context refresh at the start of each user turn ────────────
         case "input_audio_buffer.speech_started":
             if case .speaking = state {
                 playerNode.stop()
@@ -182,6 +182,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             }
             userDraft = ""
             state     = .recording
+            // Refresh context snapshot so every turn has the latest active app / URL / clipboard
+            refreshContextInstructions()
 
         // ── User transcript (from Whisper transcription) ───────────────────────
         case "conversation.item.input_audio_transcription.completed":
@@ -258,27 +260,41 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - Session configuration
 
     private func configureSession() {
-        let event: [String: Any] = [
-            "type": "session.update",
-            "session": [
-                "type":                "realtime",   // required by GA API
-                "modalities":          ["text", "audio"],
-                "instructions":        MiraPrompts.realtimeSystem,
-                "voice":               MiraVoice.saved.rawValue,
-                "input_audio_format":  "pcm16",
-                "output_audio_format": "pcm16",
-                "input_audio_transcription": ["model": "whisper-1"],
-                "turn_detection": [
-                    "type":                "server_vad",
-                    "threshold":           0.5,
-                    "prefix_padding_ms":   300,
-                    "silence_duration_ms": 600
-                ] as [String: Any],
-                "tools":       MiraToolService.definitions,
-                "tool_choice": "auto"
-            ] as [String: Any]
+        emit(buildSessionUpdate(includeFullConfig: true))
+    }
+
+    /// Sends a lightweight session.update to refresh instructions with the latest context snapshot.
+    /// Called at the start of each user turn so context is always current.
+    private func refreshContextInstructions() {
+        emit(buildSessionUpdate(includeFullConfig: false))
+    }
+
+    private func buildSessionUpdate(includeFullConfig: Bool) -> [String: Any] {
+        let contextBlock = ContextService.shared.buildPromptBlock()
+        let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
+
+        var session: [String: Any] = [
+            "type":         "realtime",
+            "instructions": instructions,
         ]
-        emit(event)
+
+        if includeFullConfig {
+            session["modalities"]          = ["text", "audio"]
+            session["voice"]               = MiraVoice.saved.rawValue
+            session["input_audio_format"]  = "pcm16"
+            session["output_audio_format"] = "pcm16"
+            session["input_audio_transcription"] = ["model": "whisper-1"]
+            session["turn_detection"] = [
+                "type":                "server_vad",
+                "threshold":           0.5,
+                "prefix_padding_ms":   300,
+                "silence_duration_ms": 600
+            ] as [String: Any]
+            session["tools"]       = MiraToolService.definitions
+            session["tool_choice"] = "auto"
+        }
+
+        return ["type": "session.update", "session": session]
     }
 
     // MARK: - Audio capture (mic → PCM16 → WebSocket)

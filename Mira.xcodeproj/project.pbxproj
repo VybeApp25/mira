@@ -13,6 +13,7 @@
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */; };
+		65A733FC2AA9E0468290BBD9 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 177D935B2C9FEEDB97A25EE9 /* IOKit.framework */; };
 		6662E3A1A711180F0D5F6856 /* MiraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847AFAFC451130DC3C6A6545 /* MiraApp.swift */; };
 		6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2173DE466719E2BE730C2CC /* NowPlayingService.swift */; };
 		7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */; };
@@ -24,6 +25,7 @@
 		A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E550071C015B2092E04A1 /* WakeWordService.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
+		B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BAF16D6CB27982CEA34F14 /* ContextService.swift */; };
 		BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */; };
 		D08711BF6A67BC56365F6AAD /* MiraPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAB411962D3D66F94EE5483 /* MiraPanel.swift */; };
 		D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979DE80CA67152EBCA55AC4D /* MiraToolService.swift */; };
@@ -47,6 +49,7 @@
 		0B0C8CBB3FF39C09431B7076 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		16778FFCF54471FB1ABBB110 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
 		1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecrets.swift; sourceTree = "<group>"; };
+		177D935B2C9FEEDB97A25EE9 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandChatView.swift; sourceTree = "<group>"; };
 		2824EFB7442C6F4AF52C6FBE /* Mira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mira.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandWindowManager.swift; sourceTree = "<group>"; };
@@ -54,6 +57,7 @@
 		3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTrackingManager.swift; sourceTree = "<group>"; };
 		3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsTabView.swift; sourceTree = "<group>"; };
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
+		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
 		54D4739EA771EF0C39908A69 /* MiraIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandView.swift; sourceTree = "<group>"; };
 		6AAB411962D3D66F94EE5483 /* MiraPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraPanel.swift; sourceTree = "<group>"; };
 		79790F66243B041B7E65898D /* HomeTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTabView.swift; sourceTree = "<group>"; };
@@ -80,6 +84,17 @@
 		F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeService.swift; sourceTree = "<group>"; };
 		F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		22EDEAB8214AC2CD5D499BCE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65A733FC2AA9E0468290BBD9 /* IOKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0296E518B63549893B2677E1 /* Config */ = {
@@ -125,6 +140,7 @@
 			isa = PBXGroup;
 			children = (
 				B1E35459BDE79C37D5E39EE8 /* Mira */,
+				D8AA324BF4666DEB17DD11F9 /* Frameworks */,
 				6BAEE14F16EA8C85A415D967 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -150,6 +166,7 @@
 			children = (
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
+				47BAF16D6CB27982CEA34F14 /* ContextService.swift */,
 				979DE80CA67152EBCA55AC4D /* MiraToolService.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */,
@@ -169,6 +186,14 @@
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		D8AA324BF4666DEB17DD11F9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				177D935B2C9FEEDB97A25EE9 /* IOKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		FD3D2137623027F8C561CFBC /* Views */ = {
@@ -204,6 +229,7 @@
 			buildConfigurationList = 71645AA03320AAE7C1C513F1 /* Build configuration list for PBXNativeTarget "Mira" */;
 			buildPhases = (
 				8CC7FB676E4E4AEB2529B18A /* Sources */,
+				22EDEAB8214AC2CD5D499BCE /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -262,6 +288,7 @@
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
+				B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */,
 				378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */,
 				01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */,
 				95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */,

@@ -11,6 +11,8 @@ targets:
     platform: macOS
     sources:
       - path: Mira
+    dependencies:
+      - sdk: IOKit.framework
     entitlements:
       path: Mira/Mira.entitlements
     info:
@@ -26,6 +28,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."
         NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
         NSCalendarsUsageDescription: "Mira shows your upcoming events in the Home tab."
+        NSAppleEventsUsageDescription: "Mira reads your active browser tab to provide context-aware assistance."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trevonbarbour.mira

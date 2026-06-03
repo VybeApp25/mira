@@ -13,6 +13,21 @@ enum MiraToolService {
     static let definitions: [[String: Any]] = [
         [
             "type": "function",
+            "name": "get_current_context",
+            "description": """
+                Get the user's live Mac context: active app, browser URL, selected text, \
+                clipboard contents, battery level, and current time. \
+                Call this whenever you need to know what the user is looking at or working on, \
+                before answering questions like "summarize this", "reply to this", or "what's open".
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [:] as [String: Any],
+                "required": []
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
             "name": "open_application",
             "description": "Open or switch to a macOS application by name.",
             "parameters": [
@@ -91,6 +106,7 @@ enum MiraToolService {
     static func execute(name: String, argsJSON: String) async -> String {
         let args = parse(argsJSON)
         switch name {
+        case "get_current_context": return await currentContext()
         case "open_application":    return openApplication(args)
         case "get_calendar_events": return await calendarEvents(args)
         case "control_music":       return musicControl(args)
@@ -104,6 +120,12 @@ enum MiraToolService {
         guard let data = json.data(using: .utf8),
               let obj  = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
+    }
+
+    // MARK: - get_current_context
+
+    private static func currentContext() async -> String {
+        await MainActor.run { ContextService.shared.buildPromptBlock(max: 1000) }
     }
 
     // MARK: - open_application
