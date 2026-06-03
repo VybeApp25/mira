@@ -17,8 +17,13 @@ enum MiraToolService {
             "description": """
                 Get the user's live Mac context: active app, browser URL, selected text, \
                 clipboard contents, battery level, and current time. \
-                Call this whenever you need to know what the user is looking at or working on, \
-                before answering questions like "summarize this", "reply to this", or "what's open".
+                Call this when the user says any of the following — \
+                "this", "that", "here", "on my screen", "in this tab", "selected text", \
+                "copied text", "what am I looking at", "what's on my screen", \
+                "summarize this", "reply to this", "explain this", "translate this", \
+                "what does this say", "open this", "search for this" — \
+                or any request that refers to content visible on screen or in the clipboard \
+                without explicitly stating what that content is.
                 """,
             "parameters": [
                 "type": "object",
