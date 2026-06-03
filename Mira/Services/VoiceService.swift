@@ -12,6 +12,8 @@ class VoiceService: NSObject, ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
 
     func requestPermissions() async {
+        // Only prompt if not yet determined — never shows twice
+        guard SFSpeechRecognizer.authorizationStatus() == .notDetermined else { return }
         _ = await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { _ in cont.resume(returning: ()) }
         }

@@ -134,13 +134,13 @@ struct AgentsTabView: View {
     @MainActor
     private func runAgentTask() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, !isRunning, !miraState.apiKey.isEmpty else { return }
+        guard !prompt.isEmpty, !isRunning, !miraState.effectiveAPIKey.isEmpty else { return }
 
         input = ""
         isRunning = true
 
         do {
-            let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: miraState.apiKey)
+            let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: miraState.effectiveAPIKey)
             taskStore.add(
                 prompt: prompt,
                 reply: result.reply,

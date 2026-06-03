@@ -25,6 +25,7 @@ targets:
         NSMicrophoneUsageDescription: "Mira listens for voice commands."
         NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."
         NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
+        NSCalendarsUsageDescription: "Mira shows your upcoming events in the Home tab."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trevonbarbour.mira

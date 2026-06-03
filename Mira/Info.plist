@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Mira shows your upcoming events in the Home tab.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mira listens for voice commands.</string>
 	<key>NSPrincipalClass</key>

@@ -17,7 +17,7 @@ struct MiraPanel: View {
     @State private var pendingAction: PendingAction? = nil
     @State private var agentServiceOnline = false
 
-    private var claude: ClaudeService { ClaudeService(apiKey: state.apiKey) }
+    private var claude: ClaudeService { ClaudeService(apiKey: state.effectiveAPIKey) }
     private let agent = AgentService.shared
 
     var body: some View {
@@ -257,7 +257,7 @@ struct MiraPanel: View {
         guard !prompt.isEmpty, !state.isLoading else { return }
 
         guard state.canUse else {
-            state.errorMessage = state.apiKey.isEmpty
+            state.errorMessage = state.effectiveAPIKey.isEmpty
                 ? MiraError.noKey.localizedDescription
                 : MiraError.limitReached.localizedDescription
             return
@@ -273,7 +273,7 @@ struct MiraPanel: View {
         do {
             if agentServiceOnline {
                 // Route to agent service (Composio tools + Claude)
-                let result = try await agent.run(prompt: prompt, claudeApiKey: state.apiKey)
+                let result = try await agent.run(prompt: prompt, claudeApiKey: state.effectiveAPIKey)
                 if let pending = result.requiresConfirmation {
                     pendingAction = pending
                 } else {
@@ -306,7 +306,7 @@ struct MiraPanel: View {
         pendingAction = nil
         state.isLoading = true
         do {
-            let result = try await agent.confirm(action: action, claudeApiKey: state.apiKey)
+            let result = try await agent.confirm(action: action, claudeApiKey: state.effectiveAPIKey)
             response = result
             voice.speak(result)
         } catch {

@@ -9,9 +9,28 @@ class MiraState: ObservableObject {
 
     static let freeLimit = 10
 
-    var apiKey: String {
+    // Key the user typed in Settings (optional override).
+    var userAPIKey: String {
         get { UserDefaults.standard.string(forKey: "mira_api_key") ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: "mira_api_key") }
+    }
+
+    // The key actually used for requests: user override first, then bundled key.
+    var effectiveAPIKey: String {
+        let user = userAPIKey
+        if !user.isEmpty { return user }
+        return AppSecrets.anthropicAPIKey
+    }
+
+    // True when a real key is available (bundled key counts, placeholder doesn't).
+    var hasKey: Bool {
+        let key = effectiveAPIKey
+        return !key.isEmpty && !key.hasPrefix("PASTE_")
+    }
+
+    // When using the bundled key there's no per-user limit.
+    var usingBundledKey: Bool {
+        userAPIKey.isEmpty && hasKey
     }
 
     var isPro: Bool {
@@ -19,29 +38,14 @@ class MiraState: ObservableObject {
     }
 
     var canUse: Bool {
-        !apiKey.isEmpty && (isPro || dailyUsageCount < MiraState.freeLimit)
+        hasKey && (usingBundledKey || isPro || dailyUsageCount < MiraState.freeLimit)
     }
 
-    // Cursor color for the screen pointer overlay
-    var cursorColorName: String {
-        get { UserDefaults.standard.string(forKey: "mira_cursor_color") ?? "Blue" }
-        set {
-            objectWillChange.send()
-            UserDefaults.standard.set(newValue, forKey: "mira_cursor_color")
-        }
-    }
-
-    var cursorColor: Color {
-        cursorColorOptions.first(where: { $0.name == cursorColorName })?.color
-            ?? Color(red: 0.29, green: 0.62, blue: 1.0)
-    }
+    var cursorColor: Color { Color(red: 0.29, green: 0.62, blue: 1.0) }
 
     // Connected Composio apps
     var connectedApps: Set<String> {
-        get {
-            let arr = UserDefaults.standard.stringArray(forKey: "mira_connected_apps") ?? []
-            return Set(arr)
-        }
+        get { Set(UserDefaults.standard.stringArray(forKey: "mira_connected_apps") ?? []) }
         set {
             objectWillChange.send()
             UserDefaults.standard.set(Array(newValue), forKey: "mira_connected_apps")
@@ -51,6 +55,7 @@ class MiraState: ObservableObject {
     init() { loadDailyUsage() }
 
     func recordUsage() {
+        guard !usingBundledKey else { return }   // don't count against limit for bundled key
         dailyUsageCount += 1
         UserDefaults.standard.set(dailyUsageCount, forKey: "mira_usage_count")
         UserDefaults.standard.set(Calendar.current.startOfDay(for: Date()), forKey: "mira_usage_date")
