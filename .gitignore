@@ -1,4 +1,6 @@
 .DS_Store
+AgentService/node_modules/
+AgentService/.env
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 build/
