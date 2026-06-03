@@ -54,9 +54,10 @@ enum RealtimeState: Equatable {
 @MainActor
 final class RealtimeVoiceService: NSObject, ObservableObject {
 
-    @Published var state:     RealtimeState = .idle
-    @Published var userDraft: String        = ""
-    @Published var aiDraft:   String        = ""
+    @Published var state:      RealtimeState = .idle
+    @Published var userDraft:  String        = ""
+    @Published var aiDraft:    String        = ""
+    @Published var toolStatus: String        = ""   // e.g. "Opening Safari…"
 
     var onUserMessage: ((String) -> Void)?
     var onAIMessage:   ((String) -> Void)?
@@ -229,6 +230,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                 pendingToolName = item["name"]    as? String ?? ""
                 pendingCallId   = item["call_id"] as? String ?? ""
                 pendingToolArgs = ""
+                toolStatus = Self.toolLabel(for: pendingToolName)
             }
 
         case "response.function_call_arguments.delta":
@@ -238,6 +240,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let id   = event["call_id"]   as? String ?? pendingCallId
             let name = event["name"]      as? String ?? pendingToolName
             let args = event["arguments"] as? String ?? pendingToolArgs
+            // Update status with specific args now that we have them
+            toolStatus = Self.toolLabel(for: name, argsJSON: args)
             Task { await self.runTool(callId: id, name: name, argsJSON: args) }
             pendingCallId = ""; pendingToolName = ""; pendingToolArgs = ""
 
@@ -356,6 +360,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func runTool(callId: String, name: String, argsJSON: String) async {
         let output = await MiraToolService.execute(name: name, argsJSON: argsJSON)
+        toolStatus = ""
         emit([
             "type": "conversation.item.create",
             "item": [
@@ -365,6 +370,47 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             ] as [String: Any]
         ])
         emit(["type": "response.create"])
+    }
+
+    // MARK: - Tool status labels
+
+    private static func toolLabel(for name: String, argsJSON: String = "") -> String {
+        let args = (try? JSONSerialization.jsonObject(
+            with: argsJSON.data(using: .utf8) ?? Data()
+        ) as? [String: Any]) ?? [:]
+
+        switch name {
+        case "open_application":
+            let app = args["app_name"] as? String ?? "app"
+            return "Opening \(app)…"
+        case "get_calendar_events":
+            return "Checking your calendar…"
+        case "control_music":
+            let action = (args["action"] as? String ?? "controlling").capitalized
+            return "\(action) music…"
+        case "search_web":
+            let q = args["query"] as? String ?? "the web"
+            return "Searching for \"\(q)\"…"
+        case "run_shortcut":
+            let s = args["shortcut_name"] as? String ?? "shortcut"
+            return "Running \"\(s)\"…"
+        default:
+            return "Working on it…"
+        }
+    }
+
+    // MARK: - Live voice update
+
+    /// Resends session.update with the current saved voice — call when user changes voice in Settings.
+    func updateVoice() {
+        guard webSocket != nil else { return }
+        emit([
+            "type": "session.update",
+            "session": [
+                "type":  "realtime",
+                "voice": MiraVoice.saved.rawValue
+            ] as [String: Any]
+        ])
     }
 
     // MARK: - Reconnection (exponential backoff, max 5 attempts)

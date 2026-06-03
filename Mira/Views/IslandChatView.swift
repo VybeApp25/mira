@@ -18,14 +18,16 @@ struct IslandChatView: View {
     let capture: ScreenCaptureService
     @ObservedObject var voice: VoiceService
 
-    @State private var messages:      [ChatMessage] = []
-    @State private var input:         String        = ""
-    @State private var isLoading:     Bool          = false
-    @State private var pendingAction: PendingAction? = nil
-    @State private var errorText:     String?       = nil
-    @State private var agentOnline:   Bool          = false
+    @State private var messages:        [ChatMessage] = []
+    @State private var input:           String        = ""
+    @State private var isLoading:       Bool          = false
+    @State private var pendingAction:   PendingAction? = nil
+    @State private var errorText:       String?       = nil
+    @State private var agentOnline:     Bool          = false
+    @State private var streamingMsgId:  UUID?         = nil  // tracks live AI message in list
 
-    @StateObject private var realtime = RealtimeVoiceService()
+    @StateObject private var realtime  = RealtimeVoiceService()
+    @StateObject private var wakeWord  = WakeWordService()
     private var isVoiceActive: Bool {
         switch realtime.state {
         case .idle: return false
@@ -45,22 +47,72 @@ struct IslandChatView: View {
             if isVoiceActive { voiceStatusBar } else { inputBar }
         }
         .task { agentOnline = await AgentService.shared.checkHealth() }
-        .onAppear { wireRealtime() }
+        .onAppear {
+            wireRealtime()
+            loadHistory()
+            wakeWord.start()
+        }
+        // Manage wake word: pause when voice session is live, resume on idle
+        .onChange(of: realtime.state) { _, newState in
+            switch newState {
+            case .idle:
+                wakeWord.start()
+            case .connecting:
+                wakeWord.pause()
+            case .speaking:
+                // Add streaming placeholder when AI starts speaking
+                if streamingMsgId == nil {
+                    var msg = ChatMessage(role: .mira, text: "")
+                    streamingMsgId = msg.id
+                    messages.append(msg)
+                }
+            default:
+                break
+            }
+        }
+        // Live-update the streaming message as AI transcript chunks arrive
+        .onChange(of: realtime.aiDraft) { _, draft in
+            guard !draft.isEmpty,
+                  let id  = streamingMsgId,
+                  let idx = messages.firstIndex(where: { $0.id == id }) else { return }
+            messages[idx].text = draft
+        }
         .onReceive(NotificationCenter.default.publisher(for: .miraActivateVoice)) { _ in
             startVoice()
         }
         .onReceive(NotificationCenter.default.publisher(for: .miraActivateText)) { _ in
-            // Text mode — just ensure island is open; text field gets focus on next click
+            // Text mode — text field gets focus on next click
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miraVoiceChanged)) { _ in
+            realtime.updateVoice()
         }
     }
 
-    // Wire realtime callbacks once
+    // Wire realtime callbacks once on appear
     private func wireRealtime() {
         realtime.onUserMessage = { text in
             messages.append(ChatMessage(role: .user, text: text))
+            ConversationStore.shared.save(role: "user", text: text)
         }
         realtime.onAIMessage = { text in
-            messages.append(ChatMessage(role: .mira, text: text))
+            // Finalise the streaming placeholder if present; otherwise append new message
+            if let id  = streamingMsgId,
+               let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages[idx].text = text
+            } else {
+                messages.append(ChatMessage(role: .mira, text: text))
+            }
+            streamingMsgId = nil
+            ConversationStore.shared.save(role: "mira", text: text)
+        }
+    }
+
+    // Load persisted history into the message list on first appear
+    private func loadHistory() {
+        guard messages.isEmpty else { return }
+        let history = ConversationStore.shared.entries.suffix(30)
+        messages = history.map { e in
+            ChatMessage(role: e.role == "user" ? .user : .mira, text: e.text)
         }
     }
 
@@ -186,10 +238,14 @@ struct IslandChatView: View {
             // Text field
             ZStack(alignment: .leading) {
                 if input.isEmpty {
-                    Text("How can I help you today?")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.22))
-                        .padding(.horizontal, 12)
+                    HStack(spacing: 0) {
+                        Text("How can I help you today?")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.22))
+                        Spacer()
+                        wakeWordBadge.padding(.trailing, 4)
+                    }
+                    .padding(.horizontal, 12)
                 }
                 TextField("", text: $input)
                     .textFieldStyle(.plain)
@@ -239,28 +295,32 @@ struct IslandChatView: View {
 
     private var voiceStatusBar: some View {
         HStack(spacing: 12) {
-            // Animated orb
             RealtimeOrb(state: realtime.state)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(voiceStatusLabel)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
-                // Live transcript
-                let draft = realtime.state == .recording
-                    ? realtime.userDraft
-                    : realtime.aiDraft
-                if !draft.isEmpty {
-                    Text(draft)
+
+                // Priority: tool status > user draft > ai transcript
+                let subtitle: String = {
+                    if !realtime.toolStatus.isEmpty  { return realtime.toolStatus }
+                    if realtime.state == .recording   { return realtime.userDraft }
+                    return realtime.aiDraft
+                }()
+                if !subtitle.isEmpty {
+                    Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundColor(realtime.toolStatus.isEmpty
+                                         ? .white.opacity(0.45)
+                                         : Color(red: 1.0, green: 0.70, blue: 0.25))
                         .lineLimit(1)
+                        .animation(.easeInOut(duration: 0.2), value: subtitle)
                 }
             }
 
             Spacer()
 
-            // Stop button
             Button { realtime.stop() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20))
@@ -272,6 +332,19 @@ struct IslandChatView: View {
         .padding(.vertical, 10)
         .background(Color.white.opacity(0.04))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
+    }
+
+    // Wake word idle indicator — shown in input bar when not in a voice session
+    private var wakeWordBadge: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(Color(red: 0.20, green: 0.84, blue: 0.29).opacity(wakeWord.isListening ? 1.0 : 0))
+                .frame(width: 5, height: 5)
+            Text("Hey Mira")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(wakeWord.isListening ? 0.28 : 0))
+        }
+        .animation(.easeInOut(duration: 0.4), value: wakeWord.isListening)
     }
 
     private var voiceStatusLabel: String {

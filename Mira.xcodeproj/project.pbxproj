@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */; };
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
+		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */; };
@@ -20,6 +21,7 @@
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
 		98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */; };
 		A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16778FFCF54471FB1ABBB110 /* VoiceService.swift */; };
+		A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E550071C015B2092E04A1 /* WakeWordService.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
 		BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */; };
@@ -56,9 +58,11 @@
 		6AAB411962D3D66F94EE5483 /* MiraPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraPanel.swift; sourceTree = "<group>"; };
 		79790F66243B041B7E65898D /* HomeTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTabView.swift; sourceTree = "<group>"; };
 		7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchGeometryProvider.swift; sourceTree = "<group>"; };
+		803E550071C015B2092E04A1 /* WakeWordService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeWordService.swift; sourceTree = "<group>"; };
 		8261E0EB0C3813433E9281F9 /* AnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationController.swift; sourceTree = "<group>"; };
 		847AFAFC451130DC3C6A6545 /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
 		8BE4187651AAE648F8751542 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		94EB42557307F47F93C50C46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		979DE80CA67152EBCA55AC4D /* MiraToolService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraToolService.swift; sourceTree = "<group>"; };
 		A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceService.swift; sourceTree = "<group>"; };
 		A5AB62B5302AD934D3ED258F /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
@@ -151,6 +155,7 @@
 				A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */,
 				BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */,
 				16778FFCF54471FB1ABBB110 /* VoiceService.swift */,
+				803E550071C015B2092E04A1 /* WakeWordService.swift */,
 				F7230251B147A0AA2C01D691 /* WeatherService.swift */,
 			);
 			path = Services;
@@ -160,6 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				376F1CDCA756B5368F057786 /* AgentTaskStore.swift */,
+				94EB42557307F47F93C50C46 /* ConversationStore.swift */,
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
 			);
 			path = Models;
@@ -256,6 +262,7 @@
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
+				378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */,
 				01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */,
 				95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */,
 				FA4EE357304AEC81E5114B8A /* HoverTrackingManager.swift in Sources */,
@@ -278,6 +285,7 @@
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
+				A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */,
 				FFD6E7D16C01F5E9BF1CB61E /* WeatherService.swift in Sources */,
 				517B1FCD0D9E9895B50469C3 /* main.swift in Sources */,
 			);

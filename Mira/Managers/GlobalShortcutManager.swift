@@ -3,6 +3,7 @@ import AppKit
 extension Notification.Name {
     static let miraActivateVoice = Notification.Name("miraActivateVoice")
     static let miraActivateText  = Notification.Name("miraActivateText")
+    static let miraVoiceChanged  = Notification.Name("miraVoiceChanged")
 }
 
 /// Monitors global modifier-key combinations for hands-free Mira activation.

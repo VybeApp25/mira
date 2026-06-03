@@ -157,8 +157,8 @@ struct SettingsView: View {
                 ForEach(MiraVoice.allCases) { v in
                     Button {
                         MiraVoice.saved = v
-                        // Force view refresh
                         selectedVoice = v
+                        NotificationCenter.default.post(name: .miraVoiceChanged, object: nil)
                     } label: {
                         HStack {
                             Text(v.label)
