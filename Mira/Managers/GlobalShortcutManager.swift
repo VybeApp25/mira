@@ -1,61 +1,86 @@
 import AppKit
+import Carbon
+
+// MARK: - Notification names
 
 extension Notification.Name {
-    static let miraActivateVoice = Notification.Name("miraActivateVoice")
-    static let miraActivateText  = Notification.Name("miraActivateText")
-    static let miraVoiceChanged  = Notification.Name("miraVoiceChanged")
+    static let miraActivateVoice    = Notification.Name("miraActivateVoice")
+    static let miraActivateText     = Notification.Name("miraActivateText")
+    static let miraVoiceChanged     = Notification.Name("miraVoiceChanged")
+    static let miraShortcutsChanged = Notification.Name("miraShortcutsChanged")
 }
 
-/// Monitors global modifier-key combinations for hands-free Mira activation.
-/// Uses NSEvent.flagsChanged which does NOT require Accessibility permission
-/// (only keyDown global monitors need it).
-///
-///   ⌃ + ⌥   →  voice mode
-///   ⌃ + fn  →  text mode (fn shows as .function in modifierFlags)
-final class GlobalShortcutManager {
+// MARK: - Carbon callback (free function — no captures, safe as C function pointer)
 
-    var onVoiceShortcut: (() -> Void)?
-    var onTextShortcut:  (() -> Void)?
-
-    private var monitor: Any?
-
-    // Track last fired combo to require a "release and re-press" before firing again
-    private var lastFired: String?
-
-    func start() {
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            DispatchQueue.main.async { self?.evaluate(event) }
+private func miraHotKeyHandler(
+    _ callRef: EventHandlerCallRef?,
+    _ event:   EventRef?,
+    _ context: UnsafeMutableRawPointer?
+) -> OSStatus {
+    var hkID = EventHotKeyID()
+    GetEventParameter(event,
+                      EventParamName(kEventParamDirectObject),
+                      EventParamType(typeEventHotKeyID),
+                      nil, MemoryLayout<EventHotKeyID>.size, nil,
+                      &hkID)
+    DispatchQueue.main.async {
+        switch hkID.id {
+        case 1: NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
+        case 2: NotificationCenter.default.post(name: .miraActivateText,  object: nil)
+        default: break
         }
     }
+    return noErr
+}
 
-    func stop() {
-        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+// MARK: - Manager
+
+/// Registers Carbon global hotkeys — works from any app without Accessibility permission.
+/// Call start() once; call update() whenever ShortcutStore changes.
+final class GlobalShortcutManager {
+
+    private var voiceRef:   EventHotKeyRef?
+    private var textRef:    EventHotKeyRef?
+    private var handlerRef: EventHandlerRef?
+
+    // "MIRA" encoded as OSType
+    private static let sig: OSType = 0x4D495241
+
+    func start() {
+        installHandler()
+        register()
+    }
+
+    func update() {
+        unregisterAll()
+        register()
     }
 
     // MARK: - Private
 
-    private func evaluate(_ event: NSEvent) {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    private func installHandler() {
+        guard handlerRef == nil else { return }
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                                  eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(),
+                            miraHotKeyHandler, 1, &spec, nil, &handlerRef)
+    }
 
-        // ⌃ + ⌥ only (no command, no shift, no fn)
-        let voiceCombo: NSEvent.ModifierFlags = [.control, .option]
-        let voiceExact = flags == voiceCombo
+    private func register() {
+        apply(ShortcutStore.shared.voice, id: 1, into: &voiceRef)
+        apply(ShortcutStore.shared.text,  id: 2, into: &textRef)
+    }
 
-        // ⌃ + fn only (no command, no shift, no option)
-        let textCombo: NSEvent.ModifierFlags  = [.control, .function]
-        let textExact  = flags == textCombo
+    private func apply(_ config: ShortcutConfig, id: UInt32, into ref: inout EventHotKeyRef?) {
+        var hkID = EventHotKeyID(signature: Self.sig, id: id)
+        RegisterEventHotKey(config.keyCode, config.carbonMods,
+                            hkID, GetApplicationEventTarget(), 0, &ref)
+    }
 
-        if voiceExact {
-            guard lastFired != "voice" else { return }
-            lastFired = "voice"
-            onVoiceShortcut?()
-        } else if textExact {
-            guard lastFired != "text" else { return }
-            lastFired = "text"
-            onTextShortcut?()
-        } else {
-            // Any other change (e.g. keys released) resets the guard
-            lastFired = nil
-        }
+    private func unregisterAll() {
+        if let r = voiceRef { UnregisterEventHotKey(r) }
+        if let r = textRef  { UnregisterEventHotKey(r) }
+        voiceRef = nil
+        textRef  = nil
     }
 }

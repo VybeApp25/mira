@@ -13,6 +13,7 @@ targets:
       - path: Mira
     dependencies:
       - sdk: IOKit.framework
+      - sdk: Carbon.framework
     entitlements:
       path: Mira/Mira.entitlements
     info:

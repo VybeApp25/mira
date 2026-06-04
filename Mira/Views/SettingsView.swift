@@ -1,13 +1,19 @@
 import SwiftUI
+import Carbon
 
 struct SettingsView: View {
     @ObservedObject var state: MiraState
-    @ObservedObject private var memory = MemoryStore.shared
+    @ObservedObject private var memory   = MemoryStore.shared
+    @ObservedObject private var shortcuts = ShortcutStore.shared
     @Environment(\.dismiss) var dismiss
     @State private var keyInput      = ""
     @State private var saved         = false
     @State private var showOverride  = false
     @State private var selectedVoice: MiraVoice = MiraVoice.saved
+    @State private var recording:    RecordingTarget? = nil
+    @State private var keyMonitor:   Any? = nil
+
+    enum RecordingTarget { case voice, text }
 
     private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
 
@@ -24,6 +30,8 @@ struct SettingsView: View {
                         keySection
                         Divider().background(Color.white.opacity(0.08))
                         voiceSection
+                        Divider().background(Color.white.opacity(0.08))
+                        shortcutsSection
                         Divider().background(Color.white.opacity(0.08))
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
@@ -145,6 +153,98 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Shortcuts section
+
+    @ViewBuilder
+    private var shortcutsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Keyboard Shortcuts", systemImage: "keyboard")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            shortcutRow(label: "Talk to Mira", config: $shortcuts.voice, target: .voice)
+            shortcutRow(label: "Text Mira",    config: $shortcuts.text,  target: .text)
+
+            if recording != nil {
+                Text("Press a key combo — Esc to cancel. Requires ⌃, ⌥, or ⌘.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.28))
+            }
+        }
+        .onDisappear { stopRecording() }
+    }
+
+    private func shortcutRow(label: String, config: Binding<ShortcutConfig>, target: RecordingTarget) -> some View {
+        let isRecording = recording == target
+        return HStack {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.80))
+            Spacer()
+            Button(action: { isRecording ? stopRecording() : startRecording(target, config: config) }) {
+                Text(isRecording ? "Press shortcut…" : config.wrappedValue.displayString)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(isRecording ? accent.opacity(0.7) : .white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(isRecording
+                                ? accent.opacity(0.15)
+                                : Color.white.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(isRecording ? accent.opacity(0.5) : Color.white.opacity(0.10))
+                    )
+                    .animation(.easeInOut(duration: 0.15), value: isRecording)
+            }
+            .buttonStyle(.plain)
+
+            if config.wrappedValue != (target == .voice ? .defaultVoice : .defaultText) {
+                Button(action: {
+                    stopRecording()
+                    config.wrappedValue = target == .voice ? .defaultVoice : .defaultText
+                }) {
+                    Image(systemName: "arrow.uturn.left")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+                .buttonStyle(.plain)
+                .help("Restore default")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    // MARK: - Shortcut recording
+
+    private func startRecording(_ target: RecordingTarget, config: Binding<ShortcutConfig>) {
+        stopRecording()
+        recording = target
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            // Escape cancels
+            if Int(event.keyCode) == kVK_Escape { stopRecording(); return nil }
+
+            let mods = event.modifierFlags.intersection([.control, .option, .command, .shift])
+            guard !mods.isEmpty else { return event }  // require at least one modifier
+
+            let carbonMods = ShortcutConfig.carbonMods(from: mods)
+            let key = event.characters?.uppercased() ?? "?"
+            config.wrappedValue = ShortcutConfig(keyCode: UInt32(event.keyCode),
+                                                  carbonMods: carbonMods,
+                                                  displayKey: key)
+            stopRecording()
+            return nil  // consume
+        }
+    }
+
+    private func stopRecording() {
+        recording = nil
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
     }
 
     // MARK: - Voice section

@@ -22,6 +22,7 @@ final class NotchManager {
     let wakeWord:                  WakeWordService
     private let hoverSummary:      HoverSummaryService
     private let tooltipController: HoverTooltipController
+    private let shortcutManager =  GlobalShortcutManager()
     // Shortcuts are handled via NSMenu key equivalents in StatusBarController
     // (no Accessibility permission needed that way)
 
@@ -70,8 +71,10 @@ final class NotchManager {
         )
         windowManager.install(rootView: island)
         wakeWord.start()
+        shortcutManager.start()
         wireHover()
         wireHoverSummary()
+        wireShortcutUpdates()
         // Expand island when a shortcut fires via StatusBarController's menu key equivalents
         NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { [weak self] _ in
             self?.expandForShortcut()
@@ -135,6 +138,12 @@ final class NotchManager {
         }
 
         hoverManager.start(activationRect: collapsedZone())
+    }
+
+    private func wireShortcutUpdates() {
+        NotificationCenter.default.addObserver(
+            forName: .miraShortcutsChanged, object: nil, queue: .main
+        ) { [weak self] _ in self?.shortcutManager.update() }
     }
 
     private func wireHoverSummary() {

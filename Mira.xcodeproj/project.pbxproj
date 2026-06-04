@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */; };
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
+		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
@@ -37,6 +38,7 @@
 		D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7668116B1E1B08C2A630FA1 /* SettingsView.swift */; };
 		D8F7DE0D6CBE08338593A56F /* NotchGeometryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */; };
 		E14FBAF9DC017FE43C87FCA7 /* IslandChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */; };
+		E1A23111FB0BBE1CC4A86CB1 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B324BC14AED4E3627AA2C7 /* Carbon.framework */; };
 		E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */; };
 		E547C59E6FE420CA4B4922B3 /* PointerOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABB60070E502F8E675BD22D /* PointerOverlay.swift */; };
 		E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401567F80D6C5B2881BDD843 /* NotchManager.swift */; };
@@ -81,8 +83,10 @@
 		A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
 		A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverSummaryService.swift; sourceTree = "<group>"; };
 		AA5914547C8201C6C6241551 /* MiraState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraState.swift; sourceTree = "<group>"; };
+		B4B324BC14AED4E3627AA2C7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureService.swift; sourceTree = "<group>"; };
 		BF8712738938AEA845880976 /* HoverPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverPreferences.swift; sourceTree = "<group>"; };
+		C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
 		C2173DE466719E2BE730C2CC /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		D6A379AF3382596E92921264 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDView.swift; sourceTree = "<group>"; };
@@ -101,6 +105,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				65A733FC2AA9E0468290BBD9 /* IOKit.framework in Frameworks */,
+				E1A23111FB0BBE1CC4A86CB1 /* Carbon.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,6 +203,7 @@
 				BF8712738938AEA845880976 /* HoverPreferences.swift */,
 				0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */,
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
+				C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -205,6 +211,7 @@
 		D8AA324BF4666DEB17DD11F9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B4B324BC14AED4E3627AA2C7 /* Carbon.framework */,
 				177D935B2C9FEEDB97A25EE9 /* IOKit.framework */,
 			);
 			name = Frameworks;
@@ -330,6 +337,7 @@
 				56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
+				29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
 				A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */,
