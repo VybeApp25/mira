@@ -29,9 +29,9 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         keySection
                         Divider().background(Color.white.opacity(0.08))
-                        voiceSection
-                        Divider().background(Color.white.opacity(0.08))
                         shortcutsSection
+                        Divider().background(Color.white.opacity(0.08))
+                        voiceSection
                         Divider().background(Color.white.opacity(0.08))
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
@@ -41,7 +41,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(width: 340, height: 660)
+        .frame(width: 360, height: 720)
         .onAppear { keyInput = state.userAPIKey }
     }
 
