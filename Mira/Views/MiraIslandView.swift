@@ -54,6 +54,7 @@ struct MiraIslandView: View {
     @ObservedObject var overlay:        OverlayWindowController
     let capture:  ScreenCaptureService
     @ObservedObject var voice:     VoiceService
+    @ObservedObject var wakeWord:  WakeWordService
     let geometry: NotchGeometry
 
     // Default to briefing on first expansion of the day; Chat every other time
@@ -223,7 +224,8 @@ struct MiraIslandView: View {
                 miraState: miraState,
                 overlay:   overlay,
                 capture:   capture,
-                voice:     voice
+                voice:     voice,
+                wakeWord:  wakeWord
             )
         case .home:
             HomeTabView(miraState: miraState)

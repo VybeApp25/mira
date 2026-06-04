@@ -16,7 +16,8 @@ struct IslandChatView: View {
     @ObservedObject var miraState: MiraState
     @ObservedObject var overlay:   OverlayWindowController
     let capture: ScreenCaptureService
-    @ObservedObject var voice: VoiceService
+    @ObservedObject var voice:     VoiceService
+    @ObservedObject var wakeWord:  WakeWordService
 
     @State private var messages:        [ChatMessage] = []
     @State private var input:           String        = ""
@@ -24,10 +25,9 @@ struct IslandChatView: View {
     @State private var pendingAction:   PendingAction? = nil
     @State private var errorText:       String?       = nil
     @State private var agentOnline:     Bool          = false
-    @State private var streamingMsgId:  UUID?         = nil  // tracks live AI message in list
+    @State private var streamingMsgId:  UUID?         = nil
 
-    @StateObject private var realtime  = RealtimeVoiceService()
-    @StateObject private var wakeWord  = WakeWordService()
+    @StateObject private var realtime = RealtimeVoiceService()
     private var isVoiceActive: Bool {
         switch realtime.state {
         case .idle: return false
@@ -50,13 +50,15 @@ struct IslandChatView: View {
         .onAppear {
             wireRealtime()
             loadHistory()
-            wakeWord.start()
         }
-        // Manage wake word: pause when voice session is live, resume on idle
+        .onDisappear {
+            realtime.stop()
+        }
+        // Pause wake word while realtime session is live; NotchManager restarts it on collapse.
         .onChange(of: realtime.state) { _, newState in
             switch newState {
             case .idle:
-                wakeWord.start()
+                break
             case .connecting:
                 wakeWord.pause()
             case .speaking:

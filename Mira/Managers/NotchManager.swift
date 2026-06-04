@@ -12,11 +12,15 @@ final class NotchManager {
     private let windowManager: MiraIslandWindowManager
     private let hoverManager:  HoverTrackingManager
 
-    private let taskStore:        AgentTaskStore
-    private let overlay:          OverlayWindowController
-    private let capture:          ScreenCaptureService
-    private let voice:            VoiceService
-    private let hoverSummary:     HoverSummaryService
+    private let taskStore:         AgentTaskStore
+    private let overlay:           OverlayWindowController
+    private let capture:           ScreenCaptureService
+    private let voice:             VoiceService
+    // App-lifetime WakeWordService — exposed so MiraIslandView can pass it down.
+    // Keeping it here prevents the view-recreation cycle from spawning duplicate
+    // audio sessions when the island collapses and re-expands.
+    let wakeWord:                  WakeWordService
+    private let hoverSummary:      HoverSummaryService
     private let tooltipController: HoverTooltipController
     // Shortcuts are handled via NSMenu key equivalents in StatusBarController
     // (no Accessibility permission needed that way)
@@ -33,7 +37,8 @@ final class NotchManager {
         overlay        = OverlayWindowController()
         capture        = ScreenCaptureService()
         voice          = VoiceService()
-        hoverSummary   = HoverSummaryService(apiKey: { state.effectiveAPIKey })
+        wakeWord          = WakeWordService()
+        hoverSummary      = HoverSummaryService(apiKey: { state.effectiveAPIKey })
         tooltipController = HoverTooltipController()
     }
 
@@ -60,9 +65,11 @@ final class NotchManager {
             overlay:        overlay,
             capture:        capture,
             voice:          voice,
+            wakeWord:       wakeWord,
             geometry:       geometry
         )
         windowManager.install(rootView: island)
+        wakeWord.start()
         wireHover()
         wireHoverSummary()
         // Expand island when a shortcut fires via StatusBarController's menu key equivalents
@@ -83,6 +90,7 @@ final class NotchManager {
         // Voice always wins — dismiss any visible tooltip and suspend hover detection.
         hoverSummary.isEnabled = false
         tooltipController.hide()
+        wakeWord.pause()
     }
 
     // MARK: - Hover wiring
@@ -102,9 +110,10 @@ final class NotchManager {
             animController.expand()
             // Widen tracking zone to cover the full expanded panel.
             hoverManager.update(activationRect: expandedZone())
-            // Suppress hover summaries while the island is open.
+            // Suppress hover summaries and wake word while island is open.
             hoverSummary.isEnabled = false
             tooltipController.hide()
+            wakeWord.pause()
         }
 
         hoverManager.onExit = { [weak self] in
@@ -118,6 +127,7 @@ final class NotchManager {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
                     self?.windowManager.setInteractive(false)
                     self?.hoverSummary.isEnabled = true
+                    self?.wakeWord.start()
                 }
             }
             collapseWork = work
