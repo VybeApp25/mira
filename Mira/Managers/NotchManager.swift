@@ -12,17 +12,20 @@ final class NotchManager {
     private let windowManager: MiraIslandWindowManager
     private let hoverManager:  HoverTrackingManager
 
-    private let taskStore:      AgentTaskStore
-    private let overlay:        OverlayWindowController
-    private let capture:        ScreenCaptureService
-    private let voice:          VoiceService
+    private let taskStore:        AgentTaskStore
+    private let overlay:          OverlayWindowController
+    private let capture:          ScreenCaptureService
+    private let voice:            VoiceService
+    private let hoverSummary:     HoverSummaryService
+    private let tooltipController: HoverTooltipController
     // Shortcuts are handled via NSMenu key equivalents in StatusBarController
     // (no Accessibility permission needed that way)
 
     init() {
         let geo        = NotchGeometryProvider.detect()
         geometry       = geo
-        miraState      = MiraState()
+        let state      = MiraState()
+        miraState      = state
         animController = AnimationController(geometry: geo)
         windowManager  = MiraIslandWindowManager(geometry: geo)
         hoverManager   = HoverTrackingManager()
@@ -30,6 +33,8 @@ final class NotchManager {
         overlay        = OverlayWindowController()
         capture        = ScreenCaptureService()
         voice          = VoiceService()
+        hoverSummary   = HoverSummaryService(apiKey: { state.effectiveAPIKey })
+        tooltipController = HoverTooltipController()
     }
 
     func setup() {
@@ -59,6 +64,7 @@ final class NotchManager {
         )
         windowManager.install(rootView: island)
         wireHover()
+        wireHoverSummary()
         // Expand island when a shortcut fires via StatusBarController's menu key equivalents
         NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { [weak self] _ in
             self?.expandForShortcut()
@@ -74,6 +80,9 @@ final class NotchManager {
         windowManager.setInteractive(true)
         animController.expand()
         hoverManager.update(activationRect: expandedZone())
+        // Voice always wins — dismiss any visible tooltip and suspend hover detection.
+        hoverSummary.isEnabled = false
+        tooltipController.hide()
     }
 
     // MARK: - Hover wiring
@@ -93,6 +102,9 @@ final class NotchManager {
             animController.expand()
             // Widen tracking zone to cover the full expanded panel.
             hoverManager.update(activationRect: expandedZone())
+            // Suppress hover summaries while the island is open.
+            hoverSummary.isEnabled = false
+            tooltipController.hide()
         }
 
         hoverManager.onExit = { [weak self] in
@@ -105,6 +117,7 @@ final class NotchManager {
                 animController.collapse()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
                     self?.windowManager.setInteractive(false)
+                    self?.hoverSummary.isEnabled = true
                 }
             }
             collapseWork = work
@@ -112,6 +125,21 @@ final class NotchManager {
         }
 
         hoverManager.start(activationRect: collapsedZone())
+    }
+
+    private func wireHoverSummary() {
+        hoverSummary.onEvent = { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .summary(let text, let pos):
+                tooltipController.show(text: text, near: pos)
+            case .explainStart(let pos):
+                tooltipController.showLoading(near: pos)
+            case .explain(let text, let pos):
+                tooltipController.show(text: text, near: pos, isExplanation: true)
+            }
+        }
+        hoverSummary.start()
     }
 
     /// Small zone around the notch — triggers open when cursor enters.
