@@ -160,7 +160,7 @@ struct BriefingView: View {
     private func eventRow(_ event: EKEvent) -> some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(event.calendar.cgColor.map { Color($0) } ?? accent)
+                .fill((event.calendar?.cgColor).flatMap { Color($0) } ?? accent)
                 .frame(width: 5, height: 5)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 0) {

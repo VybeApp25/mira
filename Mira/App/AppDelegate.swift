@@ -7,6 +7,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // Request Screen Recording permission up front so it's granted before
+        // HoverSummaryService or ScreenCaptureService makes its first capture attempt.
+        ScreenCaptureService.requestAccessIfNeeded()
+
         let manager = NotchManager()
         manager.setup()
         notchManager = manager
