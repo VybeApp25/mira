@@ -14,14 +14,36 @@ enum MiraToolService {
         // ── Memory tools ──────────────────────────────────────────────────────────
         [
             "type": "function",
+            "name": "save_content",
+            "description": """
+                Save user-owned content to Notes or Files. \
+                Call when the user asks to save, store, keep, write down, or export content. \
+                destination "notes": ideas, drafts, text, anything editable the user wants to revisit. \
+                destination "files": structured output, exports, documents to keep as a file. \
+                NEVER use this for user preferences or identity — use remember for those.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "content":     ["type": "string",
+                                   "description": "The full content to save"],
+                    "title":       ["type": "string",
+                                   "description": "Title or filename (without extension)"],
+                    "destination": ["type": "string",
+                                   "enum": ["notes", "files"],
+                                   "description": "notes = Notes app, files = text file on Desktop"]
+                ],
+                "required": ["content", "destination"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
             "name": "remember",
             "description": """
-                Store or update something about the user in long-term memory. \
-                Call this proactively when the user states a preference ("I use Safari"), \
-                shares a personal fact ("I'm training for a marathon"), \
-                mentions an ongoing project ("I'm building a workout app"), \
-                reveals a goal ("I want to hit 200 push-ups"), or names a person they mention often. \
-                Use snake_case keys like preferred_browser, current_project, workout_goal.
+                Store a persistent fact about the user — preferences, identity, habits, goals, or ongoing projects. \
+                Call when the user says "remember that", "I prefer", "from now on", or explicitly states something about themselves. \
+                Use snake_case keys like preferred_browser, workout_goal, current_project. \
+                NEVER call this to save content, documents, notes, tasks, or anything the user wants to read later — use save_content for those.
                 """,
             "parameters": [
                 "type": "object",
@@ -169,6 +191,7 @@ enum MiraToolService {
     static func execute(name: String, argsJSON: String) async -> String {
         let args = parse(argsJSON)
         switch name {
+        case "save_content":        return await saveContent(args)
         case "remember":            return await rememberMemory(args)
         case "recall_memories":     return await recallMemories(args)
         case "forget":              return await forgetMemory(args)
@@ -186,6 +209,64 @@ enum MiraToolService {
         guard let data = json.data(using: .utf8),
               let obj  = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
+    }
+
+    // MARK: - save_content
+
+    private static func saveContent(_ args: [String: Any]) async -> String {
+        guard let content = args["content"] as? String,
+              let dest    = args["destination"] as? String else {
+            return "Missing required fields: content, destination."
+        }
+        let rawTitle = args["title"] as? String
+        let title    = rawTitle?.isEmpty == false
+            ? rawTitle!
+            : String(content.prefix(40).components(separatedBy: .newlines).first ?? "Mira Note")
+
+        switch dest {
+        case "notes":
+            return saveToNotes(content: content, title: title)
+        case "files":
+            return saveToFile(content: content, title: title)
+        default:
+            return "Unknown destination '\(dest)'."
+        }
+    }
+
+    private static func saveToNotes(content: String, title: String) -> String {
+        let safe    = content.replacingOccurrences(of: "\\", with: "\\\\")
+                             .replacingOccurrences(of: "\"", with: "\\\"")
+        let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
+        let script  = """
+            tell application "Notes"
+                make new note with properties {name:"\(safeTitle)", body:"\(safe)"}
+            end tell
+            """
+        var err: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&err)
+        return err == nil
+            ? "Saved to Notes: \"\(title)\"."
+            : "Failed to save to Notes. Make sure Notes is available."
+    }
+
+    private static func saveToFile(content: String, title: String) -> String {
+        let safeName = title
+            .components(separatedBy: .init(charactersIn: "/\\:*?\"<>|"))
+            .joined(separator: "-")
+        let desktop  = URL(fileURLWithPath: "\(NSHomeDirectory())/Desktop")
+        var url      = desktop.appendingPathComponent("\(safeName).txt")
+        var counter  = 1
+        while FileManager.default.fileExists(atPath: url.path) {
+            url = desktop.appendingPathComponent("\(safeName) \(counter).txt")
+            counter += 1
+        }
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.open(url)
+            return "Saved \"\(url.lastPathComponent)\" to your Desktop."
+        } catch {
+            return "Failed to write file: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Memory tools

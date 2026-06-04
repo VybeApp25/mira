@@ -396,6 +396,9 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ) as? [String: Any]) ?? [:]
 
         switch name {
+        case "save_content":
+            let dest = args["destination"] as? String ?? "notes"
+            return dest == "files" ? "Saving file…" : "Saving to Notes…"
         case "open_application":
             let app = args["app_name"] as? String ?? "app"
             return "Opening \(app)…"
