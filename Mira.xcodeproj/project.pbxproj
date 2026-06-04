@@ -12,6 +12,7 @@
 		1504C28D46A624009B19A06D /* ToolTraceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */; };
 		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
+		47D10CE56F35895DF6988812 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B81907F9DDB9297D51C992A8 /* Assets.xcassets */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */; };
@@ -88,6 +89,7 @@
 		A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverSummaryService.swift; sourceTree = "<group>"; };
 		AA5914547C8201C6C6241551 /* MiraState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraState.swift; sourceTree = "<group>"; };
 		B4B324BC14AED4E3627AA2C7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		B81907F9DDB9297D51C992A8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureService.swift; sourceTree = "<group>"; };
 		BF8712738938AEA845880976 /* HoverPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverPreferences.swift; sourceTree = "<group>"; };
 		C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 		B1E35459BDE79C37D5E39EE8 /* Mira */ = {
 			isa = PBXGroup;
 			children = (
+				B81907F9DDB9297D51C992A8 /* Assets.xcassets */,
 				D6A379AF3382596E92921264 /* Info.plist */,
 				DA0389949E9946918CEE0916 /* Mira.entitlements */,
 				FD7C70A04688522096953A64 /* App */,
@@ -257,6 +260,7 @@
 			buildConfigurationList = 71645AA03320AAE7C1C513F1 /* Build configuration list for PBXNativeTarget "Mira" */;
 			buildPhases = (
 				8CC7FB676E4E4AEB2529B18A /* Sources */,
+				B19DAB7420EB69D1E22FD93F /* Resources */,
 				22EDEAB8214AC2CD5D499BCE /* Frameworks */,
 			);
 			buildRules = (
@@ -303,6 +307,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B19DAB7420EB69D1E22FD93F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				47D10CE56F35895DF6988812 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8CC7FB676E4E4AEB2529B18A /* Sources */ = {
