@@ -278,14 +278,12 @@ struct MiraPanel: View {
                     pendingAction = pending
                 } else {
                     response = result.reply
-                    voice.speak(result.reply)
                 }
             } else {
                 // Fall back to direct Claude with screen vision
                 let screenshot = try? await capture.captureMainDisplay()
                 let text = try await claude.ask(prompt: prompt, screenshot: screenshot)
                 response = text
-                voice.speak(text)
 
                 if let img = screenshot, let pt = try? await claude.locateElement(prompt, in: img) {
                     showPointerFeedback = true
@@ -308,7 +306,6 @@ struct MiraPanel: View {
         do {
             let result = try await agent.confirm(action: action, claudeApiKey: state.effectiveAPIKey)
             response = result
-            voice.speak(result)
         } catch {
             state.errorMessage = error.localizedDescription
         }

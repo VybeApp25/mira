@@ -41,6 +41,10 @@ class MiraState: ObservableObject {
         hasKey && (usingBundledKey || isPro || dailyUsageCount < MiraState.freeLimit)
     }
 
+    /// Mirrors RealtimeVoiceService.state so the collapsed pill can react without
+    /// owning the service. IslandChatView writes this via onChange(of: realtime.state).
+    @Published var realtimeState: RealtimeState = .idle
+
     var cursorColor: Color { Color(red: 0.29, green: 0.62, blue: 1.0) }
 
     // Connected Composio apps

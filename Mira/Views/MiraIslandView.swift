@@ -114,9 +114,22 @@ struct MiraIslandView: View {
         HStack(spacing: 7) {
             Image(systemName: "eye.fill")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(red: 0.29, green: 0.62, blue: 1.0))
-            if voice.isListening { LiveBars() }
-            if !taskStore.tasks.isEmpty {
+                .foregroundColor(collapsedAccent)
+
+            switch miraState.realtimeState {
+            case .thinking:
+                CollapsedThinkingDots()
+            case .speaking:
+                LiveBars(color: Color(red: 0.75, green: 0.35, blue: 0.95))
+            case .recording:
+                CollapsedRecordingDot()
+            case .connecting, .transcribing:
+                CollapsedConnectingDot()
+            default:
+                if voice.isListening { LiveBars() }
+            }
+
+            if !taskStore.tasks.isEmpty, case .idle = miraState.realtimeState {
                 Text("\(taskStore.tasks.count)")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white)
@@ -126,6 +139,16 @@ struct MiraIslandView: View {
             }
         }
         .padding(.horizontal, 10)
+    }
+
+    private var collapsedAccent: Color {
+        switch miraState.realtimeState {
+        case .thinking:                   return Color(red: 1.0,  green: 0.75, blue: 0.20)
+        case .speaking:                   return Color(red: 0.75, green: 0.35, blue: 0.95)
+        case .recording:                  return Color(red: 0.20, green: 0.84, blue: 0.29)
+        case .connecting, .transcribing:  return Color(red: 0.29, green: 0.62, blue: 1.0)
+        default:                          return Color(red: 0.29, green: 0.62, blue: 1.0)
+        }
     }
 
     // MARK: - Expanded layout
@@ -244,21 +267,82 @@ struct MiraIslandView: View {
 // MARK: - Live audio bars
 
 private struct LiveBars: View {
+    var color: Color = Color.red.opacity(0.80)
     var body: some View {
         HStack(spacing: 2) {
-            Bar(delay: 0.00); Bar(delay: 0.12); Bar(delay: 0.24)
+            Bar(delay: 0.00, color: color)
+            Bar(delay: 0.12, color: color)
+            Bar(delay: 0.24, color: color)
         }
     }
     private struct Bar: View {
         let delay: Double
+        let color: Color
         @State private var h: CGFloat = 4
         var body: some View {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(Color.red.opacity(0.80))
+                .fill(color)
                 .frame(width: 3, height: h)
                 .onAppear {
                     withAnimation(.easeInOut(duration: 0.40).repeatForever(autoreverses: true).delay(delay)) { h = 14 }
                 }
         }
+    }
+}
+
+// MARK: - Collapsed state indicators
+
+private struct CollapsedThinkingDots: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Dot(delay: 0.00)
+            Dot(delay: 0.18)
+            Dot(delay: 0.36)
+        }
+    }
+    private struct Dot: View {
+        let delay: Double
+        @State private var scale: CGFloat = 0.5
+        var body: some View {
+            Circle()
+                .fill(Color(red: 1.0, green: 0.75, blue: 0.20))
+                .frame(width: 4, height: 4)
+                .scaleEffect(scale)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(delay)) {
+                        scale = 1.0
+                    }
+                }
+        }
+    }
+}
+
+private struct CollapsedRecordingDot: View {
+    @State private var opacity: Double = 1.0
+    var body: some View {
+        Circle()
+            .fill(Color(red: 0.20, green: 0.84, blue: 0.29))
+            .frame(width: 6, height: 6)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.60).repeatForever(autoreverses: true)) {
+                    opacity = 0.3
+                }
+            }
+    }
+}
+
+private struct CollapsedConnectingDot: View {
+    @State private var opacity: Double = 0.3
+    var body: some View {
+        Circle()
+            .fill(Color(red: 0.29, green: 0.62, blue: 1.0))
+            .frame(width: 6, height: 6)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.50).repeatForever(autoreverses: true)) {
+                    opacity = 1.0
+                }
+            }
     }
 }

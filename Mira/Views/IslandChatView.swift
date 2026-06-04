@@ -53,9 +53,12 @@ struct IslandChatView: View {
         }
         .onDisappear {
             realtime.stop()
+            miraState.realtimeState = .idle
         }
         // Pause wake word while realtime session is live; NotchManager restarts it on collapse.
+        // Also mirror state into MiraState so the collapsed pill can show thinking/speaking.
         .onChange(of: realtime.state) { _, newState in
+            miraState.realtimeState = newState
             switch newState {
             case .idle:
                 break
@@ -401,13 +404,11 @@ struct IslandChatView: View {
                     pendingAction = pending
                 } else {
                     messages.append(ChatMessage(role: .mira, text: result.reply))
-                    voice.speak(result.reply)
                 }
             } else {
                 let screenshot = try? await capture.captureMainDisplay()
                 let text = try await claude.ask(prompt: prompt, screenshot: screenshot)
                 messages.append(ChatMessage(role: .mira, text: text))
-                voice.speak(text)
                 if let img = screenshot, let pt = try? await claude.locateElement(prompt, in: img) {
                     overlay.show(at: pt, label: "Here")
                 }
@@ -427,7 +428,6 @@ struct IslandChatView: View {
         do {
             let reply = try await AgentService.shared.confirm(action: action, claudeApiKey: miraState.effectiveAPIKey)
             messages.append(ChatMessage(role: .mira, text: reply))
-            voice.speak(reply)
         } catch { errorText = error.localizedDescription }
         isLoading = false
     }
