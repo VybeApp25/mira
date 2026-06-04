@@ -375,7 +375,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - Tool execution
 
     private func runTool(callId: String, name: String, argsJSON: String) async {
+        let start  = Date()
         let output = await MiraToolService.execute(name: name, argsJSON: argsJSON)
+        let ms     = Int(Date().timeIntervalSince(start) * 1000)
+        await MainActor.run {
+            ToolTraceStore.shared.record(toolName: name, argsJSON: argsJSON,
+                                         result: output, durationMs: ms)
+        }
         toolStatus = ""
         emit([
             "type": "conversation.item.create",

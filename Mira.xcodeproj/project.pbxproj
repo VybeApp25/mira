@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */; };
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
+		1504C28D46A624009B19A06D /* ToolTraceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */; };
 		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
@@ -44,6 +45,7 @@
 		E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401567F80D6C5B2881BDD843 /* NotchManager.swift */; };
 		EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */; };
 		F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06E43F02224F648C3BC05E6 /* AppDelegate.swift */; };
+		F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */; };
 		F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */; };
 		F957E4929A175438F6FA0F24 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5AB62B5302AD934D3ED258F /* AgentService.swift */; };
 		FA4EE357304AEC81E5114B8A /* HoverTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */; };
@@ -59,6 +61,7 @@
 		16778FFCF54471FB1ABBB110 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
 		1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecrets.swift; sourceTree = "<group>"; };
 		177D935B2C9FEEDB97A25EE9 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceView.swift; sourceTree = "<group>"; };
 		202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandChatView.swift; sourceTree = "<group>"; };
 		2824EFB7442C6F4AF52C6FBE /* Mira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mira.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandWindowManager.swift; sourceTree = "<group>"; };
@@ -67,6 +70,7 @@
 		3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsTabView.swift; sourceTree = "<group>"; };
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
+		525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceStore.swift; sourceTree = "<group>"; };
 		54D4739EA771EF0C39908A69 /* MiraIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandView.swift; sourceTree = "<group>"; };
 		6AAB411962D3D66F94EE5483 /* MiraPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraPanel.swift; sourceTree = "<group>"; };
 		6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTooltipController.swift; sourceTree = "<group>"; };
@@ -204,6 +208,7 @@
 				0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */,
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
 				C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */,
+				525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -229,6 +234,7 @@
 				D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */,
 				EABB60070E502F8E675BD22D /* PointerOverlay.swift */,
 				F7668116B1E1B08C2A630FA1 /* SettingsView.swift */,
+				1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -339,6 +345,8 @@
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
+				F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */,
+				1504C28D46A624009B19A06D /* ToolTraceView.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
 				A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */,
 				FFD6E7D16C01F5E9BF1CB61E /* WeatherService.swift in Sources */,

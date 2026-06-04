@@ -11,7 +11,8 @@ struct SettingsView: View {
     @State private var showOverride  = false
     @State private var selectedVoice: MiraVoice = MiraVoice.saved
     @State private var recording:    RecordingTarget? = nil
-    @State private var keyMonitor:   Any? = nil
+    @State private var keyMonitor:    Any? = nil
+    @State private var showTraces  = false
 
     enum RecordingTarget { case voice, text }
 
@@ -36,6 +37,8 @@ struct SettingsView: View {
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
                         usageSection
+                        Divider().background(Color.white.opacity(0.08))
+                        toolActivityButton
                     }
                     .padding(18)
                 }
@@ -43,6 +46,7 @@ struct SettingsView: View {
         }
         .frame(width: 360, height: 720)
         .onAppear { keyInput = state.userAPIKey }
+        .sheet(isPresented: $showTraces) { ToolTraceView() }
     }
 
     // MARK: - Header
@@ -412,6 +416,33 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(state.usingBundledKey ? .green : .white.opacity(0.5))
         }
+    }
+
+    // MARK: - Tool activity
+
+    @ObservedObject private var traceStore = ToolTraceStore.shared
+
+    private var toolActivityButton: some View {
+        Button(action: { showTraces = true }) {
+            HStack {
+                Label("Tool Activity", systemImage: "waveform.badge.clock")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                if !traceStore.traces.isEmpty {
+                    Text("\(traceStore.traces.count)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.35))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.white.opacity(0.07))
+                        .clipShape(Capsule())
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.20))
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
