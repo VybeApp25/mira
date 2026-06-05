@@ -179,6 +179,16 @@ final class ProposalStore: ObservableObject {
         /// NaN when fewer than 2 populated buckets or fewer than 5 reviewed proposals.
         /// A miscalibrated model has lower scores; a well-calibrated model trends toward 1.0.
         let calibrationScore: Double
+        /// (approved + rejected) / total. NaN when total == 0.
+        /// Measures review engagement — a system with 90% approval but 10% coverage is not trustworthy.
+        let reviewCoverage: Double
+        /// Composite signal: approvalRate × reviewCoverage × weightedApprovalRate × calibrationFactor.
+        /// Factors with insufficient data are omitted from the product (partial score).
+        /// isPartialTrustworthiness indicates whether all 4 factors contributed.
+        /// NOT a gate signal — read alongside individual components, never instead of them.
+        /// Calibration without accuracy is useless. Accuracy without calibration is dangerous.
+        let trustworthinessIndex:      Double
+        let isPartialTrustworthiness:  Bool   // true when weightedApproval or calibration had no data
     }
 
     /// Total proposal count across a set of projects — used by SettingsView badge.
@@ -220,27 +230,45 @@ final class ProposalStore: ObservableObject {
         let ece: Double = {
             let reviewedCount = all.filter { $0.status == .approved || $0.status == .rejected }.count
             guard buckets.count >= 2, reviewedCount >= 5 else { return Double.nan }
-            let ece = buckets.reduce(0.0) { sum, b in
+            return buckets.reduce(0.0) { sum, b in
                 sum + abs(b.calibrationError) * (Double(b.proposalCount) / Double(reviewedCount))
             }
-            return ece
+        }()
+        let calibScore = ece.isNaN ? Double.nan : max(0, 1.0 - ece)
+
+        let approvalRate  = reviewed == 0 ? Double.nan : Double(approved) / Double(reviewed)
+        let coverageRate  = all.isEmpty   ? Double.nan : Double(reviewed) / Double(all.count)
+
+        // Trustworthiness: product of available factors in [0,1].
+        // Accuracy (approvalRate × coverage) is always the base — calibration and review
+        // confidence enrich it when available but cannot substitute for it.
+        let (trustScore, isPartial): (Double, Bool) = {
+            guard !approvalRate.isNaN, !coverageRate.isNaN else { return (Double.nan, false) }
+            var product = approvalRate * coverageRate
+            var partial = false
+            if !weightedApproval.isNaN { product *= weightedApproval } else { partial = true }
+            if !calibScore.isNaN       { product *= calibScore       } else { partial = true }
+            return (product, partial)
         }()
 
         return Metrics(
-            total:                all.count,
-            pending:              pendingProposals.count,
-            approved:             approved,
-            rejected:             rejected,
-            superseded:           all.filter { $0.status == .superseded }.count,
-            approvalRate:         reviewed == 0 ? Double.nan : Double(approved) / Double(reviewed),
-            rejectionRate:        reviewed == 0 ? Double.nan : Double(rejected) / Double(reviewed),
-            supersededRate:       all.isEmpty  ? Double.nan : Double(all.filter { $0.status == .superseded }.count) / Double(all.count),
-            averageReviewLatency: avgLatency,
-            medianReviewLatency:  medianLatency,
-            stalePendingCount:    stale,
-            oldestPendingAge:     oldest,
-            weightedApprovalRate: weightedApproval,
-            calibrationScore:     ece.isNaN ? Double.nan : max(0, 1.0 - ece)
+            total:                    all.count,
+            pending:                  pendingProposals.count,
+            approved:                 approved,
+            rejected:                 rejected,
+            superseded:               all.filter { $0.status == .superseded }.count,
+            approvalRate:             approvalRate,
+            rejectionRate:            reviewed == 0 ? Double.nan : Double(rejected) / Double(reviewed),
+            supersededRate:           all.isEmpty ? Double.nan : Double(all.filter { $0.status == .superseded }.count) / Double(all.count),
+            averageReviewLatency:     avgLatency,
+            medianReviewLatency:      medianLatency,
+            stalePendingCount:        stale,
+            oldestPendingAge:         oldest,
+            weightedApprovalRate:     weightedApproval,
+            calibrationScore:         calibScore,
+            reviewCoverage:           coverageRate,
+            trustworthinessIndex:     trustScore,
+            isPartialTrustworthiness: isPartial
         )
     }
 

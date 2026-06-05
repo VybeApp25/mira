@@ -129,9 +129,49 @@ struct ProposalMetricsView: View {
                 if !globalWeightedApproval.isNaN {
                     confidenceSignalRow
                 }
+                if !globalTrustworthiness.0.isNaN {
+                    trustworthinessRow
+                }
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private var trustworthinessRow: some View {
+        let (score, partial) = globalTrustworthiness
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "seal.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(accent.opacity(0.55))
+                    .frame(width: 12)
+                Text("Trustworthiness" + (partial ? " (partial)" : ""))
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.65))
+                Spacer()
+                Text(String(format: "%.0f%%", score * 100))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(trustColor(score))
+                Text("composite")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.20))
+                    .frame(width: 60, alignment: .trailing)
+            }
+            Text("approval × coverage" + (!globalWeightedApproval.isNaN ? " × reviewer confidence" : "") + (!globalCalibrationScore.isNaN ? " × calibration" : ""))
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.22))
+                .padding(.leading, 20)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color.white.opacity(0.02))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(RoundedRectangle(cornerRadius: 5).stroke(accent.opacity(0.10), lineWidth: 0.5))
+    }
+
+    private func trustColor(_ score: Double) -> Color {
+        if score >= 0.60 { return successG }
+        if score >= 0.35 { return amber }
+        return Color(red: 1.0, green: 0.40, blue: 0.40)
     }
 
     /// Informational row — no gate threshold yet. Distinguishes 80% high-confidence
@@ -488,6 +528,22 @@ struct ProposalMetricsView: View {
             .map { proposalStore.metrics(for: $0.id).calibrationScore }
             .filter { !$0.isNaN }
         return scores.isEmpty ? Double.nan : scores.reduce(0, +) / Double(scores.count)
+    }
+
+    /// Returns (score, isPartial). Aggregated as the product of per-project index means,
+    /// weighted by reviewed proposal count so active projects dominate.
+    private var globalTrustworthiness: (Double, Bool) {
+        let entries = engine.projects.map { proposalStore.metrics(for: $0.id) }
+            .filter { !$0.trustworthinessIndex.isNaN }
+        guard !entries.isEmpty else { return (Double.nan, false) }
+        let totalReviewed = entries.reduce(0) { $0 + $1.approved + $1.rejected }
+        guard totalReviewed > 0 else { return (Double.nan, false) }
+        let weighted = entries.reduce(0.0) { sum, m in
+            let w = Double(m.approved + m.rejected) / Double(totalReviewed)
+            return sum + m.trustworthinessIndex * w
+        }
+        let partial = entries.contains { $0.isPartialTrustworthiness }
+        return (weighted, partial)
     }
 
     private var globalSpecificity: Double {
