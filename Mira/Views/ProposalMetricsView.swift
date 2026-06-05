@@ -29,6 +29,8 @@ struct ProposalMetricsView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             globalSection
                             Divider().background(Color.white.opacity(0.06))
+                            gateBreakdownSection
+                            Divider().background(Color.white.opacity(0.06))
                             latencySection
                             if !projectRows.isEmpty {
                                 Divider().background(Color.white.opacity(0.06))
@@ -105,6 +107,55 @@ struct ProposalMetricsView: View {
         .padding(.vertical, 10)
         .background(Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: - Gate breakdown
+
+    private var gateBreakdownSection: some View {
+        let (statusLabel, _) = gateStatus
+        return VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("13C gate · \(statusLabel)")
+            VStack(spacing: 4) {
+                gateRow("Proposals",      value: "\(globalTotal)",        threshold: "≥ 20",   passing: globalTotal >= 20)
+                gateRow("Approval rate",  value: rateString(globalApprovalRate),   threshold: "≥ 75%",  passing: !globalApprovalRate.isNaN  && globalApprovalRate  >= 0.75)
+                gateRow("Rejection rate", value: rateString(globalRejectionRate),  threshold: "≤ 15%",  passing: !globalRejectionRate.isNaN && globalRejectionRate <= 0.15)
+                gateRow("Superseded",     value: rateString(globalSupersededRate), threshold: "≤ 20%",  passing: !globalSupersededRate.isNaN && globalSupersededRate <= 0.20)
+                gateRow("Specificity",    value: specString(globalSpecificity),    threshold: "≥ 0.50", passing: !globalSpecificity.isNaN   && globalSpecificity   >= 0.50)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func gateRow(_ label: String, value: String, threshold: String, passing: Bool) -> some View {
+        let failColor = Color(red: 1.0, green: 0.40, blue: 0.40)
+        return HStack(spacing: 8) {
+            Image(systemName: passing ? "checkmark" : "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(passing ? successG : failColor)
+                .frame(width: 12)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.65))
+            Spacer()
+            Text(value)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(passing ? .white.opacity(0.82) : failColor.opacity(0.90))
+            Text(threshold)
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.22))
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(passing ? Color.white.opacity(0.03) : failColor.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func rateString(_ rate: Double) -> String {
+        rate.isNaN ? "—" : String(format: "%.0f%%", rate * 100)
+    }
+
+    private func specString(_ score: Double) -> String {
+        score.isNaN ? "—" : String(format: "%.2f", score)
     }
 
     // MARK: - Latency
