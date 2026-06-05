@@ -7,8 +7,37 @@
 //
 // Phase 13B: investigation / refactor / test / migration proposals (all .md)
 // Phase 13C: patch proposals (.diff) — requires filesystem read access
+//
+// Session-mode invariant (enforced by ProposalStore):
+//   A session may generate proposals OR apply proposals — never both.
+//   Application requires generatedInSession != currentSessionId.
 
 import Foundation
+
+// MARK: - ProposalError
+
+enum ProposalError: Error, LocalizedError {
+    case sameSessionApplication(sessionId: UUID)
+    case sessionModeConflict(sessionId: UUID, existing: ProposalSessionMode)
+
+    var errorDescription: String? {
+        switch self {
+        case .sameSessionApplication(let id):
+            return "Proposal cannot be applied in the same session that generated it (session \(id.uuidString.prefix(8)))."
+        case .sessionModeConflict(let id, let mode):
+            return "Session \(id.uuidString.prefix(8)) is already in .\(mode) mode — cannot switch within a session."
+        }
+    }
+}
+
+// MARK: - ProposalSessionMode
+
+/// Enforces that a session either generates or applies proposals, never both.
+/// ProposalStore tracks this per session ID in-memory for the app lifetime.
+enum ProposalSessionMode: String {
+    case generating
+    case applying
+}
 
 // MARK: - ProposalStatus
 
@@ -49,20 +78,21 @@ enum ProposalType: String, Codable, CaseIterable {
 /// Sidecar record stored alongside each proposal artifact in Proposals/<project-id>/metadata.json.
 /// Journal checkpoints reference the artifact path — metadata provides the searchable index.
 struct ProposalMetadata: Identifiable, Codable {
-    let id:            UUID
-    let projectId:     UUID
-    let sessionId:     UUID
-    let createdAt:     Date
+    let id:                  UUID
+    let projectId:           UUID
+    /// The session that generated this proposal. Phase 13C must verify its apply session differs.
+    let generatedInSession:  UUID
+    let createdAt:           Date
 
-    let title:         String           // same discipline as checkpoint titles
-    let rationale:     String           // why this proposal exists
-    let type:          ProposalType
-    let confidence:    Double           // 0.0–1.0 agent self-assessment
-    let affectedFiles: [String]         // files the proposal would modify (not yet modified)
+    let title:               String     // same discipline as checkpoint titles
+    let rationale:           String     // why this proposal exists
+    let type:                ProposalType
+    let confidence:          Double     // 0.0–1.0 agent self-assessment
+    let affectedFiles:       [String]   // files the proposal would modify (not yet modified)
 
-    var status:        ProposalStatus
-    var reviewedAt:    Date?
-    var reviewNote:    String?          // user's note on approval or rejection
+    var status:              ProposalStatus
+    var reviewedAt:          Date?
+    var reviewNote:          String?    // user's note on approval or rejection
 
     // Deterministic filename used as the artifact on disk
     var artifactFilename: String {

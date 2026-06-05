@@ -13,6 +13,36 @@ final class ProposalStore: ObservableObject {
     static let shared = ProposalStore()
     private init() {}
 
+    // In-memory session mode registry.
+    // Once a session is marked .generating or .applying it cannot switch.
+    private var sessionModes: [UUID: ProposalSessionMode] = [:]
+
+    /// Call before generating a proposal in a session.
+    /// Throws `.sessionModeConflict` if the session is already in .applying mode.
+    func claimGenerating(sessionId: UUID) throws {
+        if let existing = sessionModes[sessionId], existing != .generating {
+            throw ProposalError.sessionModeConflict(sessionId: sessionId, existing: existing)
+        }
+        sessionModes[sessionId] = .generating
+    }
+
+    /// Call before applying a proposal in a session.
+    /// Throws `.sameSessionApplication` if the session generated the proposal.
+    /// Throws `.sessionModeConflict` if the session is already in .generating mode.
+    func claimApplying(proposal: ProposalMetadata, inSession sessionId: UUID) throws {
+        guard proposal.generatedInSession != sessionId else {
+            throw ProposalError.sameSessionApplication(sessionId: sessionId)
+        }
+        if let existing = sessionModes[sessionId], existing != .applying {
+            throw ProposalError.sessionModeConflict(sessionId: sessionId, existing: existing)
+        }
+        sessionModes[sessionId] = .applying
+    }
+
+    func sessionMode(for sessionId: UUID) -> ProposalSessionMode? {
+        sessionModes[sessionId]
+    }
+
     // MARK: - Directories
 
     /// Returns (and creates if needed) the proposals directory for a project.
@@ -39,19 +69,20 @@ final class ProposalStore: ObservableObject {
     func create(result: ProposalResult,
                 projectId: UUID,
                 sessionId: UUID) throws -> (metadata: ProposalMetadata, relativePath: String) {
+        try claimGenerating(sessionId: sessionId)
         let metadata = ProposalMetadata(
-            id:            UUID(),
-            projectId:     projectId,
-            sessionId:     sessionId,
-            createdAt:     Date(),
-            title:         result.title,
-            rationale:     result.rationale,
-            type:          result.type,
-            confidence:    result.confidence,
-            affectedFiles: result.affectedFiles,
-            status:        .pending,
-            reviewedAt:    nil,
-            reviewNote:    nil
+            id:                 UUID(),
+            projectId:          projectId,
+            generatedInSession: sessionId,
+            createdAt:          Date(),
+            title:              result.title,
+            rationale:          result.rationale,
+            type:               result.type,
+            confidence:         result.confidence,
+            affectedFiles:      result.affectedFiles,
+            status:             .pending,
+            reviewedAt:         nil,
+            reviewNote:         nil
         )
 
         let dir         = directory(for: projectId)
