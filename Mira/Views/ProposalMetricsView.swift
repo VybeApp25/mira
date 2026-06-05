@@ -1,0 +1,320 @@
+// ProposalMetricsView.swift
+// Phase 13B — Proposal quality dashboard
+//
+// Surfaces the confusion matrix + latency metrics accumulated by ProposalStore.
+// This view exists to make the 13C promotion decision data-driven rather than
+// architectural. Open from Settings → Proposal Metrics.
+
+import SwiftUI
+
+struct ProposalMetricsView: View {
+    @ObservedObject private var engine        = ProjectEngine.shared
+    @ObservedObject private var proposalStore = ProposalStore.shared
+
+    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
+    private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
+    private let muted    = Color.white.opacity(0.18)
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.10, green: 0.10, blue: 0.12).ignoresSafeArea()
+            VStack(spacing: 0) {
+                header
+                Divider().background(Color.white.opacity(0.08))
+                if globalTotal == 0 {
+                    emptyState
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            globalSection
+                            Divider().background(Color.white.opacity(0.06))
+                            latencySection
+                            if !projectRows.isEmpty {
+                                Divider().background(Color.white.opacity(0.06))
+                                perProjectSection
+                            }
+                        }
+                        .padding(.bottom, 16)
+                    }
+                }
+            }
+        }
+        .frame(width: 420, height: 560)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            Text("Proposal Metrics")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+            Spacer()
+            gateBadge
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+    }
+
+    /// Shows whether the 13C promotion gate is currently satisfiable.
+    private var gateBadge: some View {
+        let (label, color) = gateStatus
+        return HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
+    }
+
+    // MARK: - Global confusion matrix
+
+    private var globalSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Outcomes · \(globalTotal) proposals total")
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()),
+                                GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                matrixCell(value: globalApproved,  label: "Approved",    color: successG)
+                matrixCell(value: globalRejected,  label: "Rejected",    color: Color(red: 1.0, green: 0.40, blue: 0.40))
+                matrixCell(value: globalSuperseded, label: "Superseded", color: muted)
+                matrixCell(value: globalStale,     label: "Unreviewed",  color: amber,
+                           note: globalStale > 0 ? "> 7d" : nil)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func matrixCell(value: Int, label: String, color: Color, note: String? = nil) -> some View {
+        VStack(spacing: 4) {
+            Text("\(value)")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(value == 0 ? .white.opacity(0.20) : color)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.32))
+            if let note = note {
+                Text(note)
+                    .font(.system(size: 8))
+                    .foregroundColor(amber.opacity(0.55))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: - Latency
+
+    private var latencySection: some View {
+        let latencies = aggregateLatencies()
+        return VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Review latency")
+            if latencies.isEmpty {
+                Text("No reviewed proposals yet.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.28))
+            } else {
+                HStack(spacing: 8) {
+                    latencyStat(label: "Average", value: formatLatency(average(latencies)))
+                    latencyStat(label: "Median",  value: formatLatency(median(latencies)))
+                    latencyStat(label: "Fastest", value: formatLatency(latencies.min() ?? 0))
+                    latencyStat(label: "Slowest", value: formatLatency(latencies.max() ?? 0))
+                }
+            }
+            if globalStale > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.badge.exclamationmark")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.75))
+                    Text("\(globalStale) proposal\(globalStale == 1 ? "" : "s") pending > 7 days — unreviewed proposals suppress the approval signal.")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .background(amber.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func latencyStat(label: String, value: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.85))
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.28))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: - Per-project rows
+
+    private var perProjectSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionLabel("By project")
+                .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 6)
+            ForEach(projectRows, id: \.id) { row in
+                projectRow(row)
+                Divider().background(Color.white.opacity(0.05)).padding(.leading, 18)
+            }
+        }
+    }
+
+    private func projectRow(_ row: ProjectRow) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.82))
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    statChip("\(row.approved) approved", color: successG)
+                    if row.rejected > 0  { statChip("\(row.rejected) rejected",   color: Color(red: 1.0, green: 0.40, blue: 0.40)) }
+                    if row.superseded > 0 { statChip("\(row.superseded) superseded", color: muted) }
+                    if row.pending > 0   { statChip("\(row.pending) pending",     color: amber) }
+                }
+            }
+            Spacer()
+            if !row.approvalRate.isNaN {
+                VStack(spacing: 1) {
+                    Text(String(format: "%.0f%%", row.approvalRate * 100))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(row.approvalRate >= 0.75 ? successG : amber)
+                    Text("approval")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 9)
+    }
+
+    private func statChip(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 9))
+            .foregroundColor(color.opacity(0.75))
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(color.opacity(0.10))
+            .clipShape(Capsule())
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "chart.bar.doc.horizontal")
+                .font(.system(size: 28)).foregroundColor(.white.opacity(0.10))
+            Text("No proposals yet")
+                .font(.system(size: 12)).foregroundColor(.white.opacity(0.28))
+            Text("Metrics appear once Phase 13B generates its first proposals.")
+                .font(.system(size: 11)).foregroundColor(.white.opacity(0.18))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - 13C gate status
+
+    private var gateStatus: (String, Color) {
+        if globalTotal == 0       { return ("Collecting",   muted) }
+        if globalTotal < 20       { return ("Accumulating", amber) }
+        let rate = globalApprovalRate
+        if rate.isNaN             { return ("Accumulating", amber) }
+        if rate >= 0.75
+            && globalRejectionRate <= 0.15
+            && globalSupersededRate <= 0.20
+            && globalSpecificity >= 0.50 { return ("Gate met",   successG) }
+        return ("Not yet",        amber)
+    }
+
+    // MARK: - Aggregate helpers
+
+    private var projectRows: [ProjectRow] {
+        engine.projects.compactMap { project in
+            let m = proposalStore.metrics(for: project.id)
+            guard m.total > 0 else { return nil }
+            return ProjectRow(id: project.id, name: project.name,
+                              approved: m.approved, rejected: m.rejected,
+                              superseded: m.superseded, pending: m.pending,
+                              approvalRate: m.approvalRate)
+        }
+        .sorted { $0.approved + $0.rejected > $1.approved + $1.rejected }
+    }
+
+    private var globalTotal:        Int    { projectRows.reduce(0) { $0 + $1.approved + $1.rejected + $1.superseded + $1.pending } }
+    private var globalApproved:     Int    { projectRows.reduce(0) { $0 + $1.approved } }
+    private var globalRejected:     Int    { projectRows.reduce(0) { $0 + $1.rejected } }
+    private var globalSuperseded:   Int    { projectRows.reduce(0) { $0 + $1.superseded } }
+    private var globalStale:        Int    { engine.projects.reduce(0) { $0 + proposalStore.metrics(for: $1.id).stalePendingCount } }
+
+    private var globalReviewed:     Int    { globalApproved + globalRejected }
+    private var globalApprovalRate: Double { globalReviewed == 0 ? Double.nan : Double(globalApproved) / Double(globalReviewed) }
+    private var globalRejectionRate: Double { globalReviewed == 0 ? Double.nan : Double(globalRejected) / Double(globalReviewed) }
+    private var globalSupersededRate: Double { globalTotal == 0 ? Double.nan : Double(globalSuperseded) / Double(globalTotal) }
+
+    private var globalSpecificity: Double {
+        let scores = engine.projects.map { ProjectEngine.shared.backgroundCheckpointSpecificity(for: $0) }.filter { !$0.isNaN }
+        return scores.isEmpty ? Double.nan : scores.reduce(0, +) / Double(scores.count)
+    }
+
+    private func aggregateLatencies() -> [TimeInterval] {
+        engine.projects.flatMap { project -> [TimeInterval] in
+            let proposals = proposalStore.load(for: project.id)
+            return proposals.compactMap { p in
+                guard let r = p.reviewedAt else { return nil }
+                return r.timeIntervalSince(p.createdAt)
+            }
+        }
+    }
+
+    // MARK: - Math helpers
+
+    private func average(_ values: [TimeInterval]) -> TimeInterval {
+        values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+    }
+
+    private func median(_ values: [TimeInterval]) -> TimeInterval {
+        guard !values.isEmpty else { return 0 }
+        let s = values.sorted(); return s[s.count / 2]
+    }
+
+    private func formatLatency(_ t: TimeInterval) -> String {
+        if t < 60        { return "<1m" }
+        if t < 3_600     { return "\(Int(t / 60))m" }
+        if t < 86_400    { return "\(Int(t / 3_600))h" }
+        return "\(Int(t / 86_400))d"
+    }
+
+    // MARK: - Section label
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.25))
+            .tracking(1)
+    }
+
+    // MARK: - Row model
+
+    private struct ProjectRow {
+        let id:           UUID
+        let name:         String
+        let approved:     Int
+        let rejected:     Int
+        let superseded:   Int
+        let pending:      Int
+        let approvalRate: Double
+    }
+}

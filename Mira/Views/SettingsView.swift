@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var keyMonitor:    Any? = nil
     @State private var showTraces        = false
     @State private var showIntegrations  = false
+    @State private var showProposalMetrics = false
     @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
     @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
     @State private var hoverCategories: [String: CategoryStats] = [:]
@@ -59,8 +60,9 @@ struct SettingsView: View {
             keyInput = state.userAPIKey
             hoverCategories = HoverPreferences.shared.categories
         }
-        .sheet(isPresented: $showTraces)        { ToolTraceView() }
-        .sheet(isPresented: $showIntegrations)  { IntegrationsView() }
+        .sheet(isPresented: $showTraces)          { ToolTraceView() }
+        .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
+        .sheet(isPresented: $showProposalMetrics) { ProposalMetricsView() }
     }
 
     // MARK: - Header
@@ -717,31 +719,57 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Tool activity
+    // MARK: - Tool activity + proposal metrics
 
-    @ObservedObject private var traceStore = ToolTraceStore.shared
+    @ObservedObject private var traceStore    = ToolTraceStore.shared
+    @ObservedObject private var proposalStore = ProposalStore.shared
+    @ObservedObject private var engine        = ProjectEngine.shared
 
     private var toolActivityButton: some View {
-        Button(action: { showTraces = true }) {
-            HStack {
-                Label("Tool Activity", systemImage: "waveform.badge.clock")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.5))
-                Spacer()
-                if !traceStore.traces.isEmpty {
-                    Text("\(traceStore.traces.count)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.35))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.white.opacity(0.07))
-                        .clipShape(Capsule())
+        VStack(spacing: 10) {
+            Button(action: { showTraces = true }) {
+                HStack {
+                    Label("Tool Activity", systemImage: "waveform.badge.clock")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    if !traceStore.traces.isEmpty {
+                        Text("\(traceStore.traces.count)")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.35))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.white.opacity(0.07))
+                            .clipShape(Capsule())
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.20))
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.20))
             }
+            .buttonStyle(.plain)
+
+            Button(action: { showProposalMetrics = true }) {
+                HStack {
+                    Label("Proposal Metrics", systemImage: "chart.bar.doc.horizontal")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    let total = proposalStore.globalProposalCount(for: engine.projects)
+                    if total > 0 {
+                        Text("\(total)")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.35))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.white.opacity(0.07))
+                            .clipShape(Capsule())
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.20))
+                }
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers

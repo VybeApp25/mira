@@ -14,6 +14,7 @@
 		277DAE431BD25B27F7A1CF08 /* server.js in Resources */ = {isa = PBXBuildFile; fileRef = 2401A65BD01B1E1859DD4B36 /* server.js */; };
 		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		2BC76E2CC98B202D34533CAE /* ActionChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B706458B64024088E8769D /* ActionChipsView.swift */; };
+		3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		435235FBB96512337D08237E /* IntegrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */; };
@@ -127,6 +128,7 @@
 		A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
 		A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverSummaryService.swift; sourceTree = "<group>"; };
 		AA5914547C8201C6C6241551 /* MiraState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraState.swift; sourceTree = "<group>"; };
+		AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalMetricsView.swift; sourceTree = "<group>"; };
 		AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsTabView.swift; sourceTree = "<group>"; };
 		B4B324BC14AED4E3627AA2C7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		B7939C1365120ADFFBCEEE8D /* ProposalModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalModels.swift; sourceTree = "<group>"; };
@@ -316,6 +318,7 @@
 				D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */,
 				EABB60070E502F8E675BD22D /* PointerOverlay.swift */,
 				AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */,
+				AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */,
 				F7668116B1E1B08C2A630FA1 /* SettingsView.swift */,
 				1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */,
 			);
@@ -457,6 +460,7 @@
 				D9000B1F5D5817FE0E25FB6C /* ProjectEvent.swift in Sources */,
 				CA63D9AFDC3D4C6971488A9B /* ProjectModels.swift in Sources */,
 				D37336D1E54FF64164918D9A /* ProjectsTabView.swift in Sources */,
+				3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */,
 				0E37A87E6432FD04DF2C441B /* ProposalModels.swift in Sources */,
 				A203B2E97FF34162072AC381 /* ProposalStore.swift in Sources */,
 				56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */,

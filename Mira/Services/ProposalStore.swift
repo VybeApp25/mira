@@ -145,13 +145,34 @@ final class ProposalStore: ObservableObject {
 
     // MARK: - Metrics (Phase 13B → 13C promotion gate)
 
+    /// Stale threshold: pending proposals older than this are counted as "never reviewed."
+    static let stalePendingThreshold: TimeInterval = 7 * 24 * 60 * 60   // 7 days
+
     struct Metrics {
-        let total:        Int
-        let pending:      Int
-        let approved:     Int
-        let rejected:     Int
-        let superseded:   Int
-        let approvalRate: Double   // approved / (approved + rejected), NaN when no reviews yet
+        let total:                Int
+        let pending:              Int
+        let approved:             Int
+        let rejected:             Int
+        let superseded:           Int
+        /// approved / (approved + rejected). NaN when no reviews yet.
+        let approvalRate:         Double
+        /// rejected / (approved + rejected). NaN when no reviews yet.
+        let rejectionRate:        Double
+        /// superseded / total (all proposals, not just reviewed). NaN when total == 0.
+        let supersededRate:       Double
+        /// Mean time from generatedAt → reviewedAt across all reviewed proposals.
+        let averageReviewLatency: TimeInterval?
+        /// Median time from generatedAt → reviewedAt across all reviewed proposals.
+        let medianReviewLatency:  TimeInterval?
+        /// Pending proposals older than stalePendingThreshold — the "never reviewed" signal.
+        let stalePendingCount:    Int
+        /// Age of the oldest pending proposal. nil when no pending proposals.
+        let oldestPendingAge:     TimeInterval?
+    }
+
+    /// Total proposal count across a set of projects — used by SettingsView badge.
+    func globalProposalCount(for projects: [MiraProject]) -> Int {
+        projects.reduce(0) { $0 + load(for: $1.id).count }
     }
 
     func metrics(for projectId: UUID) -> Metrics {
@@ -159,13 +180,34 @@ final class ProposalStore: ObservableObject {
         let approved  = all.filter { $0.status == .approved  }.count
         let rejected  = all.filter { $0.status == .rejected  }.count
         let reviewed  = approved + rejected
+        let now       = Date()
+
+        let latencies: [TimeInterval] = all.compactMap { p in
+            guard let r = p.reviewedAt else { return nil }
+            return r.timeIntervalSince(p.createdAt)
+        }
+        let avgLatency: TimeInterval? = latencies.isEmpty ? nil
+            : latencies.reduce(0, +) / Double(latencies.count)
+        let medianLatency: TimeInterval? = latencies.isEmpty ? nil
+            : { let s = latencies.sorted(); return s[s.count / 2] }()
+
+        let pendingProposals = all.filter { $0.status == .pending }
+        let stale  = pendingProposals.filter { now.timeIntervalSince($0.createdAt) > Self.stalePendingThreshold }.count
+        let oldest = pendingProposals.map { now.timeIntervalSince($0.createdAt) }.max()
+
         return Metrics(
-            total:        all.count,
-            pending:      all.filter { $0.status == .pending    }.count,
-            approved:     approved,
-            rejected:     rejected,
-            superseded:   all.filter { $0.status == .superseded }.count,
-            approvalRate: reviewed == 0 ? Double.nan : Double(approved) / Double(reviewed)
+            total:                all.count,
+            pending:              pendingProposals.count,
+            approved:             approved,
+            rejected:             rejected,
+            superseded:           all.filter { $0.status == .superseded }.count,
+            approvalRate:         reviewed == 0 ? Double.nan : Double(approved) / Double(reviewed),
+            rejectionRate:        reviewed == 0 ? Double.nan : Double(rejected) / Double(reviewed),
+            supersededRate:       all.isEmpty  ? Double.nan : Double(all.filter { $0.status == .superseded }.count) / Double(all.count),
+            averageReviewLatency: avgLatency,
+            medianReviewLatency:  medianLatency,
+            stalePendingCount:    stale,
+            oldestPendingAge:     oldest
         )
     }
 }
