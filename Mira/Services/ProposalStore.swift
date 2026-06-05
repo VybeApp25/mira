@@ -277,25 +277,93 @@ final class ProposalStore: ObservableObject {
         )
     }
 
-    // MARK: - Global evidence strength
+    // MARK: - Global evidence dimensions + regression lock
 
-    /// Derives evidence strength across all projects.
-    /// This is a global signal — single-project metrics cannot satisfy the diversity criterion.
-    func globalEvidenceStrength(for projects: [MiraProject]) -> EvidenceStrength {
+    private let delegationKey     = "mira.delegation.authorized"
+    private let lastStrengthKey   = "mira.evidence.lastStrength"
+
+    @Published private(set) var delegationAuthorized: Bool = false
+    private var lastObservedStrength: EvidenceStrength = .weak
+
+    func loadDelegationState() {
+        delegationAuthorized  = UserDefaults.standard.bool(forKey: delegationKey)
+        let raw = UserDefaults.standard.integer(forKey: lastStrengthKey)
+        lastObservedStrength  = EvidenceStrength(rawValue: raw) ?? .weak
+    }
+
+    /// Call after computing evidence dimensions. Auto-revokes delegation on regression.
+    func observeEvidenceStrength(_ strength: EvidenceStrength) {
+        defer {
+            lastObservedStrength = strength
+            UserDefaults.standard.set(strength.rawValue, forKey: lastStrengthKey)
+        }
+        if lastObservedStrength == .strong && strength < .strong && delegationAuthorized {
+            delegationAuthorized = false
+            UserDefaults.standard.set(false, forKey: delegationKey)
+        }
+    }
+
+    /// Explicit human grant — only valid when current evidence strength is .strong.
+    func grantDelegation(currentStrength: EvidenceStrength) {
+        guard currentStrength == .strong else { return }
+        delegationAuthorized = true
+        UserDefaults.standard.set(true, forKey: delegationKey)
+    }
+
+    /// Whether evidence has ever been strong enough to earn delegation (persisted).
+    var hadReachedStrong: Bool { UserDefaults.standard.integer(forKey: lastStrengthKey) >= EvidenceStrength.strong.rawValue }
+
+    /// Computes four independent evidence dimensions and derives overall strength.
+    /// Geometric mean prevents any single axis from dominating.
+    func globalEvidenceDimensions(for projects: [MiraProject]) -> EvidenceDimensions {
         let allMetrics          = projects.map { metrics(for: $0.id) }
         let totalReviewed       = allMetrics.reduce(0) { $0 + $1.approved + $1.rejected }
         let projectsWithReviews = allMetrics.filter { $0.approved + $0.rejected > 0 }.count
         let totalProposals      = allMetrics.reduce(0) { $0 + $1.total }
-        let globalCoverage      = totalProposals == 0 ? 0.0 : Double(totalReviewed) / Double(totalProposals)
-        let allSignalsPopulated = allMetrics.contains { !$0.weightedApprovalRate.isNaN }
-                               && allMetrics.contains { !$0.calibrationScore.isNaN }
 
-        if totalReviewed < 10 || projectsWithReviews < 1 { return .weak }
-        if totalReviewed < 20 || projectsWithReviews < 2 || globalCoverage < 0.60 { return .emerging }
-        if totalReviewed < 50 || projectsWithReviews < 3 || globalCoverage < 0.80 || !allSignalsPopulated {
-            return .moderate
+        let volumeScore    = min(Double(totalReviewed) / 50.0, 1.0)
+        let diversityScore = min(Double(projectsWithReviews) / 5.0, 1.0)
+        let coverageScore  = totalProposals == 0 ? 0.0 : min(Double(totalReviewed) / Double(totalProposals), 1.0)
+
+        let allProposals = projects.flatMap { load(for: $0.id) }
+        let (stabilityScore, stabilityIsEstimated) = computeStabilityScore(from: allProposals)
+
+        return EvidenceDimensions(
+            volumeScore:          volumeScore,
+            diversityScore:       diversityScore,
+            coverageScore:        coverageScore,
+            stabilityScore:       stabilityScore,
+            stabilityIsEstimated: stabilityIsEstimated
+        )
+    }
+
+    /// Convenience accessor kept for compatibility — use globalEvidenceDimensions for full detail.
+    func globalEvidenceStrength(for projects: [MiraProject]) -> EvidenceStrength {
+        globalEvidenceDimensions(for: projects).strength
+    }
+
+    // MARK: - Stability score
+
+    private func computeStabilityScore(from proposals: [ProposalMetadata]) -> (Double, Bool) {
+        let reviewed = proposals.filter { ($0.status == .approved || $0.status == .rejected) && $0.reviewedAt != nil }
+        guard reviewed.count >= 2 else { return (0.5, true) }
+
+        var weekBuckets: [Date: (approved: Int, total: Int)] = [:]
+        let cal = Calendar.current
+        for p in reviewed {
+            guard let d = p.reviewedAt else { continue }
+            let weekStart = cal.dateInterval(of: .weekOfYear, for: d)?.start ?? d
+            weekBuckets[weekStart, default: (0, 0)].total += 1
+            if p.status == .approved { weekBuckets[weekStart, default: (0, 0)].approved += 1 }
         }
-        return .strong
+
+        guard weekBuckets.count >= 2 else { return (0.5, true) }
+
+        let rates  = weekBuckets.values.map { Double($0.approved) / Double($0.total) }
+        let mean   = rates.reduce(0, +) / Double(rates.count)
+        let stdDev = sqrt(rates.map { pow($0 - mean, 2) }.reduce(0, +) / Double(rates.count))
+        // stdDev 0 = perfectly stable (1.0); stdDev 0.40+ = completely unstable (0)
+        return (max(0, 1.0 - stdDev / 0.40), false)
     }
 
     // MARK: - Calibration buckets

@@ -29,6 +29,8 @@ struct ProposalMetricsView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             globalSection
                             Divider().background(Color.white.opacity(0.06))
+                            dimensionsSection
+                            Divider().background(Color.white.opacity(0.06))
                             gateBreakdownSection
                             Divider().background(Color.white.opacity(0.06))
                             latencySection
@@ -48,6 +50,10 @@ struct ProposalMetricsView: View {
             }
         }
         .frame(width: 420, height: 560)
+        .onAppear {
+            proposalStore.loadDelegationState()
+            proposalStore.observeEvidenceStrength(globalEvidenceStrength)
+        }
     }
 
     // MARK: - Header
@@ -324,6 +330,144 @@ struct ProposalMetricsView: View {
 
     private func specString(_ score: Double) -> String {
         score.isNaN ? "—" : String(format: "%.2f", score)
+    }
+
+    // MARK: - Evidence dimensions
+
+    private var dimensionsSection: some View {
+        let d = globalDimensions
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                sectionLabel("Evidence dimensions")
+                if d.stabilityIsEstimated {
+                    Text("stability estimated")
+                        .font(.system(size: 9))
+                        .foregroundColor(amber.opacity(0.55))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(amber.opacity(0.08))
+                        .clipShape(Capsule())
+                }
+            }
+            VStack(spacing: 6) {
+                dimensionBar("Volume",    score: d.volumeScore,
+                             note: "reviewed proposals / 50")
+                dimensionBar("Diversity", score: d.diversityScore,
+                             note: "projects with reviews / 5")
+                dimensionBar("Coverage",  score: d.coverageScore,
+                             note: "reviewed / total proposals")
+                dimensionBar("Stability", score: d.stabilityScore,
+                             note: d.stabilityIsEstimated ? "< 2 weeks of data — neutral placeholder" : "1 − weekly approval std dev / 0.40")
+            }
+            HStack(spacing: 6) {
+                Text("Composite")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+                Text(String(format: "%.2f", d.composite))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.55))
+                Text("geometric mean · \(d.strength.label)")
+                    .font(.system(size: 9))
+                    .foregroundColor(evidenceColor(d.strength).opacity(0.65))
+            }
+            .padding(.horizontal, 2)
+
+            // Regression lock status
+            regressionLockRow
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func dimensionBar(_ label: String, score: Double, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.65))
+                    .frame(width: 70, alignment: .leading)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.06))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(dimensionBarColor(score).opacity(0.70))
+                            .frame(width: geo.size.width * score)
+                    }
+                }
+                .frame(height: 6)
+                Text(String(format: "%.0f%%", score * 100))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(dimensionBarColor(score))
+                    .frame(width: 34, alignment: .trailing)
+            }
+            Text(note)
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.22))
+                .padding(.leading, 74)
+        }
+    }
+
+    private func dimensionBarColor(_ score: Double) -> Color {
+        if score >= 0.75 { return successG }
+        if score >= 0.40 { return amber }
+        return Color(red: 1.0, green: 0.40, blue: 0.40)
+    }
+
+    private var regressionLockRow: some View {
+        let authorized = proposalStore.delegationAuthorized
+        let strength   = globalEvidenceStrength
+        let hadStrong  = proposalStore.hadReachedStrong
+
+        if !hadStrong {
+            return AnyView(EmptyView())
+        }
+
+        if authorized {
+            return AnyView(HStack(spacing: 6) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(successG)
+                Text("Delegation authorized — evidence remains strong.")
+                    .font(.system(size: 10))
+                    .foregroundColor(successG.opacity(0.80))
+            }
+            .padding(8)
+            .background(successG.opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 6)))
+        }
+
+        if strength < .strong {
+            return AnyView(HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40))
+                Text("Delegation revoked — evidence regression. Restore Strong evidence to re-authorize.")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(8)
+            .background(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 6)))
+        }
+
+        // Strong but not yet authorized — show grant button
+        return AnyView(HStack(spacing: 8) {
+            Image(systemName: "shield")
+                .font(.system(size: 10))
+                .foregroundColor(amber.opacity(0.75))
+            Text("Evidence is Strong. Delegation not yet authorized.")
+                .font(.system(size: 10))
+                .foregroundColor(amber.opacity(0.70))
+            Spacer()
+            Button("Authorize") {
+                proposalStore.grantDelegation(currentStrength: strength)
+            }
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(successG)
+            .buttonStyle(.plain)
+        }
+        .padding(8)
+        .background(amber.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 6)))
     }
 
     // MARK: - Latency
@@ -622,9 +766,11 @@ struct ProposalMetricsView: View {
         return scores.isEmpty ? Double.nan : scores.reduce(0, +) / Double(scores.count)
     }
 
-    private var globalEvidenceStrength: EvidenceStrength {
-        proposalStore.globalEvidenceStrength(for: engine.projects)
+    private var globalDimensions: EvidenceDimensions {
+        proposalStore.globalEvidenceDimensions(for: engine.projects)
     }
+
+    private var globalEvidenceStrength: EvidenceStrength { globalDimensions.strength }
 
     /// Returns (score, isPartial). Aggregated as the product of per-project index means,
     /// weighted by reviewed proposal count so active projects dominate.

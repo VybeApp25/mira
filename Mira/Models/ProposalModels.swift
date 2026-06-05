@@ -155,6 +155,32 @@ enum EvidenceStrength: Int, Comparable, CaseIterable {
     static let minimumForGate: EvidenceStrength = .moderate
 }
 
+// MARK: - EvidenceDimensions
+
+/// Four independent axes of evidence quality.
+/// Strength = geometric mean (4th root of product) so no single axis can dominate.
+/// A high-volume single-project dataset cannot reach Strong — diversityScore caps it.
+struct EvidenceDimensions {
+    let volumeScore:         Double   // reviewed/50, capped at 1.0
+    let diversityScore:      Double   // projects_with_reviews/5, capped at 1.0
+    let coverageScore:       Double   // reviewed/total, 0–1
+    let stabilityScore:      Double   // 1 − stdDev_of_weekly_rates/0.4; 0.5 = insufficient history
+    let stabilityIsEstimated: Bool    // true when < 2 weeks of data — score is neutral placeholder
+
+    /// Geometric mean of all four dimensions.
+    var composite: Double {
+        pow(volumeScore * diversityScore * coverageScore * stabilityScore, 0.25)
+    }
+
+    var strength: EvidenceStrength {
+        let c = composite
+        if c >= 0.75 { return .strong   }
+        if c >= 0.50 { return .moderate }
+        if c >= 0.30 { return .emerging }
+        return .weak
+    }
+}
+
 // MARK: - CalibrationBucket
 
 /// One 10%-wide confidence bucket containing the proposals whose agent confidence fell in that range.
