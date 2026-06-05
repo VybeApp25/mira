@@ -175,6 +175,10 @@ final class ProposalStore: ObservableObject {
         /// NaN when no approvals have confidence recorded. Distinct from approvalRate: a 80% approval
         /// at low confidence is weaker evidence than 80% at high confidence.
         let weightedApprovalRate: Double
+        /// Expected Calibration Error converted to a 0–1 score: 1.0 = perfect calibration.
+        /// NaN when fewer than 2 populated buckets or fewer than 5 reviewed proposals.
+        /// A miscalibrated model has lower scores; a well-calibrated model trends toward 1.0.
+        let calibrationScore: Double
     }
 
     /// Total proposal count across a set of projects — used by SettingsView badge.
@@ -212,6 +216,16 @@ final class ProposalStore: ObservableObject {
             return totalWeight / maxWeight
         }()
 
+        let buckets = buildCalibrationBuckets(from: all)
+        let ece: Double = {
+            let reviewedCount = all.filter { $0.status == .approved || $0.status == .rejected }.count
+            guard buckets.count >= 2, reviewedCount >= 5 else { return Double.nan }
+            let ece = buckets.reduce(0.0) { sum, b in
+                sum + abs(b.calibrationError) * (Double(b.proposalCount) / Double(reviewedCount))
+            }
+            return ece
+        }()
+
         return Metrics(
             total:                all.count,
             pending:              pendingProposals.count,
@@ -225,7 +239,54 @@ final class ProposalStore: ObservableObject {
             medianReviewLatency:  medianLatency,
             stalePendingCount:    stale,
             oldestPendingAge:     oldest,
-            weightedApprovalRate: weightedApproval
+            weightedApprovalRate: weightedApproval,
+            calibrationScore:     ece.isNaN ? Double.nan : max(0, 1.0 - ece)
         )
+    }
+
+    // MARK: - Calibration buckets
+
+    /// Groups approved/rejected proposals into 10%-wide confidence buckets and computes
+    /// per-bucket approval rate and calibration error. Empty buckets are omitted.
+    func calibration(for projectId: UUID) -> [CalibrationBucket] {
+        buildCalibrationBuckets(from: load(for: projectId))
+    }
+
+    private func buildCalibrationBuckets(from proposals: [ProposalMetadata]) -> [CalibrationBucket] {
+        let reviewed = proposals.filter { $0.status == .approved || $0.status == .rejected }
+        guard !reviewed.isEmpty else { return [] }
+
+        // Group into 10% buckets: [0.0,0.1), [0.1,0.2), ..., [0.9,1.0]
+        var groups: [Int: [ProposalMetadata]] = [:]
+        for p in reviewed {
+            let bucket = min(Int(p.confidence * 10), 9)   // 0...9
+            groups[bucket, default: []].append(p)
+        }
+
+        return groups.keys.sorted().compactMap { bucketIdx -> CalibrationBucket? in
+            let items = groups[bucketIdx] ?? []
+            guard !items.isEmpty else { return nil }
+            let lowerBound  = Double(bucketIdx) / 10.0
+            let midpoint    = lowerBound + 0.05
+            let approvedN   = items.filter { $0.status == .approved }.count
+            let approvalRate = Double(approvedN) / Double(items.count)
+
+            // Weighted approval rate using reviewer confidence (nil if none recorded)
+            let withConfidence = items.filter { $0.status == .approved && $0.reviewConfidence != nil }
+            let weighted: Double? = withConfidence.isEmpty ? nil : {
+                let totalW = withConfidence.reduce(0.0) { $0 + ($1.reviewConfidence?.weight ?? 0) }
+                let maxW   = Double(withConfidence.count) * ReviewConfidence.high.weight
+                return totalW / maxW
+            }()
+
+            return CalibrationBucket(
+                lowerBound:           lowerBound,
+                proposalCount:        items.count,
+                approvalRate:         approvalRate,
+                weightedApprovalRate: weighted,
+                calibrationError:     approvalRate - midpoint
+            )
+        }
+        .sorted { $0.lowerBound > $1.lowerBound }   // highest confidence first
     }
 }

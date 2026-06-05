@@ -32,10 +32,15 @@ struct ProposalMetricsView: View {
                             gateBreakdownSection
                             Divider().background(Color.white.opacity(0.06))
                             latencySection
-                            if !projectRows.isEmpty {
-                                Divider().background(Color.white.opacity(0.06))
-                                perProjectSection
-                            }
+                            let allBuckets = globalCalibrationBuckets
+                                if !allBuckets.isEmpty {
+                                    Divider().background(Color.white.opacity(0.06))
+                                    calibrationSection(buckets: allBuckets)
+                                }
+                                if !projectRows.isEmpty {
+                                    Divider().background(Color.white.opacity(0.06))
+                                    perProjectSection
+                                }
                         }
                         .padding(.bottom, 16)
                     }
@@ -241,6 +246,102 @@ struct ProposalMetricsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
+    // MARK: - Calibration
+
+    private func calibrationSection(buckets: [CalibrationBucket]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                sectionLabel("Calibration")
+                Spacer()
+                if !globalCalibrationScore.isNaN {
+                    let score = globalCalibrationScore
+                    Text(String(format: "ECE score %.2f", score))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(calibrationColor(score))
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(calibrationColor(score).opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+
+            // Column headers
+            HStack(spacing: 0) {
+                Text("Confidence").font(.system(size: 9)).foregroundColor(.white.opacity(0.22)).frame(width: 72, alignment: .leading)
+                Text("N").font(.system(size: 9)).foregroundColor(.white.opacity(0.22)).frame(width: 28, alignment: .trailing)
+                Text("Approved").font(.system(size: 9)).foregroundColor(.white.opacity(0.22)).frame(maxWidth: .infinity, alignment: .trailing)
+                Text("Error").font(.system(size: 9)).foregroundColor(.white.opacity(0.22)).frame(width: 56, alignment: .trailing)
+            }
+            .padding(.horizontal, 10)
+
+            VStack(spacing: 3) {
+                ForEach(buckets) { bucket in
+                    calibrationRow(bucket)
+                }
+            }
+
+            if isMiscalibrated(buckets) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.75))
+                    Text("Non-monotonic: a higher-confidence bucket has lower approval than a lower-confidence bucket.")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .background(amber.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func calibrationRow(_ bucket: CalibrationBucket) -> some View {
+        let err = bucket.calibrationError
+        let errColor: Color = abs(err) < 0.05 ? successG
+                            : abs(err) < 0.15 ? amber
+                            : Color(red: 1.0, green: 0.40, blue: 0.40)
+        let errSign = err >= 0 ? "+" : ""
+
+        return HStack(spacing: 0) {
+            Text(bucket.rangeLabel)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.60))
+                .frame(width: 72, alignment: .leading)
+            Text("\(bucket.proposalCount)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.35))
+                .frame(width: 28, alignment: .trailing)
+            Text(String(format: "%.0f%%", bucket.approvalRate * 100))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.82))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            Text(String(format: "%@%.0f%%", errSign, err * 100))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(errColor)
+                .frame(width: 56, alignment: .trailing)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Color.white.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func calibrationColor(_ score: Double) -> Color {
+        if score >= 0.85 { return successG }
+        if score >= 0.70 { return amber }
+        return Color(red: 1.0, green: 0.40, blue: 0.40)
+    }
+
+    /// True when any bucket with higher confidence has lower approval than a bucket with lower confidence.
+    private func isMiscalibrated(_ buckets: [CalibrationBucket]) -> Bool {
+        let sorted = buckets.sorted { $0.lowerBound > $1.lowerBound }
+        for i in 0..<(sorted.count - 1) {
+            if sorted[i].approvalRate < sorted[i + 1].approvalRate { return true }
+        }
+        return false
+    }
+
     // MARK: - Per-project rows
 
     private var perProjectSection: some View {
@@ -349,6 +450,44 @@ struct ProposalMetricsView: View {
     private var globalWeightedApproval: Double {
         let rates = engine.projects.map { proposalStore.metrics(for: $0.id).weightedApprovalRate }.filter { !$0.isNaN }
         return rates.isEmpty ? Double.nan : rates.reduce(0, +) / Double(rates.count)
+    }
+
+    /// Merge all per-project calibration buckets into a single global set by accumulating
+    /// proposal counts per bucket index, then recomputing approval rates.
+    private var globalCalibrationBuckets: [CalibrationBucket] {
+        var counts:   [Int: Int] = [:]   // bucketIdx → total proposals
+        var approvedN:[Int: Int] = [:]   // bucketIdx → approved proposals
+
+        for project in engine.projects {
+            for bucket in proposalStore.calibration(for: project.id) {
+                let idx = Int(bucket.lowerBound * 10)
+                let approvedCount = Int((bucket.approvalRate * Double(bucket.proposalCount)).rounded())
+                counts[idx, default: 0]    += bucket.proposalCount
+                approvedN[idx, default: 0] += approvedCount
+            }
+        }
+
+        return counts.keys.sorted().reversed().compactMap { idx -> CalibrationBucket? in
+            let total    = counts[idx] ?? 0
+            guard total > 0 else { return nil }
+            let approved = approvedN[idx] ?? 0
+            let lowerBound  = Double(idx) / 10.0
+            let approvalRate = Double(approved) / Double(total)
+            return CalibrationBucket(
+                lowerBound:           lowerBound,
+                proposalCount:        total,
+                approvalRate:         approvalRate,
+                weightedApprovalRate: nil,
+                calibrationError:     approvalRate - (lowerBound + 0.05)
+            )
+        }
+    }
+
+    private var globalCalibrationScore: Double {
+        let scores = engine.projects
+            .map { proposalStore.metrics(for: $0.id).calibrationScore }
+            .filter { !$0.isNaN }
+        return scores.isEmpty ? Double.nan : scores.reduce(0, +) / Double(scores.count)
     }
 
     private var globalSpecificity: Double {

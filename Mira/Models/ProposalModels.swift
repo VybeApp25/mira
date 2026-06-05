@@ -120,6 +120,34 @@ struct ProposalMetadata: Identifiable, Codable {
     }
 }
 
+// MARK: - CalibrationBucket
+
+/// One 10%-wide confidence bucket containing the proposals whose agent confidence fell in that range.
+/// Only approved/rejected proposals are counted — pending and superseded are excluded.
+///
+/// A calibrated system trends toward approvalRate ≈ confidenceMidpoint.
+/// calibrationError > 0 means the model is under-confident (it's right more often than it claims).
+/// calibrationError < 0 means the model is over-confident (it claims certainty it hasn't earned).
+struct CalibrationBucket: Identifiable {
+    /// Lower bound of the 10%-wide range (e.g. 0.80 for the 80–89% bucket).
+    let lowerBound:           Double
+    let proposalCount:        Int
+    /// approved / (approved + rejected) within this bucket.
+    let approvalRate:         Double
+    /// Approval rate weighted by reviewer confidence — nil when no reviewer confidence recorded.
+    let weightedApprovalRate: Double?
+    /// approvalRate − confidenceMidpoint. Positive = under-confident. Negative = over-confident.
+    let calibrationError:     Double
+
+    var id: Double { lowerBound }
+
+    var rangeLabel: String {
+        String(format: "%.0f–%.0f%%", lowerBound * 100, (lowerBound + 0.10) * 100)
+    }
+
+    var confidenceMidpoint: Double { lowerBound + 0.05 }
+}
+
 // MARK: - ProposalResult (parsed from ClaudeService.generateProposal)
 
 /// Transient output from the background proposal generation pass.
