@@ -274,8 +274,10 @@ private struct ProjectDetailView: View {
     var onResume: (String) -> Void
     let onBack:   () -> Void
 
+    @ObservedObject private var proposalStore = ProposalStore.shared
     @State private var localProject: MiraProject
     @State private var selectedSession: ProjectSession? = nil
+    @State private var selectedProposal: ProposalMetadata? = nil
     @State private var showCompletionSummary = false
 
     private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
@@ -316,6 +318,15 @@ private struct ProjectDetailView: View {
                     }
                 )
                 .transition(.opacity)
+            } else if let proposal = selectedProposal {
+                ProposalDetailView(
+                    proposal: proposal,
+                    project: localProject,
+                    onBack: {
+                        withAnimation(.easeInOut(duration: 0.18)) { selectedProposal = nil }
+                    }
+                )
+                .transition(.opacity)
             } else if let session = selectedSession {
                 SessionDetailView(
                     session: session,
@@ -349,6 +360,21 @@ private struct ProjectDetailView: View {
                                     timelineRow(event)
                                         .opacity(isLive ? 0.40 : 1.0)
                                         .animation(.easeInOut(duration: 0.25), value: isLive)
+                                }
+
+                                let pendingProposals = proposalStore.pending(for: localProject.id)
+                                if !pendingProposals.isEmpty {
+                                    proposalSectionHeader(count: pendingProposals.count)
+                                    ForEach(pendingProposals) { proposal in
+                                        ProposalRowView(proposal: proposal)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                withAnimation(.easeInOut(duration: 0.18)) {
+                                                    selectedProposal = proposal
+                                                }
+                                            }
+                                        Rectangle().fill(Color.white.opacity(0.04)).frame(height: 0.5)
+                                    }
                                 }
 
                                 let completedSessions = localProject.sessions
@@ -507,6 +533,28 @@ private struct ProjectDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
+    }
+
+    // MARK: - Proposal section
+
+    private func proposalSectionHeader(count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text("Proposals")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.28))
+                .tracking(0.5)
+            Text("\(count)")
+                .font(.system(size: 9))
+                .foregroundColor(amber.opacity(0.80))
+                .padding(.horizontal, 4).padding(.vertical, 1)
+                .background(amber.opacity(0.14))
+                .clipShape(Capsule())
+            Text("pending review")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.20))
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
     }
 
     // MARK: - Session history
@@ -1010,6 +1058,315 @@ private struct SessionDetailView: View {
         return project.checkpoints
             .filter { ids.contains($0.id) }
             .sorted { $0.number < $1.number }
+    }
+}
+
+// MARK: - ProposalRowView
+
+private struct ProposalRowView: View {
+    let proposal: ProposalMetadata
+    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let amber  = Color(red: 1.0,  green: 0.75, blue: 0.20)
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(amber.opacity(0.12))
+                    .frame(width: 26, height: 26)
+                Image(systemName: typeIcon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(amber.opacity(0.80))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(proposal.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.88))
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(proposal.type.displayName)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.32))
+                    Text("·")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.18))
+                    Text(String(format: "%.0f%% confidence", proposal.confidence * 100))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.32))
+                    Text("·")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.18))
+                    Text(relativeTime(proposal.createdAt))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.28))
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.16))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+    }
+
+    private var typeIcon: String {
+        switch proposal.type {
+        case .investigation: return "magnifyingglass"
+        case .refactor:      return "arrow.triangle.2.circlepath"
+        case .test:          return "checkmark.shield"
+        case .migration:     return "arrow.right.circle"
+        case .patch:         return "doc.badge.plus"
+        }
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let d = Date().timeIntervalSince(date)
+        if d < 60     { return "just now" }
+        if d < 3_600  { return "\(Int(d / 60))m ago" }
+        if d < 86_400 { return "\(Int(d / 3_600))h ago" }
+        return "\(Int(d / 86_400))d ago"
+    }
+}
+
+// MARK: - ProposalDetailView
+
+private struct ProposalDetailView: View {
+    let proposal: ProposalMetadata
+    let project:  MiraProject
+    let onBack:   () -> Void
+
+    @ObservedObject private var proposalStore = ProposalStore.shared
+    @State private var rejectNote = ""
+    @State private var showRejectField = false
+
+    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
+    private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    typeConfidenceRow
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
+                    metaSection("Rationale") {
+                        Text(proposal.rationale)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.68))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !proposal.affectedFiles.isEmpty {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
+                        metaSection("Files") {
+                            VStack(alignment: .leading, spacing: 5) {
+                                ForEach(proposal.affectedFiles, id: \.self) { path in
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "doc.text")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.25))
+                                        Text((path as NSString).lastPathComponent)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if let content = proposalStore.artifactContent(for: proposal), !content.isEmpty {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
+                        metaSection("Proposal") {
+                            Text(content)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.55))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if showRejectField {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
+                        metaSection("Rejection note (optional)") {
+                            TextField("Why are you rejecting this?", text: $rejectNote)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .tint(accent)
+                        }
+                    }
+                }
+                .padding(.bottom, 8)
+            }
+            actionBar
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button(action: onBack) {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                    Text("Project").font(.system(size: 11))
+                }
+                .foregroundColor(accent.opacity(0.75))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            Text(proposal.type.displayName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+            Spacer()
+            HStack(spacing: 3) {
+                Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                Text("Project").font(.system(size: 11))
+            }
+            .opacity(0)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+    }
+
+    // MARK: - Type + confidence
+
+    private var typeConfidenceRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(amber.opacity(0.12))
+                    .frame(width: 40, height: 40)
+                Image(systemName: typeIcon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(amber.opacity(0.80))
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(proposal.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.90))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                confidenceBar
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+    }
+
+    private var confidenceBar: some View {
+        HStack(spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.07))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(confidenceColor.opacity(0.70))
+                        .frame(width: geo.size.width * proposal.confidence)
+                }
+            }
+            .frame(height: 4)
+            Text(String(format: "%.0f%%", proposal.confidence * 100))
+                .font(.system(size: 10))
+                .foregroundColor(confidenceColor.opacity(0.75))
+                .frame(width: 28, alignment: .trailing)
+        }
+    }
+
+    private var confidenceColor: Color {
+        if proposal.confidence >= 0.75 { return successG }
+        if proposal.confidence >= 0.50 { return amber }
+        return Color(red: 1.0, green: 0.40, blue: 0.40)
+    }
+
+    // MARK: - Action bar
+
+    private var actionBar: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            if showRejectField {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showRejectField = false; rejectNote = "" }
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.28))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    proposalStore.update(proposalId: proposal.id, projectId: project.id,
+                                         status: .rejected, note: rejectNote.isEmpty ? nil : rejectNote)
+                    onBack()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                        Text("Reject").font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40))
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showRejectField = true }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                        Text("Reject").font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(.white.opacity(0.28))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    proposalStore.update(proposalId: proposal.id, projectId: project.id,
+                                         status: .approved)
+                    onBack()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold))
+                        Text("Approve").font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(successG)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(successG.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Color.white.opacity(0.03))
+        .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func metaSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.25))
+                .tracking(1)
+            content()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+    }
+
+    private var typeIcon: String {
+        switch proposal.type {
+        case .investigation: return "magnifyingglass"
+        case .refactor:      return "arrow.triangle.2.circlepath"
+        case .test:          return "checkmark.shield"
+        case .migration:     return "arrow.right.circle"
+        case .patch:         return "doc.badge.plus"
+        }
     }
 }
 
