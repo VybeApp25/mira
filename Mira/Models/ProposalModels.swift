@@ -39,6 +39,24 @@ enum ProposalSessionMode: String {
     case applying
 }
 
+// MARK: - ReviewConfidence
+
+/// Human certainty at the moment of approval or rejection.
+/// Stored alongside the decision so weighted approval rate can be computed
+/// separately from raw approval rate — a low-confidence 80% approval is weaker
+/// evidence than a high-confidence 80% approval.
+enum ReviewConfidence: Int, Codable, CaseIterable {
+    case low    = 1
+    case medium = 2
+    case high   = 3
+
+    var label: String {
+        switch self { case .low: return "Low"; case .medium: return "Medium"; case .high: return "High" }
+    }
+
+    var weight: Double { Double(rawValue) }
+}
+
 // MARK: - ProposalStatus
 
 enum ProposalStatus: String, Codable {
@@ -92,7 +110,8 @@ struct ProposalMetadata: Identifiable, Codable {
 
     var status:              ProposalStatus
     var reviewedAt:          Date?
-    var reviewNote:          String?    // user's note on approval or rejection
+    var reviewNote:          String?          // user's note on approval or rejection
+    var reviewConfidence:    ReviewConfidence? // how certain the reviewer was — nil = not recorded
 
     // Deterministic filename used as the artifact on disk
     var artifactFilename: String {

@@ -1136,6 +1136,7 @@ private struct ProposalDetailView: View {
     let onBack:   () -> Void
 
     @ObservedObject private var proposalStore = ProposalStore.shared
+    @State private var selectedConfidence: ReviewConfidence? = nil
     @State private var rejectNote = ""
     @State private var showRejectField = false
 
@@ -1277,70 +1278,116 @@ private struct ProposalDetailView: View {
         return Color(red: 1.0, green: 0.40, blue: 0.40)
     }
 
+    // MARK: - Confidence picker
+
+    private var confidencePicker: some View {
+        HStack(spacing: 0) {
+            Text("Confidence")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.28))
+                .frame(width: 72, alignment: .leading)
+            HStack(spacing: 4) {
+                ForEach(ReviewConfidence.allCases, id: \.self) { level in
+                    let selected = selectedConfidence == level
+                    Button {
+                        selectedConfidence = selected ? nil : level
+                    } label: {
+                        Text(level.label)
+                            .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                            .foregroundColor(selected ? confidenceColor(level) : .white.opacity(0.32))
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(selected ? confidenceColor(level).opacity(0.15) : Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(selected ? confidenceColor(level).opacity(0.35) : Color.clear, lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .background(Color.white.opacity(0.02))
+        .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.05)), alignment: .top)
+    }
+
+    private func confidenceColor(_ level: ReviewConfidence) -> Color {
+        switch level {
+        case .low:    return Color(red: 1.0, green: 0.75, blue: 0.20)   // amber
+        case .medium: return Color(red: 0.29, green: 0.62, blue: 1.0)   // accent blue
+        case .high:   return Color(red: 0.20, green: 0.84, blue: 0.60)  // successG
+        }
+    }
+
     // MARK: - Action bar
 
     private var actionBar: some View {
-        HStack(spacing: 8) {
-            Spacer()
-            if showRejectField {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { showRejectField = false; rejectNote = "" }
-                } label: {
-                    Text("Cancel")
-                        .font(.system(size: 12, weight: .medium))
+        VStack(spacing: 0) {
+            confidencePicker
+            HStack(spacing: 8) {
+                Spacer()
+                if showRejectField {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { showRejectField = false; rejectNote = "" }
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.28))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.white.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        proposalStore.update(proposalId: proposal.id, projectId: project.id,
+                                             status: .rejected, confidence: selectedConfidence,
+                                             note: rejectNote.isEmpty ? nil : rejectNote)
+                        onBack()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                            Text("Reject").font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { showRejectField = true }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                            Text("Reject").font(.system(size: 12, weight: .medium))
+                        }
                         .foregroundColor(.white.opacity(0.28))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.white.opacity(0.06))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-                Button {
-                    proposalStore.update(proposalId: proposal.id, projectId: project.id,
-                                         status: .rejected, note: rejectNote.isEmpty ? nil : rejectNote)
-                    onBack()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
-                        Text("Reject").font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40))
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { showRejectField = true }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
-                        Text("Reject").font(.system(size: 12, weight: .medium))
+                    .buttonStyle(.plain)
+                    Button {
+                        proposalStore.update(proposalId: proposal.id, projectId: project.id,
+                                             status: .approved, confidence: selectedConfidence)
+                        onBack()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold))
+                            Text("Approve").font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(successG)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(successG.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .foregroundColor(.white.opacity(0.28))
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                Button {
-                    proposalStore.update(proposalId: proposal.id, projectId: project.id,
-                                         status: .approved)
-                    onBack()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold))
-                        Text("Approve").font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(successG)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(successG.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 12).padding(.vertical, 8)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Color.white.opacity(0.03))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
     }

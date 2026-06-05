@@ -119,12 +119,15 @@ final class ProposalStore: ObservableObject {
     // MARK: - Update Status
 
     func update(proposalId: UUID, projectId: UUID,
-                status: ProposalStatus, note: String? = nil) {
+                status: ProposalStatus,
+                confidence: ReviewConfidence? = nil,
+                note: String? = nil) {
         var proposals = load(for: projectId)
         guard let idx = proposals.firstIndex(where: { $0.id == proposalId }) else { return }
-        proposals[idx].status    = status
-        proposals[idx].reviewedAt = Date()
-        proposals[idx].reviewNote = note
+        proposals[idx].status           = status
+        proposals[idx].reviewedAt       = Date()
+        proposals[idx].reviewNote       = note
+        proposals[idx].reviewConfidence = confidence
 
         // Approval supersedes any other pending proposal that touches the same files
         if status == .approved {
@@ -168,6 +171,10 @@ final class ProposalStore: ObservableObject {
         let stalePendingCount:    Int
         /// Age of the oldest pending proposal. nil when no pending proposals.
         let oldestPendingAge:     TimeInterval?
+        /// Σ(approved_i × confidenceWeight_i) / Σ(confidenceWeight_i) across approvals with recorded confidence.
+        /// NaN when no approvals have confidence recorded. Distinct from approvalRate: a 80% approval
+        /// at low confidence is weaker evidence than 80% at high confidence.
+        let weightedApprovalRate: Double
     }
 
     /// Total proposal count across a set of projects — used by SettingsView badge.
@@ -195,6 +202,16 @@ final class ProposalStore: ObservableObject {
         let stale  = pendingProposals.filter { now.timeIntervalSince($0.createdAt) > Self.stalePendingThreshold }.count
         let oldest = pendingProposals.map { now.timeIntervalSince($0.createdAt) }.max()
 
+        // Weighted approval: only from approved proposals with recorded confidence.
+        // Σ(weight) / Σ(weight_max) — normalised so high-confidence 100% = 1.0, low-confidence 100% < 1.0.
+        let approvedWithConfidence = all.filter { $0.status == .approved && $0.reviewConfidence != nil }
+        let weightedApproval: Double = {
+            guard !approvedWithConfidence.isEmpty else { return Double.nan }
+            let totalWeight    = approvedWithConfidence.reduce(0.0) { $0 + ($1.reviewConfidence?.weight ?? 0) }
+            let maxWeight      = Double(approvedWithConfidence.count) * ReviewConfidence.high.weight
+            return totalWeight / maxWeight
+        }()
+
         return Metrics(
             total:                all.count,
             pending:              pendingProposals.count,
@@ -207,7 +224,8 @@ final class ProposalStore: ObservableObject {
             averageReviewLatency: avgLatency,
             medianReviewLatency:  medianLatency,
             stalePendingCount:    stale,
-            oldestPendingAge:     oldest
+            oldestPendingAge:     oldest,
+            weightedApprovalRate: weightedApproval
         )
     }
 }

@@ -121,9 +121,41 @@ struct ProposalMetricsView: View {
                 gateRow("Rejection rate", value: rateString(globalRejectionRate),  threshold: "≤ 15%",  passing: !globalRejectionRate.isNaN && globalRejectionRate <= 0.15)
                 gateRow("Superseded",     value: rateString(globalSupersededRate), threshold: "≤ 20%",  passing: !globalSupersededRate.isNaN && globalSupersededRate <= 0.20)
                 gateRow("Specificity",    value: specString(globalSpecificity),    threshold: "≥ 0.50", passing: !globalSpecificity.isNaN   && globalSpecificity   >= 0.50)
+                if !globalWeightedApproval.isNaN {
+                    confidenceSignalRow
+                }
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    /// Informational row — no gate threshold yet. Distinguishes 80% high-confidence
+    /// approval from 80% low-confidence approval. Threshold calibrated from field data.
+    private var confidenceSignalRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.28))
+                .frame(width: 12)
+            Text("Weighted approval")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.50))
+            Spacer()
+            Text(rateString(globalWeightedApproval))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white.opacity(0.65))
+            Text("signal")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.20))
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Color.white.opacity(0.02))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+        )
     }
 
     private func gateRow(_ label: String, value: String, threshold: String, passing: Bool) -> some View {
@@ -314,6 +346,10 @@ struct ProposalMetricsView: View {
     private var globalApprovalRate: Double { globalReviewed == 0 ? Double.nan : Double(globalApproved) / Double(globalReviewed) }
     private var globalRejectionRate: Double { globalReviewed == 0 ? Double.nan : Double(globalRejected) / Double(globalReviewed) }
     private var globalSupersededRate: Double { globalTotal == 0 ? Double.nan : Double(globalSuperseded) / Double(globalTotal) }
+    private var globalWeightedApproval: Double {
+        let rates = engine.projects.map { proposalStore.metrics(for: $0.id).weightedApprovalRate }.filter { !$0.isNaN }
+        return rates.isEmpty ? Double.nan : rates.reduce(0, +) / Double(rates.count)
+    }
 
     private var globalSpecificity: Double {
         let scores = engine.projects.map { ProjectEngine.shared.backgroundCheckpointSpecificity(for: $0) }.filter { !$0.isNaN }
