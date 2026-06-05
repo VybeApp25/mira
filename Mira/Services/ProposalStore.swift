@@ -189,6 +189,8 @@ final class ProposalStore: ObservableObject {
         /// Calibration without accuracy is useless. Accuracy without calibration is dangerous.
         let trustworthinessIndex:      Double
         let isPartialTrustworthiness:  Bool   // true when weightedApproval or calibration had no data
+        /// Count of approvals with reviewConfidence recorded — sample size for weightedApprovalRate.
+        let approvedWithConfidenceCount: Int
     }
 
     /// Total proposal count across a set of projects — used by SettingsView badge.
@@ -242,6 +244,8 @@ final class ProposalStore: ObservableObject {
         // Trustworthiness: product of available factors in [0,1].
         // Accuracy (approvalRate × coverage) is always the base — calibration and review
         // confidence enrich it when available but cannot substitute for it.
+        let approvedWithConfidenceCount = approvedWithConfidence.count
+
         let (trustScore, isPartial): (Double, Bool) = {
             guard !approvalRate.isNaN, !coverageRate.isNaN else { return (Double.nan, false) }
             var product = approvalRate * coverageRate
@@ -252,24 +256,46 @@ final class ProposalStore: ObservableObject {
         }()
 
         return Metrics(
-            total:                    all.count,
-            pending:                  pendingProposals.count,
-            approved:                 approved,
-            rejected:                 rejected,
-            superseded:               all.filter { $0.status == .superseded }.count,
-            approvalRate:             approvalRate,
-            rejectionRate:            reviewed == 0 ? Double.nan : Double(rejected) / Double(reviewed),
-            supersededRate:           all.isEmpty ? Double.nan : Double(all.filter { $0.status == .superseded }.count) / Double(all.count),
-            averageReviewLatency:     avgLatency,
-            medianReviewLatency:      medianLatency,
-            stalePendingCount:        stale,
-            oldestPendingAge:         oldest,
-            weightedApprovalRate:     weightedApproval,
-            calibrationScore:         calibScore,
-            reviewCoverage:           coverageRate,
-            trustworthinessIndex:     trustScore,
-            isPartialTrustworthiness: isPartial
+            total:                        all.count,
+            pending:                      pendingProposals.count,
+            approved:                     approved,
+            rejected:                     rejected,
+            superseded:                   all.filter { $0.status == .superseded }.count,
+            approvalRate:                 approvalRate,
+            rejectionRate:                reviewed == 0 ? Double.nan : Double(rejected) / Double(reviewed),
+            supersededRate:               all.isEmpty ? Double.nan : Double(all.filter { $0.status == .superseded }.count) / Double(all.count),
+            averageReviewLatency:         avgLatency,
+            medianReviewLatency:          medianLatency,
+            stalePendingCount:            stale,
+            oldestPendingAge:             oldest,
+            weightedApprovalRate:         weightedApproval,
+            calibrationScore:             calibScore,
+            reviewCoverage:               coverageRate,
+            trustworthinessIndex:         trustScore,
+            isPartialTrustworthiness:     isPartial,
+            approvedWithConfidenceCount:  approvedWithConfidenceCount
         )
+    }
+
+    // MARK: - Global evidence strength
+
+    /// Derives evidence strength across all projects.
+    /// This is a global signal — single-project metrics cannot satisfy the diversity criterion.
+    func globalEvidenceStrength(for projects: [MiraProject]) -> EvidenceStrength {
+        let allMetrics          = projects.map { metrics(for: $0.id) }
+        let totalReviewed       = allMetrics.reduce(0) { $0 + $1.approved + $1.rejected }
+        let projectsWithReviews = allMetrics.filter { $0.approved + $0.rejected > 0 }.count
+        let totalProposals      = allMetrics.reduce(0) { $0 + $1.total }
+        let globalCoverage      = totalProposals == 0 ? 0.0 : Double(totalReviewed) / Double(totalProposals)
+        let allSignalsPopulated = allMetrics.contains { !$0.weightedApprovalRate.isNaN }
+                               && allMetrics.contains { !$0.calibrationScore.isNaN }
+
+        if totalReviewed < 10 || projectsWithReviews < 1 { return .weak }
+        if totalReviewed < 20 || projectsWithReviews < 2 || globalCoverage < 0.60 { return .emerging }
+        if totalReviewed < 50 || projectsWithReviews < 3 || globalCoverage < 0.80 || !allSignalsPopulated {
+            return .moderate
+        }
+        return .strong
     }
 
     // MARK: - Calibration buckets

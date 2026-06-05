@@ -117,17 +117,52 @@ struct ProposalMetricsView: View {
     // MARK: - Gate breakdown
 
     private var gateBreakdownSection: some View {
+        let strength = globalEvidenceStrength
         let (statusLabel, _) = gateStatus
+        let gateActive = strength >= EvidenceStrength.minimumForGate
+        let globalReviewed = globalApproved + globalRejected
+        let withConfidence = engine.projects.reduce(0) { $0 + proposalStore.metrics(for: $1.id).approvedWithConfidenceCount }
+
         return VStack(alignment: .leading, spacing: 10) {
             sectionLabel("13C gate · \(statusLabel)")
+
+            // Evidence strength prerequisite — must pass before individual signals are evaluated
+            evidenceStrengthRow(strength)
+
+            if !gateActive {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.65))
+                    Text("Gate conditions not evaluated until evidence reaches Moderate. Collect more reviewed proposals across multiple projects.")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(8)
+                .background(amber.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
             VStack(spacing: 4) {
-                gateRow("Proposals",      value: "\(globalTotal)",        threshold: "≥ 20",   passing: globalTotal >= 20)
-                gateRow("Approval rate",  value: rateString(globalApprovalRate),   threshold: "≥ 75%",  passing: !globalApprovalRate.isNaN  && globalApprovalRate  >= 0.75)
-                gateRow("Rejection rate", value: rateString(globalRejectionRate),  threshold: "≤ 15%",  passing: !globalRejectionRate.isNaN && globalRejectionRate <= 0.15)
-                gateRow("Superseded",     value: rateString(globalSupersededRate), threshold: "≤ 20%",  passing: !globalSupersededRate.isNaN && globalSupersededRate <= 0.20)
-                gateRow("Specificity",    value: specString(globalSpecificity),    threshold: "≥ 0.50", passing: !globalSpecificity.isNaN   && globalSpecificity   >= 0.50)
+                // Sample size note inline with each row when N is insufficient
+                gateRow("Proposals",       value: "\(globalTotal)",
+                        threshold: "≥ 20",   passing: gateActive && globalTotal >= 20,
+                        sampleNote: nil)
+                gateRow("Approval rate",   value: rateString(globalApprovalRate),
+                        threshold: "≥ 75%",  passing: gateActive && !globalApprovalRate.isNaN && globalApprovalRate >= 0.75,
+                        sampleNote: globalReviewed < 20 ? "N=\(globalReviewed)" : nil)
+                gateRow("Rejection rate",  value: rateString(globalRejectionRate),
+                        threshold: "≤ 15%",  passing: gateActive && !globalRejectionRate.isNaN && globalRejectionRate <= 0.15,
+                        sampleNote: globalReviewed < 20 ? "N=\(globalReviewed)" : nil)
+                gateRow("Superseded",      value: rateString(globalSupersededRate),
+                        threshold: "≤ 20%",  passing: gateActive && !globalSupersededRate.isNaN && globalSupersededRate <= 0.20,
+                        sampleNote: nil)
+                gateRow("Specificity",     value: specString(globalSpecificity),
+                        threshold: "≥ 0.50", passing: gateActive && !globalSpecificity.isNaN && globalSpecificity >= 0.50,
+                        sampleNote: nil)
                 if !globalWeightedApproval.isNaN {
-                    confidenceSignalRow
+                    confidenceSignalRow(sampleNote: withConfidence < 20 ? "N=\(withConfidence)" : nil)
                 }
                 if !globalTrustworthiness.0.isNaN {
                     trustworthinessRow
@@ -135,6 +170,50 @@ struct ProposalMetricsView: View {
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func evidenceStrengthRow(_ strength: EvidenceStrength) -> some View {
+        let color = evidenceColor(strength)
+        return HStack(spacing: 8) {
+            Image(systemName: evidenceIcon(strength))
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(color)
+                .frame(width: 12)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Evidence strength")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.65))
+                Text(strength.detail)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.28))
+            }
+            Spacer()
+            Text(strength.label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(color.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(RoundedRectangle(cornerRadius: 5).stroke(color.opacity(0.18), lineWidth: 0.5))
+    }
+
+    private func evidenceColor(_ s: EvidenceStrength) -> Color {
+        switch s {
+        case .weak:     return Color(red: 1.0, green: 0.40, blue: 0.40)
+        case .emerging: return amber
+        case .moderate: return accent
+        case .strong:   return successG
+        }
+    }
+
+    private func evidenceIcon(_ s: EvidenceStrength) -> String {
+        switch s {
+        case .weak:     return "minus.circle"
+        case .emerging: return "arrow.up.circle"
+        case .moderate: return "checkmark.circle"
+        case .strong:   return "checkmark.circle.fill"
+        }
     }
 
     private var trustworthinessRow: some View {
@@ -176,15 +255,22 @@ struct ProposalMetricsView: View {
 
     /// Informational row — no gate threshold yet. Distinguishes 80% high-confidence
     /// approval from 80% low-confidence approval. Threshold calibrated from field data.
-    private var confidenceSignalRow: some View {
+    private func confidenceSignalRow(sampleNote: String? = nil) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.28))
                 .frame(width: 12)
-            Text("Weighted approval")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.50))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Weighted approval")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.50))
+                if let note = sampleNote {
+                    Text("⚠ \(note) with confidence — below 20 minimum")
+                        .font(.system(size: 9))
+                        .foregroundColor(amber.opacity(0.65))
+                }
+            }
             Spacer()
             Text(rateString(globalWeightedApproval))
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -197,22 +283,27 @@ struct ProposalMetricsView: View {
         .padding(.horizontal, 10).padding(.vertical, 5)
         .background(Color.white.opacity(0.02))
         .clipShape(RoundedRectangle(cornerRadius: 5))
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.white.opacity(0.06), lineWidth: 0.5))
     }
 
-    private func gateRow(_ label: String, value: String, threshold: String, passing: Bool) -> some View {
+    private func gateRow(_ label: String, value: String, threshold: String, passing: Bool,
+                          sampleNote: String? = nil) -> some View {
         let failColor = Color(red: 1.0, green: 0.40, blue: 0.40)
         return HStack(spacing: 8) {
             Image(systemName: passing ? "checkmark" : "xmark")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundColor(passing ? successG : failColor)
                 .frame(width: 12)
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.65))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.65))
+                if let note = sampleNote {
+                    Text("⚠ \(note) — below 20 minimum")
+                        .font(.system(size: 9))
+                        .foregroundColor(amber.opacity(0.65))
+                }
+            }
             Spacer()
             Text(value)
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -452,15 +543,16 @@ struct ProposalMetricsView: View {
     // MARK: - 13C gate status
 
     private var gateStatus: (String, Color) {
-        if globalTotal == 0       { return ("Collecting",   muted) }
-        if globalTotal < 20       { return ("Accumulating", amber) }
+        let strength = globalEvidenceStrength
+        if globalTotal == 0          { return ("Collecting",          muted) }
+        if strength < .moderate      { return ("Evidence insufficient", amber) }
         let rate = globalApprovalRate
-        if rate.isNaN             { return ("Accumulating", amber) }
+        if rate.isNaN                { return ("Accumulating",         amber) }
         if rate >= 0.75
             && globalRejectionRate <= 0.15
             && globalSupersededRate <= 0.20
-            && globalSpecificity >= 0.50 { return ("Gate met",   successG) }
-        return ("Not yet",        amber)
+            && globalSpecificity >= 0.50 { return ("Gate met",        successG) }
+        return ("Not yet",           amber)
     }
 
     // MARK: - Aggregate helpers
@@ -528,6 +620,10 @@ struct ProposalMetricsView: View {
             .map { proposalStore.metrics(for: $0.id).calibrationScore }
             .filter { !$0.isNaN }
         return scores.isEmpty ? Double.nan : scores.reduce(0, +) / Double(scores.count)
+    }
+
+    private var globalEvidenceStrength: EvidenceStrength {
+        proposalStore.globalEvidenceStrength(for: engine.projects)
     }
 
     /// Returns (score, isPartial). Aggregated as the product of per-project index means,

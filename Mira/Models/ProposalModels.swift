@@ -120,6 +120,41 @@ struct ProposalMetadata: Identifiable, Codable {
     }
 }
 
+// MARK: - EvidenceStrength
+
+/// Global readiness signal derived from sample size, project diversity, and review coverage.
+/// A gate should never appear "passed" when evidence strength is Weak or Emerging.
+/// Evidence quality matters as much as evidence value.
+enum EvidenceStrength: Int, Comparable, CaseIterable {
+    case weak     = 1   // < 10 reviewed, or single project
+    case emerging = 2   // 10–19 reviewed, or 1 project, or low coverage
+    case moderate = 3   // ≥ 20 reviewed, ≥ 2 projects, ≥ 60% coverage
+    case strong   = 4   // ≥ 50 reviewed, ≥ 3 projects, ≥ 80% coverage, all signals populated
+
+    static func < (lhs: EvidenceStrength, rhs: EvidenceStrength) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    var label: String {
+        switch self {
+        case .weak:     return "Weak"
+        case .emerging: return "Emerging"
+        case .moderate: return "Moderate"
+        case .strong:   return "Strong"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .weak:     return "< 10 reviewed or single project — no signal yet"
+        case .emerging: return "Building sample — metrics visible but not actionable"
+        case .moderate: return "Sufficient for threshold evaluation"
+        case .strong:   return "Statistically robust across projects"
+        }
+    }
+
+    /// Gate conditions are only evaluated when evidence is at least this strength.
+    static let minimumForGate: EvidenceStrength = .moderate
+}
+
 // MARK: - CalibrationBucket
 
 /// One 10%-wide confidence bucket containing the proposals whose agent confidence fell in that range.
