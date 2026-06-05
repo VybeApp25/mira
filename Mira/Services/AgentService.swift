@@ -49,12 +49,10 @@ class AgentService: ObservableObject {
 
     private let base = URL(string: "http://127.0.0.1:4242")!
 
-    // Stable userId per device — Composio uses this to look up connected accounts
+    // Composio entity ID — "default" matches the entity used by the Composio web dashboard.
+    // Override in Settings if you use a custom entity on your Composio account.
     var userId: String {
-        if let id = UserDefaults.standard.string(forKey: "mira_user_id") { return id }
-        let id = "mira_\(UUID().uuidString.prefix(8).lowercased())"
-        UserDefaults.standard.set(id, forKey: "mira_user_id")
-        return id
+        UserDefaults.standard.string(forKey: "mira_composio_entity") ?? "default"
     }
 
     var isRunning: Bool = false
@@ -85,6 +83,17 @@ class AgentService: ObservableObject {
         let (data, _) = try await URLSession.shared.data(for: req)
         let result = try JSONDecoder().decode(ConfirmResult.self, from: data)
         return result.success ? "Done — \(action.description) complete." : "Something went wrong."
+    }
+
+    func connections() async throws -> [String] {
+        guard var comps = URLComponents(url: base.appendingPathComponent("connections"), resolvingAgainstBaseURL: false) else {
+            throw AgentError.badURL
+        }
+        comps.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        guard let url = comps.url else { throw AgentError.badURL }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        struct Resp: Decodable { let connected: [String] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.connected ?? []
     }
 
     func connectAppURL(_ app: String) async throws -> URL {

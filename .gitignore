@@ -9,3 +9,4 @@ DerivedData/
 *.o
 *.d
 Mira/Config/AppSecrets.swift
+AgentService/dist/

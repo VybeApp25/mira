@@ -139,8 +139,19 @@ struct AgentsTabView: View {
         input = ""
         isRunning = true
 
+        // Journal every agent run against the most recently active project so
+        // hasActiveUserSession is accurate and Phase 11 scheduler guards hold.
+        let activeProjectId = ProjectEngine.shared.activeProjects.first?.id
+        if let pid = activeProjectId {
+            ProjectEngine.shared.startSession(projectId: pid, trigger: .userCommand)
+        }
+
         do {
             let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: miraState.effectiveAPIKey)
+            if let pid = activeProjectId {
+                ProjectEngine.shared.endSession(projectId: pid,
+                                                summary: result.reply.isEmpty ? nil : result.reply)
+            }
             taskStore.add(
                 prompt: prompt,
                 reply: result.reply,
@@ -148,6 +159,9 @@ struct AgentsTabView: View {
                 completed: result.requiresConfirmation == nil
             )
         } catch {
+            if let pid = activeProjectId {
+                ProjectEngine.shared.endSession(projectId: pid, summary: nil)
+            }
             taskStore.add(prompt: prompt, reply: "Error: \(error.localizedDescription)", toolsUsed: [], completed: false)
         }
 

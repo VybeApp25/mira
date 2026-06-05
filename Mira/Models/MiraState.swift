@@ -45,6 +45,9 @@ class MiraState: ObservableObject {
     /// owning the service. IslandChatView writes this via onChange(of: realtime.state).
     @Published var realtimeState: RealtimeState = .idle
 
+    /// Short description of what the cursor is hovering over. Set by HoverInsightManager; auto-clears after 5 s.
+    @Published var hoverSummary: String?
+
     var cursorColor: Color { Color(red: 0.29, green: 0.62, blue: 1.0) }
 
     // Connected Composio apps

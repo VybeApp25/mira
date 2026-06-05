@@ -12,7 +12,13 @@ struct SettingsView: View {
     @State private var selectedVoice: MiraVoice = MiraVoice.saved
     @State private var recording:    RecordingTarget? = nil
     @State private var keyMonitor:    Any? = nil
-    @State private var showTraces  = false
+    @State private var showTraces        = false
+    @State private var showIntegrations  = false
+    @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
+    @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
+    @State private var hoverCategories: [String: CategoryStats] = [:]
+    @ObservedObject private var hoverHistory = HoverHistoryStore.shared
+    @State private var showHoverHistory = false
 
     enum RecordingTarget { case voice, text }
 
@@ -30,7 +36,11 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         keySection
                         Divider().background(Color.white.opacity(0.08))
+                        connectedAppsButton
+                        Divider().background(Color.white.opacity(0.08))
                         shortcutsSection
+                        Divider().background(Color.white.opacity(0.08))
+                        screenCompanionSection
                         Divider().background(Color.white.opacity(0.08))
                         voiceSection
                         Divider().background(Color.white.opacity(0.08))
@@ -45,8 +55,12 @@ struct SettingsView: View {
             }
         }
         .frame(width: 360, height: 720)
-        .onAppear { keyInput = state.userAPIKey }
-        .sheet(isPresented: $showTraces) { ToolTraceView() }
+        .onAppear {
+            keyInput = state.userAPIKey
+            hoverCategories = HoverPreferences.shared.categories
+        }
+        .sheet(isPresented: $showTraces)        { ToolTraceView() }
+        .sheet(isPresented: $showIntegrations)  { IntegrationsView() }
     }
 
     // MARK: - Header
@@ -222,6 +236,246 @@ struct SettingsView: View {
         .padding(.vertical, 8)
         .background(Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    // MARK: - Screen Companion section
+
+    private var currentSensitivity: HoverSensitivity {
+        HoverSensitivity(rawValue: sensitivityRaw) ?? .balanced
+    }
+
+    @ViewBuilder
+    private var screenCompanionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Screen Companion", systemImage: "eye")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            // Permission badge
+            if false { // permission is checked live by SCK; CGPreflightScreenCaptureAccess is unreliable on Sequoia
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 12))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Screen Recording not granted")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("Hover insights won't work without it.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.40))
+                    }
+                    Spacer()
+                    Button("Open Settings") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(accent)
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.20)))
+                .cornerRadius(8)
+            }
+
+            // Toggle
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Smart hover insights")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Mira watches your cursor and surfaces insights as you work.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $screenCompanionEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
+                    .onChange(of: screenCompanionEnabled) { _ in
+                        NotificationCenter.default.post(name: .miraScreenCompanionChanged, object: nil)
+                    }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            // Sensitivity
+            if screenCompanionEnabled {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Sensitivity")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.40))
+
+                    HStack(spacing: 6) {
+                        ForEach(HoverSensitivity.allCases, id: \.rawValue) { s in
+                            let selected = s == currentSensitivity
+                            Button {
+                                sensitivityRaw = s.rawValue
+                                HoverPreferences.shared.sensitivity = s
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(s.label)
+                                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                                        .foregroundColor(selected ? .white : .white.opacity(0.45))
+                                    Text(s.subtitle)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(selected ? accent.opacity(0.7) : .white.opacity(0.25))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 7)
+                                .background(selected ? accent.opacity(0.15) : Color.white.opacity(0.04))
+                                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                        .stroke(selected ? accent.opacity(0.4) : Color.clear)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            // Engagement bars
+            let matureCategories = hoverCategories
+                .filter { $0.value.shown >= 4 }
+                .sorted { $0.value.engagementScore > $1.value.engagementScore }
+
+            if !matureCategories.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(matureCategories, id: \.key) { category, stats in
+                        HStack(spacing: 8) {
+                            Text(category)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.55))
+                                .frame(width: 72, alignment: .leading)
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.07))
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(engagementColor(stats.engagementScore))
+                                        .frame(width: geo.size.width * stats.engagementScore)
+                                }
+                            }
+                            .frame(height: 5)
+
+                            Text("\(Int(stats.engagementScore * 100))%")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.35))
+                                .frame(width: 32, alignment: .trailing)
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Button("Reset engagement stats") {
+                    HoverPreferences.shared.resetStats()
+                    hoverCategories = [:]
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.25))
+                .buttonStyle(.plain)
+            }
+
+            // Hover history
+            if !hoverHistory.entries.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) { showHoverHistory.toggle() }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text("Recent Insights")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.40))
+                                Image(systemName: showHoverHistory ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.white.opacity(0.25))
+                                Text("\(hoverHistory.entries.count)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.25))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Color.white.opacity(0.07))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                        if showHoverHistory {
+                            Button("Clear") { hoverHistory.clear() }
+                                .font(.system(size: 11))
+                                .foregroundColor(.red.opacity(0.6))
+                                .buttonStyle(.plain)
+                        }
+                    }
+
+                    if showHoverHistory {
+                        VStack(spacing: 3) {
+                            ForEach(hoverHistory.entries) { entry in
+                                hoverEntryRow(entry)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func hoverEntryRow(_ entry: HoverEntry) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.text)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.80))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if let app = entry.appName {
+                        Text(app)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.30))
+                    }
+                    if let reason = entry.reason {
+                        Text("· \(reason)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.25))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer()
+            Text(relativeTime(entry.timestamp))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.white.opacity(0.20))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let s = Int(-date.timeIntervalSinceNow)
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s/60)m" }
+        return "\(s/3600)h"
+    }
+
+    private func engagementColor(_ score: Double) -> Color {
+        switch score {
+        case 0.60...: return Color(red: 0.20, green: 0.84, blue: 0.29)
+        case 0.30...: return Color(red: 1.0,  green: 0.75, blue: 0.20)
+        default:      return Color.white.opacity(0.25)
+        }
     }
 
     // MARK: - Shortcut recording
@@ -415,6 +669,51 @@ struct SettingsView: View {
             Text(state.usingBundledKey ? "Unlimited" : "\(state.dailyUsageCount) / \(MiraState.freeLimit)")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(state.usingBundledKey ? .green : .white.opacity(0.5))
+        }
+    }
+
+    // MARK: - Connected Apps
+
+    @State private var connectedCount:  Int?    = nil
+    @AppStorage("mira_composio_entity") private var composioEntity = "default"
+
+    private var connectedAppsButton: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: { showIntegrations = true }) {
+                HStack {
+                    Label("Connected Apps", systemImage: "puzzlepiece.extension.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    if let n = connectedCount {
+                        Text(n == 0 ? "None" : "\(n) connected")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(n == 0 ? .white.opacity(0.25) : Color(red: 0.20, green: 0.84, blue: 0.29))
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.20))
+                }
+            }
+            .buttonStyle(.plain)
+            .task {
+                connectedCount = (try? await AgentService.shared.connections())?.count
+            }
+
+            // Composio entity ID — change only if you use a custom entity in your Composio dashboard
+            HStack(spacing: 6) {
+                Text("Entity")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                TextField("default", text: $composioEntity)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
         }
     }
 

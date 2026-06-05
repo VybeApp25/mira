@@ -88,8 +88,12 @@ struct IslandChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miraActivateText)) { _ in
             // Text mode — text field gets focus on next click
         }
-        .onReceive(NotificationCenter.default.publisher(for: .miraVoiceChanged)) { _ in
-            realtime.updateVoice()
+        // .miraVoiceChanged no longer used — GA API removed voice as a session parameter
+        // Fix 3: chip tap from the HUD overlay routes here
+        .onReceive(NotificationCenter.default.publisher(for: .miraChipPromptSelected)) { note in
+            guard let prompt = note.userInfo?["prompt"] as? String else { return }
+            input = prompt
+            Task { await submit() }
         }
     }
 

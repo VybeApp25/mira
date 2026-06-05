@@ -95,15 +95,14 @@ enum MiraToolService {
             "type": "function",
             "name": "get_current_context",
             "description": """
-                Get the user's live Mac context: active app, browser URL, selected text, \
-                clipboard contents, battery level, and current time. \
-                Call this when the user says any of the following — \
+                Capture a live screenshot of the user's Mac screen and describe everything visible, \
+                plus active app, browser URL, selected text, clipboard, battery, and time. \
+                ALWAYS call this when the user says any of the following — \
+                "read my screen", "what's on my screen", "what do you see", "look at my screen", \
                 "this", "that", "here", "on my screen", "in this tab", "selected text", \
-                "copied text", "what am I looking at", "what's on my screen", \
-                "summarize this", "reply to this", "explain this", "translate this", \
-                "what does this say", "open this", "search for this" — \
-                or any request that refers to content visible on screen or in the clipboard \
-                without explicitly stating what that content is.
+                "copied text", "what am I looking at", "summarize this", "reply to this", \
+                "explain this", "translate this", "what does this say", "open this", "search for this" — \
+                or any request that refers to content visible on screen or in the clipboard.
                 """,
             "parameters": [
                 "type": "object",
@@ -184,6 +183,250 @@ enum MiraToolService {
                 "required": ["shortcut_name"]
             ] as [String: Any]
         ],
+        // ── Spotify ───────────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "control_spotify",
+            "description": """
+                Control Spotify or play a specific song. \
+                action "play_song": searches Spotify for the song and plays the top result — \
+                use this when the user asks to play a specific song or artist on Spotify. \
+                action "play"/"pause"/"toggle"/"next"/"previous": basic playback control. \
+                Requires Spotify to be installed. Keyboard automation requires Accessibility permission.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "enum": ["play", "pause", "toggle", "next", "previous", "play_song"],
+                        "description": "The action to perform"
+                    ],
+                    "song": [
+                        "type": "string",
+                        "description": "Song + artist for play_song, e.g. 'Blinding Lights The Weeknd'"
+                    ]
+                ],
+                "required": ["action"]
+            ] as [String: Any]
+        ],
+        // ── Power tools ───────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "run_apple_script",
+            "description": """
+                Execute any AppleScript on the Mac — the most powerful automation tool available. \
+                Use for: sending iMessages (tell application "Messages" to send ...), \
+                composing/sending email, controlling any scriptable app, reading app state, \
+                automating Finder (move/rename/open files), clicking UI elements via System Events, \
+                or anything not covered by other tools. \
+                System Events keystroke/click requires Accessibility permission (System Settings › Privacy › Accessibility). \
+                Return value is the script's result string, or "Done." if the script has no return value.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "script": [
+                        "type": "string",
+                        "description": "Valid AppleScript source code to execute"
+                    ]
+                ],
+                "required": ["script"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "run_shell_command",
+            "description": """
+                Run a zsh shell command on the Mac. \
+                Use for: file management (mv, cp, mkdir, rm, ls, find), \
+                reading file contents (cat), system info (df, ps, system_profiler), \
+                running scripts, git commands, installing via brew, or any CLI task. \
+                Output capped at 2000 characters. Avoid commands that run indefinitely.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "command": [
+                        "type": "string",
+                        "description": "Shell command to run, e.g. 'ls ~/Desktop', 'cat ~/notes.txt'"
+                    ]
+                ],
+                "required": ["command"]
+            ] as [String: Any]
+        ],
+        // ── System controls ───────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "set_volume",
+            "description": "Set the Mac's output volume. Level 0 = mute, 100 = maximum.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "level": [
+                        "type": "integer",
+                        "description": "Volume level 0–100"
+                    ]
+                ],
+                "required": ["level"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "type_text",
+            "description": """
+                Type text into whatever app is currently focused. \
+                Requires Accessibility permission (System Settings › Privacy & Security › Accessibility). \
+                Use to fill search fields, compose messages, or enter text in any app.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "The text to type into the active app"
+                    ]
+                ],
+                "required": ["text"]
+            ] as [String: Any]
+        ],
+        // ── Project tools ─────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "create_project",
+            "description": """
+                Create a new long-term Mira project with a goal and optional completion criteria. \
+                Call when the user wants Mira to work on something over multiple sessions — \
+                building an app, writing a report series, or any multi-step goal that spans more than one conversation. \
+                Each criterion is one verifiable outcome (e.g. "App builds cleanly", "Voice mode works").
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "name":     ["type": "string",
+                                 "description": "Short project name, e.g. 'Vybe iOS App'"],
+                    "goal":     ["type": "string",
+                                 "description": "One sentence describing the desired end state"],
+                    "criteria": ["type": "array",
+                                 "items": ["type": "string"],
+                                 "description": "Optional list of verifiable completion criteria"]
+                ],
+                "required": ["name", "goal"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "save_checkpoint",
+            "description": """
+                Save a checkpoint for the active project. \
+                Call at natural stopping points during a long agent task — \
+                after completing a meaningful unit of work, before switching to a new sub-task, \
+                or whenever the agent might be interrupted. \
+                The checkpoint is used to resume the project automatically if Mira is restarted.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string",
+                                   "description": "UUID of the project (from create_project or get_project_context)"],
+                    "title":      ["type": "string",
+                                   "description": "Short title for this checkpoint, e.g. 'SwiftUI views complete'"],
+                    "summary":    ["type": "string",
+                                   "description": "What was accomplished since the last checkpoint"],
+                    "context":    ["type": "string",
+                                   "description": "State needed to resume: current files, next planned step, any blockers"],
+                    "files":      ["type": "array",
+                                   "items": ["type": "string"],
+                                   "description": "Absolute paths of files created or modified in this session"]
+                ],
+                "required": ["project_id", "title", "summary", "context"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "complete_criterion",
+            "description": """
+                Mark a completion criterion as done for a project. \
+                Call when the agent has verifiably achieved one of the project's success criteria — \
+                confirmed by a passing build, a test, or a user confirmation. \
+                Mira will automatically mark the project completed when all criteria are done.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "project_id":   ["type": "string",
+                                     "description": "UUID of the project"],
+                    "criterion_id": ["type": "string",
+                                     "description": "UUID of the criterion (from get_project_context)"],
+                    "verified_by":  ["type": "string",
+                                     "enum": ["agent", "user"],
+                                     "description": "Who verified this criterion is complete"]
+                ],
+                "required": ["project_id", "criterion_id"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "add_project_decision",
+            "description": """
+                Record an architectural or design decision made during the project. \
+                Call when the agent chooses one approach over another — \
+                e.g. choosing SwiftData over CoreData, or picking a specific API. \
+                These decisions are shown in the project timeline and used to avoid re-litigating settled choices.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "project_id":  ["type": "string",
+                                    "description": "UUID of the project"],
+                    "description": ["type": "string",
+                                    "description": "What was decided, e.g. 'Chose SwiftData over CoreData'"],
+                    "rationale":   ["type": "string",
+                                    "description": "Why this decision was made"]
+                ],
+                "required": ["project_id", "description", "rationale"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "get_project_context",
+            "description": """
+                Get the full context of a project — status, criteria, latest checkpoint, decisions, and resume prompt. \
+                Call at the start of any project session to orient the agent, \
+                or when the user asks about project progress. \
+                Returns the resume prompt ready to use.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string",
+                                   "description": "UUID of the project. Omit to get context for the most recently active project."]
+                ],
+                "required": []
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "query_project_history",
+            "description": """
+                Query the work history of a project — sessions, personas, artifacts, and checkpoints. \
+                Call when the user asks about past sessions: \
+                "What did we do last session?", "Which session created X?", \
+                "What did Mira Developer accomplish?", "How many sessions ran yesterday?", \
+                "Show me sessions related to Y." \
+                Returns a natural-language answer drawn from the project's session records.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "question":   ["type": "string",
+                                   "description": "The user's question about the project's work history"],
+                    "project_id": ["type": "string",
+                                   "description": "UUID of the project. Omit to query the most recently active project."]
+                ],
+                "required": ["question"]
+            ] as [String: Any]
+        ],
     ]
 
     // MARK: - Execution router
@@ -199,9 +442,21 @@ enum MiraToolService {
         case "open_application":    return openApplication(args)
         case "get_calendar_events": return await calendarEvents(args)
         case "control_music":       return musicControl(args)
+        case "control_spotify":     return controlSpotify(args)
         case "search_web":          return searchWeb(args)
         case "run_shortcut":        return runShortcut(args)
-        default:                    return "Unknown tool: \(name)"
+        case "run_apple_script":    return runAppleScript(args)
+        case "run_shell_command":   return await runShellCommand(args)
+        case "set_volume":          return setVolume(args)
+        case "type_text":           return typeText(args)
+        // Project tools
+        case "create_project":        return await createProject(args)
+        case "save_checkpoint":       return await saveCheckpoint(args)
+        case "complete_criterion":    return await completeCriterion(args)
+        case "add_project_decision":  return await addProjectDecision(args)
+        case "get_project_context":   return await getProjectContext(args)
+        case "query_project_history": return await queryProjectHistory(args)
+        default:                      return "Unknown tool: \(name)"
         }
     }
 
@@ -303,34 +558,54 @@ enum MiraToolService {
     // MARK: - get_current_context
 
     private static func currentContext() async -> String {
-        await MainActor.run { ContextService.shared.buildPromptBlock(max: 1000) }
+        // Text context: active app, URL, selected text, clipboard, battery, time
+        let textContext = await MainActor.run { ContextService.shared.buildPromptBlock(max: 800) }
+
+        // Screenshot → Claude vision → screen description
+        let screenDescription = await captureScreenDescription()
+
+        if screenDescription.isEmpty { return textContext }
+        return textContext + "\n\n[Screen]\n" + screenDescription
+    }
+
+    private static func captureScreenDescription() async -> String {
+        let apiKey = await MainActor.run { AppSecrets.anthropicAPIKey }
+        guard !apiKey.isEmpty else { return "" }
+
+        let capture = ScreenCaptureService()
+        guard let screenshot = try? await capture.captureMainDisplay() else {
+            return "Screen Recording permission not granted. Ask the user to enable Mira in System Settings › Privacy & Security › Screen Recording."
+        }
+
+        let claude = ClaudeService(apiKey: apiKey)
+        let description = try? await claude.ask(
+            prompt: "Describe everything visible on this screen. Include: app name and window title, all visible text content, UI elements, any documents or media open, and what the user appears to be working on. Be thorough — the description will be read aloud by a voice assistant.",
+            screenshot: screenshot,
+            system: "You are describing a Mac screen for a voice assistant. Be specific and comprehensive but concise. No markdown. Plain sentences only."
+        )
+        return description ?? ""
     }
 
     // MARK: - open_application
 
     private static func openApplication(_ args: [String: Any]) -> String {
         guard let name = args["app_name"] as? String else { return "Missing app_name." }
-        let ws = NSWorkspace.shared
-        // Activate if already running
-        if let app = ws.runningApplications
-            .first(where: { $0.localizedName?.lowercased() == name.lowercased() }) {
-            app.activate()
-            return "Switched to \(app.localizedName ?? name)."
+        // `open -a` searches all install locations and activates if already running
+        let proc = Process()
+        proc.launchPath = "/usr/bin/open"
+        proc.arguments = ["-a", name]
+        let errPipe = Pipe()
+        proc.standardError = errPipe
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            if proc.terminationStatus == 0 { return "Opened \(name)." }
+            let msg = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                             encoding: .utf8) ?? ""
+            return "Could not open '\(name)'. \(msg.trimmingCharacters(in: .whitespacesAndNewlines))"
+        } catch {
+            return "Error launching \(name): \(error.localizedDescription)"
         }
-        // Try /Applications/<Name>.app
-        let candidates = [
-            "/Applications/\(name).app",
-            "\(NSHomeDirectory())/Applications/\(name).app",
-            "/System/Applications/\(name).app",
-        ]
-        for path in candidates {
-            let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: path) {
-                ws.openApplication(at: url, configuration: .init()) { _, _ in }
-                return "Opened \(name)."
-            }
-        }
-        return "Could not open \(name). Check the app name and that it's installed."
     }
 
     // MARK: - get_calendar_events
@@ -401,5 +676,272 @@ enum MiraToolService {
         }
         NSWorkspace.shared.open(url)
         return "Running shortcut '\(name)'."
+    }
+
+    // MARK: - control_spotify
+
+    private static func controlSpotify(_ args: [String: Any]) -> String {
+        guard let action = args["action"] as? String else { return "Missing action." }
+
+        switch action {
+        case "play":     return spotifyAppleScript("play")
+        case "pause":    return spotifyAppleScript("pause")
+        case "toggle":   return spotifyAppleScript("playpause")
+        case "next":     return spotifyAppleScript("next track")
+        case "previous": return spotifyAppleScript("previous track")
+
+        case "play_song":
+            guard let song = args["song"] as? String, !song.isEmpty else { return "Missing song." }
+            let safe = song
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            // Keyboard automation via System Events — searches Spotify and plays the top result.
+            // Requires Accessibility permission (Mira listed in System Settings › Privacy › Accessibility).
+            let script = """
+                tell application "Spotify" to activate
+                delay 0.8
+                tell application "System Events"
+                    tell process "Spotify"
+                        keystroke "l" using {command down}
+                        delay 0.5
+                        keystroke "a" using {command down}
+                        keystroke "\(safe)"
+                        key code 36
+                        delay 1.5
+                        key code 36
+                    end tell
+                end tell
+                """
+            var err: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&err)
+            if err == nil { return "Searching and playing '\(song)' on Spotify." }
+
+            // Fallback: URL scheme — shows search results without auto-playing
+            let encoded = song.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let url = URL(string: "spotify:search:\(encoded)") { NSWorkspace.shared.open(url) }
+            let reason = (err?["NSAppleScriptErrorMessage"] as? String) ?? "unknown error"
+            return "Opened Spotify search for '\(song)'. To enable auto-play, go to System Settings › Privacy & Security › Accessibility and add Mira. (\(reason))"
+
+        default:
+            return "Unknown Spotify action '\(action)'."
+        }
+    }
+
+    private static func spotifyAppleScript(_ command: String) -> String {
+        var err: NSDictionary?
+        NSAppleScript(source: "tell application \"Spotify\" to \(command)")?.executeAndReturnError(&err)
+        if let e = err {
+            return "Spotify error: \((e["NSAppleScriptErrorMessage"] as? String) ?? "Is Spotify open?")"
+        }
+        return "Done."
+    }
+
+    // MARK: - run_apple_script
+
+    private static func runAppleScript(_ args: [String: Any]) -> String {
+        guard let script = args["script"] as? String else { return "Missing script." }
+        var err: NSDictionary?
+        let result = NSAppleScript(source: script)?.executeAndReturnError(&err)
+        if let e = err {
+            let msg = e["NSAppleScriptErrorMessage"] as? String
+                   ?? e["NSAppleScriptErrorBriefMessage"] as? String
+                   ?? e.description
+            return "AppleScript error: \(msg)"
+        }
+        return result?.stringValue ?? "Done."
+    }
+
+    // MARK: - run_shell_command
+
+    private static func runShellCommand(_ args: [String: Any]) async -> String {
+        guard let command = args["command"] as? String else { return "Missing command." }
+        return await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let proc = Process()
+                proc.launchPath = "/bin/zsh"
+                proc.arguments  = ["-c", command]
+                let pipe = Pipe()
+                proc.standardOutput = pipe
+                proc.standardError  = pipe
+                do {
+                    try proc.run()
+                    proc.waitUntilExit()
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    var out  = String(data: data, encoding: .utf8) ?? ""
+                    out = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let status = proc.terminationStatus
+                    if out.isEmpty { cont.resume(returning: "Done (exit \(status)).") }
+                    else           { cont.resume(returning: String(out.prefix(2000))) }
+                } catch {
+                    cont.resume(returning: "Launch error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    // MARK: - set_volume
+
+    private static func setVolume(_ args: [String: Any]) -> String {
+        guard let level = args["level"] as? Int, level >= 0, level <= 100 else {
+            return "Level must be an integer 0–100."
+        }
+        var err: NSDictionary?
+        NSAppleScript(source: "set volume output volume \(level)")?.executeAndReturnError(&err)
+        return err == nil ? "Volume set to \(level)%." : "Failed to set volume."
+    }
+
+    // MARK: - type_text
+
+    private static func typeText(_ args: [String: Any]) -> String {
+        guard let text = args["text"] as? String else { return "Missing text." }
+        let safe = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"System Events\" to keystroke \"\(safe)\""
+        var err: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&err)
+        if let e = err {
+            let msg = e["NSAppleScriptErrorMessage"] as? String ?? e.description
+            return "Type error: \(msg). Add Mira to System Settings › Privacy & Security › Accessibility to enable typing."
+        }
+        return "Typed text."
+    }
+
+    // MARK: - Project tools
+
+    private static func createProject(_ args: [String: Any]) async -> String {
+        guard let name = args["name"] as? String,
+              let goal = args["goal"] as? String else {
+            return "Missing required fields: name, goal."
+        }
+        let criteria = args["criteria"] as? [String] ?? []
+        let project = await MainActor.run {
+            ProjectEngine.shared.createProject(name: name,
+                                               goal: goal,
+                                               criteriaDescriptions: criteria)
+        }
+        var result = "Project created: '\(project.name)' (id: \(project.id.uuidString))."
+        if !criteria.isEmpty {
+            result += " \(criteria.count) completion criteria added."
+        }
+        return result
+    }
+
+    private static func saveCheckpoint(_ args: [String: Any]) async -> String {
+        guard let projectIdStr = args["project_id"] as? String,
+              let projectId    = UUID(uuidString: projectIdStr),
+              let title        = args["title"] as? String,
+              let summary      = args["summary"] as? String,
+              let context      = args["context"] as? String else {
+            return "Missing required fields: project_id, title, summary, context."
+        }
+        let files = args["files"] as? [String] ?? []
+        let checkpoint = await MainActor.run {
+            ProjectEngine.shared.saveCheckpoint(projectId: projectId,
+                                                title: title,
+                                                summary: summary,
+                                                agentContext: context,
+                                                filesModified: files)
+        }
+        guard let cp = checkpoint else {
+            return "Project not found: \(projectIdStr)."
+        }
+        return "Checkpoint #\(cp.number) saved: '\(cp.title)'."
+    }
+
+    private static func completeCriterion(_ args: [String: Any]) async -> String {
+        guard let projectIdStr   = args["project_id"] as? String,
+              let criterionIdStr = args["criterion_id"] as? String,
+              let projectId      = UUID(uuidString: projectIdStr),
+              let criterionId    = UUID(uuidString: criterionIdStr) else {
+            return "Missing required fields: project_id, criterion_id."
+        }
+        let verifiedBy = args["verified_by"] as? String ?? "agent"
+        await MainActor.run {
+            ProjectEngine.shared.completeCriterion(projectId: projectId,
+                                                   criterionId: criterionId,
+                                                   verifiedBy: verifiedBy)
+        }
+        return "Criterion marked complete."
+    }
+
+    private static func addProjectDecision(_ args: [String: Any]) async -> String {
+        guard let projectIdStr = args["project_id"] as? String,
+              let projectId    = UUID(uuidString: projectIdStr),
+              let description  = args["description"] as? String,
+              let rationale    = args["rationale"] as? String else {
+            return "Missing required fields: project_id, description, rationale."
+        }
+        await MainActor.run {
+            ProjectEngine.shared.addDecision(to: projectId,
+                                             description: description,
+                                             rationale: rationale)
+        }
+        return "Decision recorded: \(description)."
+    }
+
+    private static func getProjectContext(_ args: [String: Any]) async -> String {
+        let projectIdStr = args["project_id"] as? String
+        let project = await MainActor.run { () -> MiraProject? in
+            if let str = projectIdStr, let id = UUID(uuidString: str) {
+                return ProjectEngine.shared.project(id: id)
+            }
+            // Fall back to the most recently active project
+            return ProjectEngine.shared.activeProjects.first
+        }
+        guard let p = project else {
+            return "No active project found. Create one with create_project."
+        }
+        let resumePrompt = await MainActor.run {
+            p.lastResumePrompt ?? ProjectEngine.shared.buildResumePrompt(for: p)
+        }
+        return """
+            Project: \(p.name) [\(p.id.uuidString)]
+            Status: \(p.status.label)
+            Progress: \(p.progressPercent)%
+            Criteria:
+            \(p.criteria.map { "  \($0.isComplete ? "✓" : "○") [\($0.id.uuidString)] \($0.description)" }.joined(separator: "\n"))
+
+            \(resumePrompt)
+            """
+    }
+
+    // MARK: - query_project_history
+
+    private static func queryProjectHistory(_ args: [String: Any]) async -> String {
+        guard let question = args["question"] as? String, !question.isEmpty else {
+            return "Missing required field: question."
+        }
+        let projectIdStr = args["project_id"] as? String
+
+        let (project, apiKey) = await MainActor.run { () -> (MiraProject?, String) in
+            let p: MiraProject?
+            if let str = projectIdStr, let id = UUID(uuidString: str) {
+                p = ProjectEngine.shared.project(id: id)
+            } else {
+                // Most recently active, then any project if none active
+                p = ProjectEngine.shared.activeProjects.first
+                  ?? ProjectEngine.shared.projects.first
+            }
+            return (p, AppSecrets.anthropicAPIKey)
+        }
+
+        guard let project = project else {
+            return "No project found. Create one first with create_project."
+        }
+        guard !apiKey.isEmpty else {
+            return "Claude API key not configured."
+        }
+
+        let context = await MainActor.run {
+            ProjectEngine.shared.buildSessionContext(for: project)
+        }
+
+        do {
+            let service = ClaudeService(apiKey: apiKey)
+            return try await service.queryProjectHistory(question: question, context: context)
+        } catch {
+            return "Could not query session history: \(error.localizedDescription)"
+        }
     }
 }

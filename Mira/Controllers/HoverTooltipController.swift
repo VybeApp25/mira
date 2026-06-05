@@ -5,30 +5,41 @@ import SwiftUI
 
 private struct TooltipView: View {
     let text: String
+    let reason: String?
     let isLoading: Bool
     let isExplanation: Bool
 
     var body: some View {
-        HStack(spacing: isLoading ? 6 : 0) {
+        HStack(alignment: .center, spacing: isLoading ? 6 : 0) {
             if isLoading {
                 ProgressIndicator()
             }
-            Text(text)
-                .font(.system(size: isExplanation ? 12 : 12, weight: isExplanation ? .regular : .semibold))
-                .foregroundColor(isLoading ? .white.opacity(0.6) : .white)
-                .lineLimit(isExplanation ? 3 : 1)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: !isExplanation, vertical: true)
-                .frame(maxWidth: isExplanation ? 280 : .infinity)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text)
+                    .font(.system(size: 12, weight: isExplanation ? .regular : .semibold))
+                    .foregroundColor(isLoading ? .white.opacity(0.6) : .white)
+                    .lineLimit(isExplanation ? 3 : 1)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: !isExplanation && reason == nil, vertical: true)
+                    .frame(maxWidth: isExplanation ? 280 : nil)
+
+                if let reason, !isLoading, !isExplanation {
+                    Text(reason)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.38))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .padding(.horizontal, 11)
-        .padding(.vertical, 7)
+        .padding(.vertical, reason != nil && !isLoading ? 8 : 7)
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: reason != nil && !isLoading ? 10 : 20)
                 .fill(Color.black.opacity(0.88))
                 .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 4)
         )
-        .fixedSize(horizontal: !isExplanation, vertical: true)
+        .fixedSize(horizontal: !isExplanation && reason == nil, vertical: true)
     }
 }
 
@@ -56,11 +67,11 @@ final class HoverTooltipController {
     // MARK: - Public API
 
     func showLoading(near cursorPos: CGPoint) {
-        present(text: "Explaining…", near: cursorPos, isLoading: true, isExplanation: false, autohide: false)
+        present(text: "Explaining…", reason: nil, near: cursorPos, isLoading: true, isExplanation: false, autohide: false)
     }
 
-    func show(text: String, near cursorPos: CGPoint, isExplanation: Bool = false) {
-        present(text: text, near: cursorPos, isLoading: false, isExplanation: isExplanation, autohide: true)
+    func show(text: String, reason: String? = nil, near cursorPos: CGPoint, isExplanation: Bool = false) {
+        present(text: text, reason: reason, near: cursorPos, isLoading: false, isExplanation: isExplanation, autohide: true)
     }
 
     func hide() {
@@ -76,12 +87,12 @@ final class HoverTooltipController {
 
     // MARK: - Private
 
-    private func present(text: String, near cursorPos: CGPoint, isLoading: Bool, isExplanation: Bool, autohide: Bool) {
+    private func present(text: String, reason: String?, near cursorPos: CGPoint, isLoading: Bool, isExplanation: Bool, autohide: Bool) {
         hideWork?.cancel()
         ensurePanel()
         guard let p = panel else { return }
 
-        let view = TooltipView(text: text, isLoading: isLoading, isExplanation: isExplanation)
+        let view = TooltipView(text: text, reason: reason, isLoading: isLoading, isExplanation: isExplanation)
         (p.contentView as? NSHostingView<TooltipView>)?.rootView = view
 
         let contentSize = (p.contentView as? NSHostingView<TooltipView>)?.fittingSize ?? CGSize(width: 200, height: 34)
@@ -115,7 +126,7 @@ final class HoverTooltipController {
         p.hasShadow = false
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        p.contentView = NSHostingView(rootView: TooltipView(text: "", isLoading: false, isExplanation: false))
+        p.contentView = NSHostingView(rootView: TooltipView(text: "", reason: nil, isLoading: false, isExplanation: false))
         panel = p
     }
 

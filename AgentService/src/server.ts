@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { runAgent, executeConfirmed, getConnectUrl } from "./agent";
+import { runAgent, executeConfirmed, getConnectUrl, getConnectedApps } from "./agent";
 
 const app = express();
 app.use(express.json());
@@ -58,6 +58,7 @@ app.post("/agent/confirm", async (req, res) => {
   }
 });
 
+// OAuth connect URL for a given app
 app.get("/connect/:app", async (req, res) => {
   const { userId } = req.query as { userId?: string };
   if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
@@ -68,6 +69,21 @@ app.get("/connect/:app", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  }
+});
+
+// Return the list of active connected app slugs for a user
+app.get("/connections", async (req, res) => {
+  const { userId } = req.query as { userId?: string };
+  if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
+
+  try {
+    const connected = await getConnectedApps(userId);
+    res.json({ connected });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/connections]", msg);
+    res.status(500).json({ error: msg, connected: [] });
   }
 });
 

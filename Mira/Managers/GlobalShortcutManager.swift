@@ -4,10 +4,12 @@ import Carbon
 // MARK: - Notification names
 
 extension Notification.Name {
-    static let miraActivateVoice    = Notification.Name("miraActivateVoice")
-    static let miraActivateText     = Notification.Name("miraActivateText")
-    static let miraVoiceChanged     = Notification.Name("miraVoiceChanged")
-    static let miraShortcutsChanged = Notification.Name("miraShortcutsChanged")
+    static let miraActivateVoice         = Notification.Name("miraActivateVoice")
+    static let miraActivateText          = Notification.Name("miraActivateText")
+    static let miraVoiceChanged          = Notification.Name("miraVoiceChanged")
+    static let miraShortcutsChanged      = Notification.Name("miraShortcutsChanged")
+    static let miraScreenCompanionChanged = Notification.Name("miraScreenCompanionChanged")
+    static let miraChipPromptSelected    = Notification.Name("miraChipPromptSelected")  // Fix 3
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)

@@ -62,7 +62,8 @@ class ClaudeService {
         }
         content.append(.text(prompt))
 
-        let body = APIRequest(model: model, max_tokens: 400, system: system,
+        let maxTokens = screenshot != nil ? 800 : 400
+        let body = APIRequest(model: model, max_tokens: maxTokens, system: system,
                               messages: [APIMessage(role: "user", content: content)])
 
         var req = URLRequest(url: baseURL)
@@ -78,6 +79,181 @@ class ClaudeService {
             throw MiraError.api(msg)
         }
         return try JSONDecoder().decode(APIResponse.self, from: data).text
+    }
+
+    /// Session intelligence query — higher token budget, focused on work history.
+    func queryProjectHistory(question: String, context: String) async throws -> String {
+        let prompt = "Project Work History:\n\n\(context)\n\nQuestion: \(question)"
+        let body   = APIRequest(
+            model:      model,
+            max_tokens: 1200,
+            system:     MiraPrompts.sessionIntelligence,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        req.setValue(apiKey,          forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01",    forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw MiraError.api(msg)
+        }
+        return try JSONDecoder().decode(APIResponse.self, from: data).text
+    }
+
+    /// Phase 13B — background proposal generation.
+    /// Produces a concrete proposal artifact (investigation/refactor/test/migration).
+    /// Still read-only: no filesystem writes. Proposal content goes to ProposalStore.
+    func generateProposal(resumePrompt: String, sessionContext: String) async throws -> ProposalResult {
+        let prompt = """
+        Resume Context:
+        \(resumePrompt)
+
+        Session History:
+        \(sessionContext)
+
+        Produce ONE concrete proposal for advancing this project.
+        Respond ONLY with a single JSON object — no markdown wrapper, no explanation:
+        {
+          "type": "investigation|refactor|test|migration",
+          "title": "Short specific title (max 60 chars)",
+          "rationale": "1-2 sentences: why this proposal is the right next step",
+          "content": "Full proposal in markdown (100-400 words). Be specific — name files, functions, patterns.",
+          "confidence": 0.75,
+          "affected_files": ["relative/path/to/file.swift"],
+          "should_block": false,
+          "block_reason": null
+        }
+        Set should_block=true if the project context is insufficient to produce a useful proposal.
+        Use type "investigation" if uncertain which change to make — describe what needs deeper analysis.
+        """
+        let body = APIRequest(
+            model:      model,
+            max_tokens: 1000,
+            system:     MiraPrompts.proposalGeneration,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        req.setValue(apiKey,              forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json",  forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        let text = try JSONDecoder().decode(APIResponse.self, from: data).text
+        return parseProposalResult(from: text)
+    }
+
+    private func parseProposalResult(from text: String) -> ProposalResult {
+        struct Raw: Decodable {
+            let type:           String
+            let title:          String
+            let rationale:      String
+            let content:        String
+            let confidence:     Double
+            let affected_files: [String]
+            let should_block:   Bool
+            let block_reason:   String?
+        }
+        if let range = text.range(of: #"\{[\s\S]*\}"#, options: .regularExpression),
+           let jsonData = String(text[range]).data(using: .utf8),
+           let raw = try? JSONDecoder().decode(Raw.self, from: jsonData) {
+            return ProposalResult(
+                type:          ProposalType(rawValue: raw.type) ?? .investigation,
+                title:         raw.title,
+                rationale:     raw.rationale,
+                content:       raw.content,
+                confidence:    raw.confidence,
+                affectedFiles: raw.affected_files,
+                shouldBlock:   raw.should_block,
+                blockReason:   raw.block_reason
+            )
+        }
+        return ProposalResult(
+            type: .investigation, title: "Background analysis",
+            rationale: "Unable to parse structured proposal.",
+            content: text, confidence: 0.3, affectedFiles: [],
+            shouldBlock: false, blockReason: nil
+        )
+    }
+
+    /// Phase 13A — background analysis session.
+    /// Read-only: returns a structured checkpoint describing what the agent found.
+    /// No file writes, no external tools. Caller enforces the 10-minute timeout policy.
+    func backgroundAnalysis(resumePrompt: String, sessionContext: String) async throws -> BackgroundWorkResult {
+        let prompt = """
+        Resume Context:
+        \(resumePrompt)
+
+        Session History:
+        \(sessionContext)
+
+        Respond ONLY with a single JSON object — no markdown, no explanation, no preamble:
+        {
+          "checkpoint_title": "Short specific title (max 60 chars) describing what you analyzed",
+          "checkpoint_summary": "1-3 sentences: key findings, risks, or blockers you identified",
+          "agent_context": "1-2 sentences: exact next step for the next session to pick up from",
+          "should_block": false,
+          "block_reason": null
+        }
+        Set should_block=true if you cannot make useful progress (insufficient context, needs user decision, or criteria are already met).
+        """
+        let body = APIRequest(
+            model:      model,
+            max_tokens: 600,
+            system:     MiraPrompts.backgroundWork,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        req.setValue(apiKey,              forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json",  forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        let text = try JSONDecoder().decode(APIResponse.self, from: data).text
+        return parseBackgroundWorkResult(from: text)
+    }
+
+    private func parseBackgroundWorkResult(from text: String) -> BackgroundWorkResult {
+        struct Raw: Decodable {
+            let checkpoint_title:   String
+            let checkpoint_summary: String
+            let agent_context:      String
+            let should_block:       Bool
+            let block_reason:       String?
+        }
+        // Extract the first JSON object from the response
+        if let range = text.range(of: #"\{[\s\S]*\}"#, options: .regularExpression),
+           let jsonData = String(text[range]).data(using: .utf8),
+           let raw = try? JSONDecoder().decode(Raw.self, from: jsonData) {
+            return BackgroundWorkResult(
+                checkpointTitle:   raw.checkpoint_title,
+                checkpointSummary: raw.checkpoint_summary,
+                agentContext:      raw.agent_context,
+                shouldBlock:       raw.should_block,
+                blockReason:       raw.block_reason
+            )
+        }
+        // Fallback: use raw text as summary if JSON parsing fails
+        return BackgroundWorkResult(
+            checkpointTitle:   "Background analysis",
+            checkpointSummary: String(text.prefix(200)),
+            agentContext:      "Continue from previous checkpoint.",
+            shouldBlock:       false,
+            blockReason:       nil
+        )
     }
 
     func locateElement(_ description: String, in screenshot: NSImage) async throws -> CGPoint? {
@@ -122,12 +298,48 @@ enum MiraPrompts {
     SAVE INTENT: Call save_content when the user asks to save, store, keep, or export anything — \
     destination "notes" for ideas/drafts/text, "files" for documents/exports. \
     Call remember ONLY for explicit user preferences, habits, or identity facts ("I prefer", "from now on", "remember that"). \
-    Never call remember for content. If save intent is ambiguous, ask one clarifying question before calling either tool.
+    Never call remember for content. If save intent is ambiguous, ask one clarifying question before calling either tool. \
+    MAC CONTROL: \
+    Use control_spotify to play, pause, or play a specific song on Spotify. \
+    When the user says "play [song] on Spotify" or "open Spotify and play [song]", call open_application("Spotify") then control_spotify(action:"play_song", song:"..."). \
+    Use run_apple_script for anything requiring deep app control — sending iMessages, typing in apps, clicking UI elements, composing emails via Mail, automating Finder. \
+    Use run_shell_command for file operations, reading files, system info, or any terminal task. \
+    Use set_volume to change the Mac's volume. \
+    Use type_text to type into the currently focused app (requires Accessibility permission).
     """
 
     static let vision = """
     You are a precise UI element locator. Return only a JSON object with pixel coordinates.
     Analyze the screenshot carefully. Coordinates are from the top-left corner of the image.
+    """
+
+    /// Phase 13B proposal generation — produces a concrete artifact proposal.
+    static let proposalGeneration = """
+    You are Mira, generating a background proposal artifact. \
+    You are an autonomous analyst — you CANNOT modify files or run commands. \
+    Your output is a single JSON proposal that will be stored as a candidate artifact for human review. \
+    Proposals must be specific: name real files, functions, patterns, or test cases from the provided context. \
+    A generic proposal is worthless — write something a developer could act on directly. \
+    Set should_block=true if the context is too thin to produce a useful proposal.
+    """
+
+    /// Phase 13A background analysis — read-only observer, no filesystem writes.
+    static let backgroundWork = """
+    You are Mira, running a background analysis session. \
+    You are an autonomous observer — you CANNOT modify files, run commands, or call external services. \
+    Your entire output is a single JSON checkpoint describing what you analyzed and what should happen next. \
+    Be specific, factual, and concise. Reference actual file names, checkpoint titles, and session numbers from the context. \
+    If you cannot make useful progress, set should_block to true with a clear reason. \
+    Never fabricate details not present in the provided context.
+    """
+
+    static let sessionIntelligence = """
+    You are Mira, answering questions about a project's work history. \
+    You have access to session records: who worked (personas), what was done, \
+    which files were created, checkpoint titles, and when each session occurred. \
+    Answer factually from the provided data — reference session numbers, persona names, \
+    and artifact filenames by name. If the answer isn't in the records, say so clearly. \
+    Keep replies under 120 words. No markdown.
     """
 }
 

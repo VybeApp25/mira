@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case chat, home, agents, briefing }
+enum IslandTab: Equatable { case chat, home, agents, briefing, projects }
 
 // MARK: - Main island view
 
@@ -56,6 +56,7 @@ struct MiraIslandView: View {
     @ObservedObject var voice:     VoiceService
     @ObservedObject var wakeWord:  WakeWordService
     let geometry: NotchGeometry
+    @ObservedObject private var engine = ProjectEngine.shared
 
     // Default to briefing on first expansion of the day; Chat every other time
     @State private var selectedTab: IslandTab = {
@@ -77,6 +78,9 @@ struct MiraIslandView: View {
             Color.clear.ignoresSafeArea()
             pill
         }
+        // Opt out of the macOS safe-area inset (menu bar height ≈ 33pt).
+        // Without this the pill is pushed ~33pt below the notch, leaving a gap.
+        .ignoresSafeArea()
         .sheet(isPresented: $showSettings) {
             SettingsView(state: miraState)
         }
@@ -109,13 +113,11 @@ struct MiraIslandView: View {
     }
 
     // MARK: - Collapsed pill
+    // When idle the pill is pure black — indistinguishable from the hardware notch.
+    // Only active states (voice, agent) render a visible indicator.
 
     private var collapsedContent: some View {
         HStack(spacing: 7) {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(collapsedAccent)
-
             switch miraState.realtimeState {
             case .thinking:
                 CollapsedThinkingDots()
@@ -154,25 +156,225 @@ struct MiraIslandView: View {
     // MARK: - Expanded layout
 
     private var expandedContent: some View {
-        VStack(spacing: 0) {
-            navBar
-            Rectangle()
-                .fill(Color.white.opacity(0.07))
-                .frame(height: 0.5)
-            tabContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                navBar
+                Rectangle()
+                    .fill(Color.white.opacity(0.07))
+                    .frame(height: 0.5)
+                if let summary = miraState.hoverSummary {
+                    hoverSummaryBar(summary)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 0.5)
+                }
+                continuationBanner
+                tabContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            // Phase 2: HUD overlay — sits on top of tabs, invisible when idle
+            hudOverlay
         }
+    }
+
+    // MARK: - Phase 10: Continuation banner
+
+    @ViewBuilder
+    private var continuationBanner: some View {
+        if let project = engine.pendingContinuation {
+            let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(0.15))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Continue \(project.name)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.90))
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text(project.relativeTime)
+                            if !project.checkpoints.isEmpty {
+                                Text("·")
+                                Text("\(project.checkpoints.count) checkpoint\(project.checkpoints.count == 1 ? "" : "s")")
+                            }
+                            if let session = project.lastCompletedSession {
+                                Text("·")
+                                Text(session.persona.displayName)
+                            }
+                        }
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.32))
+                    }
+                    Spacer()
+                    Button {
+                        let prompt = ProjectEngine.shared.buildResumePrompt(for: project)
+                        engine.dismissContinuation()
+                        selectedTab = .chat
+                        NotificationCenter.default.post(
+                            name: .miraChipPromptSelected,
+                            object: nil,
+                            userInfo: ["prompt": prompt]
+                        )
+                    } label: {
+                        Text("Resume")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(accent)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(accent.opacity(0.14))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    Button { engine.dismissContinuation() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.22))
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .animation(.easeInOut(duration: 0.18), value: engine.pendingContinuation != nil)
+        }
+    }
+
+    // MARK: - HUD overlay (Phase 2, additive)
+
+    @ViewBuilder
+    private var hudOverlay: some View {
+        let hudService  = HUDService.shared
+        let chipService = ActionChipService.shared
+
+        switch animController.hudMode {
+        case .idle:
+            EmptyView()
+
+        case .running:
+            AgentHUDView(hud: hudService)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: animController.hudMode)
+
+        case .done:
+            // Fix 1: use the stored AgentResult so summary is never "Done."
+            let result = animController.currentResult ?? AgentResult(
+                summary:     hudService.updates.last?.message ?? "Done.",
+                doneTitle:   hudService.activeProjectName ?? "Task Complete",
+                artifacts:   [],
+                nextActions: chipService.chips,
+                checkpointId: nil,
+                projectId:   nil
+            )
+            AgentResultView(
+                result: result,
+                chipService: chipService,
+                onChipTapped: { prompt in
+                    // Fix 3: route chip prompt into the chat tab
+                    selectedTab = .chat
+                    animController.clearHUD()
+                    NotificationCenter.default.post(
+                        name: .miraChipPromptSelected,
+                        object: nil,
+                        userInfo: ["prompt": prompt]
+                    )
+                }
+            )
+            .transition(.opacity)
+            .animation(.easeInOut(duration: 0.2), value: animController.hudMode)
+
+        case .blocked:
+            blockedOverlay
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: animController.hudMode)
+        }
+    }
+
+    // MARK: - Blocked overlay (Fix 5)
+
+    private var blockedOverlay: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(red: 1.0, green: 0.75, blue: 0.20))
+                Text("Blocked")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                Spacer()
+                Button { animController.clearHUD() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.30))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider().background(Color.white.opacity(0.07))
+
+            Text(HUDService.shared.currentMessage)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.80))
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+    }
+
+    private func hoverSummaryBar(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 10))
+                .foregroundColor(Color(red: 0.29, green: 0.62, blue: 1.0).opacity(0.6))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.78))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button {
+                miraState.hoverSummary = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.22))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
     }
 
     // MARK: - Inline nav bar
 
     private var navBar: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             // Left group — primary tabs
-            navTab(icon: "sparkles",     label: "Today",  tab: .briefing)
-            navTab(icon: "message.fill", label: "Chat",   tab: .chat)
-            navTab(icon: "house.fill",   label: "Home",   tab: .home)
-            navTab(icon: "cpu",          label: "Agents", tab: .agents)
+            navTab(icon: "message.fill", label: "Chat",     tab: .chat)
+            navTab(icon: "folder.fill",  label: "Projects", tab: .projects)
+            navTab(icon: "sparkles",     label: "Today",    tab: .briefing)
+            navTab(icon: "house.fill",   label: "Home",     tab: .home)
+            navTab(icon: "cpu",          label: "Agents",   tab: .agents)
 
             Spacer()
 
@@ -252,6 +454,18 @@ struct MiraIslandView: View {
             )
         case .home:
             HomeTabView(miraState: miraState)
+        case .projects:
+            ProjectsTabView(
+                animController: animController,
+                onResume: { prompt in
+                    selectedTab = .chat
+                    NotificationCenter.default.post(
+                        name: .miraChipPromptSelected,
+                        object: nil,
+                        userInfo: ["prompt": prompt]
+                    )
+                }
+            )
         case .agents:
             AgentsTabView(
                 taskStore: taskStore,

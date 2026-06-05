@@ -7,16 +7,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // Request Screen Recording permission up front so it's granted before
-        // HoverSummaryService or ScreenCaptureService makes its first capture attempt.
         ScreenCaptureService.requestAccessIfNeeded()
+        AgentProcessManager.shared.start()
 
         let manager = NotchManager()
         manager.setup()
         notchManager = manager
+        MiraCursorManager.shared.activate()
 
-        // Status bar item: secondary access point for settings / quick chat.
         statusBarController = StatusBarController(miraState: manager.miraState)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        AgentProcessManager.shared.stop()
+        MiraCursorManager.shared.deactivate()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

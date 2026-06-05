@@ -1,5 +1,37 @@
 import Foundation
 
+// MARK: - Sensitivity
+
+enum HoverSensitivity: String, CaseIterable {
+    case minimal   = "minimal"
+    case balanced  = "balanced"
+    case proactive = "proactive"
+
+    var dwellSeconds: TimeInterval {
+        switch self {
+        case .minimal:   return 5.0
+        case .balanced:  return 3.0
+        case .proactive: return 1.5
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .minimal:   return "Minimal"
+        case .balanced:  return "Balanced"
+        case .proactive: return "Proactive"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .minimal:   return "Only long pauses"
+        case .balanced:  return "Current behavior"
+        case .proactive: return "Frequent suggestions"
+        }
+    }
+}
+
 // MARK: - Per-category stats
 
 struct CategoryStats: Codable {
@@ -23,7 +55,25 @@ final class HoverPreferences {
     static let shared = HoverPreferences()
 
     private(set) var categories: [String: CategoryStats] = [:]
-    private let udKey = "mira_hover_prefs_v1"
+    private let udKey    = "mira_hover_prefs_v1"
+    static let companionKey   = "mira_screen_companion_v1"
+    static let sensitivityKey = "mira_hover_sensitivity_v1"
+
+    var screenCompanionEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: Self.companionKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.companionKey)
+            NotificationCenter.default.post(name: .miraScreenCompanionChanged, object: nil)
+        }
+    }
+
+    var sensitivity: HoverSensitivity {
+        get {
+            let raw = UserDefaults.standard.string(forKey: Self.sensitivityKey) ?? "balanced"
+            return HoverSensitivity(rawValue: raw) ?? .balanced
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Self.sensitivityKey) }
+    }
 
     private init() { load() }
 
@@ -37,6 +87,11 @@ final class HoverPreferences {
     func recordExplained(category: String) {
         categories[category, default: CategoryStats()].explained += 1
         save()
+    }
+
+    func resetStats() {
+        categories = [:]
+        UserDefaults.standard.removeObject(forKey: udKey)
     }
 
     // MARK: - Context injection

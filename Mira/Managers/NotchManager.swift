@@ -16,12 +16,11 @@ final class NotchManager {
     private let overlay:           OverlayWindowController
     private let capture:           ScreenCaptureService
     private let voice:             VoiceService
-    // App-lifetime WakeWordService — exposed so MiraIslandView can pass it down.
-    // Keeping it here prevents the view-recreation cycle from spawning duplicate
-    // audio sessions when the island collapses and re-expands.
+    // App-lifetime WakeWordService — kept here so view-recreation doesn't spawn duplicate audio sessions.
     let wakeWord:                  WakeWordService
-    private let hoverSummary:      HoverSummaryService
+    private let hoverDetection:    HoverDetectionService
     private let tooltipController: HoverTooltipController
+    private var insightManager:    HoverInsightManager?
     private let shortcutManager =  GlobalShortcutManager()
     // Shortcuts are handled via NSMenu key equivalents in StatusBarController
     // (no Accessibility permission needed that way)
@@ -35,11 +34,11 @@ final class NotchManager {
         windowManager  = MiraIslandWindowManager(geometry: geo)
         hoverManager   = HoverTrackingManager()
         taskStore      = AgentTaskStore.shared
-        overlay        = OverlayWindowController()
-        capture        = ScreenCaptureService()
-        voice          = VoiceService()
+        overlay           = OverlayWindowController()
+        capture           = ScreenCaptureService()
+        voice             = VoiceService()
         wakeWord          = WakeWordService()
-        hoverSummary      = HoverSummaryService(apiKey: { state.effectiveAPIKey })
+        hoverDetection    = HoverDetectionService()
         tooltipController = HoverTooltipController()
     }
 
@@ -70,14 +69,30 @@ final class NotchManager {
             geometry:       geometry
         )
         windowManager.install(rootView: island)
+        insightManager = HoverInsightManager(
+            miraState:      miraState,
+            animController: animController,
+            capture:        capture,
+            tooltip:        tooltipController
+        )
         wakeWord.start()
         shortcutManager.start()
+        BackgroundScheduler.shared.start()
         wireHover()
-        wireHoverSummary()
+        wireHoverDetection()
         wireShortcutUpdates()
         // Expand island when a shortcut fires via StatusBarController's menu key equivalents
         NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { [weak self] _ in
-            self?.expandForShortcut()
+            guard let self else { return }
+            let alreadyExpanded = self.animController.state == .expanded
+            self.expandForShortcut()
+            if !alreadyExpanded {
+                // IslandChatView is inside `if isExpanded` — it wasn't in the hierarchy yet.
+                // Re-post after SwiftUI renders expandedContent so the view catches the notification.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                    NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
+                }
+            }
         }
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             self?.expandForShortcut()
@@ -87,11 +102,13 @@ final class NotchManager {
     private func expandForShortcut() {
         collapseWork?.cancel()
         collapseWork = nil
+        wakeWordRestartWork?.cancel()
+        wakeWordRestartWork = nil
+        insightManager?.cancel()
         windowManager.setInteractive(true)
         animController.expand()
         hoverManager.update(activationRect: expandedZone())
-        // Voice always wins — dismiss any visible tooltip and suspend hover detection.
-        hoverSummary.isEnabled = false
+        hoverDetection.pause()
         tooltipController.hide()
         wakeWord.pause()
     }
@@ -99,39 +116,42 @@ final class NotchManager {
     // MARK: - Hover wiring
 
     // Pending collapse work item — cancelled if the cursor re-enters before it fires.
-    private var collapseWork: DispatchWorkItem?
+    private var collapseWork:       DispatchWorkItem?
+    // Pending wakeWord restart — cancelled on re-enter so wake word never restarts while island is open.
+    private var wakeWordRestartWork: DispatchWorkItem?
 
     private func wireHover() {
         hoverManager.update(activationRect: collapsedZone())
 
         hoverManager.onEnter = { [weak self] in
             guard let self else { return }
-            // Cancel any pending collapse so a brief cursor exit doesn't flicker.
             collapseWork?.cancel()
             collapseWork = nil
+            wakeWordRestartWork?.cancel()
+            wakeWordRestartWork = nil
+            // Clear any ambient hover summary — user is now actively using the island.
+            insightManager?.cancel()
             windowManager.setInteractive(true)
             animController.expand()
-            // Widen tracking zone to cover the full expanded panel.
             hoverManager.update(activationRect: expandedZone())
-            // Suppress hover summaries and wake word while island is open.
-            hoverSummary.isEnabled = false
+            hoverDetection.pause()
             tooltipController.hide()
             wakeWord.pause()
         }
 
         hoverManager.onExit = { [weak self] in
             guard let self else { return }
-            // Shrink zone immediately so re-entry detection snaps back to notch area.
             hoverManager.update(activationRect: collapsedZone())
-            // Debounce collapse — ignore exits shorter than 120 ms (cursor wobble).
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 animController.collapse()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                let restartWork = DispatchWorkItem { [weak self] in
                     self?.windowManager.setInteractive(false)
-                    self?.hoverSummary.isEnabled = true
+                    self?.hoverDetection.resume()
                     self?.wakeWord.start()
                 }
+                wakeWordRestartWork = restartWork
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: restartWork)
             }
             collapseWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
@@ -146,19 +166,22 @@ final class NotchManager {
         ) { [weak self] _ in self?.shortcutManager.update() }
     }
 
-    private func wireHoverSummary() {
-        hoverSummary.onEvent = { [weak self] event in
+    private func wireHoverDetection() {
+        hoverDetection.onDwell = { [weak self] pos, optionHeld in
             guard let self else { return }
-            switch event {
-            case .summary(let text, let pos):
-                tooltipController.show(text: text, near: pos)
-            case .explainStart(let pos):
-                tooltipController.showLoading(near: pos)
-            case .explain(let text, let pos):
-                tooltipController.show(text: text, near: pos, isExplanation: true)
+            insightManager?.handleDwell(at: pos, optionHeld: optionHeld)
+        }
+        hoverDetection.start()
+
+        NotificationCenter.default.addObserver(
+            forName: .miraScreenCompanionChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            if !HoverPreferences.shared.screenCompanionEnabled {
+                tooltipController.hide()
+                insightManager?.cancel()
             }
         }
-        hoverSummary.start()
     }
 
     /// Small zone around the notch — triggers open when cursor enters.

@@ -21,21 +21,51 @@ export interface PendingAction {
   params: Record<string, unknown>;
 }
 
-// Write/external actions that always need user confirmation first
+// Integrations Mira exposes — must match toolkit slugs in Composio
+export const SUPPORTED_TOOLKITS = [
+  "gmail",
+  "googlecalendar",
+  "notion",
+  "slack",
+  "github",
+  "linear",
+];
+
+// Write/external actions that always need user confirmation before executing
 const CONFIRM_BEFORE_RUN = new Set([
+  // Gmail
   "GMAIL_SEND_EMAIL",
   "GMAIL_REPLY_TO_THREAD",
+  "GMAIL_CREATE_EMAIL_DRAFT",
+  // Google Calendar
   "GOOGLECALENDAR_CREATE_EVENT",
   "GOOGLECALENDAR_DELETE_EVENT",
+  "GOOGLECALENDAR_UPDATE_EVENT",
+  // Notion
   "NOTION_CREATE_PAGE",
   "NOTION_UPDATE_PAGE",
+  "NOTION_DELETE_PAGE",
+  // Slack
   "SLACK_SENDS_A_MESSAGE_AS_THE_APP",
+  "SLACK_SEND_MESSAGE",
+  "SLACK_CREATE_CHANNEL",
+  // GitHub
+  "GITHUB_CREATE_AN_ISSUE",
+  "GITHUB_CREATE_PULL_REQUEST",
+  "GITHUB_CREATE_A_RELEASE",
+  "GITHUB_DELETE_A_REPOSITORY",
+  // Linear
+  "LINEAR_CREATE_ISSUE",
+  "LINEAR_UPDATE_ISSUE",
+  "LINEAR_DELETE_ISSUE",
 ]);
 
-const SYSTEM_PROMPT = `You are Mira, a screen-aware Mac assistant. Be concise and direct.
-Lead with the answer. No preamble.
+const SYSTEM_PROMPT = `You are Mira, a screen-aware Mac assistant with access to the user's connected apps. Be concise and direct.
+Lead with the answer. No preamble. No markdown.
 Use tools only when the user explicitly requests an action.
-For write actions the system will confirm with the user before anything is sent or changed.`;
+For write actions (send email, create event, post message, create issue) the system will confirm with the user before executing.
+When reading data (list emails, fetch calendar, search Notion), proceed without confirmation.
+Always summarize what you found or did in plain language — no raw JSON dumps.`;
 
 function makeComposio() {
   return new Composio({
@@ -67,10 +97,12 @@ export async function runAgent(req: AgentRequest): Promise<AgentResponse> {
   const composio = makeComposio();
   const anthropic = createAnthropic({ apiKey: req.claudeApiKey });
 
-  // Tool router session — Composio manages execution + routing
+  // Load tools filtered to supported toolkits only
   const session = await composio.create(req.userId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawTools = await session.tools() as Record<string, any>;
+  const rawTools = await (session as any).tools({
+    toolkitSlugs: SUPPORTED_TOOLKITS,
+  }) as Record<string, any>;
   const tools = wrapTools(rawTools);
 
   const result = await generateText({
@@ -124,13 +156,48 @@ export async function getConnectUrl(app: string, userId: string): Promise<string
   return (conn as { redirectUrl?: string }).redirectUrl ?? "";
 }
 
+export async function getConnectedApps(userId: string): Promise<string[]> {
+  const composio = makeComposio();
+  const result = await composio.connectedAccounts.list({
+    userIds: [userId],
+    statuses: ["ACTIVE"],
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (result.items ?? []).map((a: any) => (a.toolkit?.slug ?? "").toLowerCase()).filter(Boolean);
+}
+
 function describe(tool: string, input: Record<string, unknown>): string {
   switch (tool) {
-    case "GMAIL_SEND_EMAIL": return `send an email to ${input["to"] ?? "recipient"}`;
-    case "GMAIL_REPLY_TO_THREAD": return `reply to an email`;
-    case "GOOGLECALENDAR_CREATE_EVENT": return `create event: "${input["summary"] ?? "event"}"`;
-    case "GOOGLECALENDAR_DELETE_EVENT": return `delete a calendar event`;
-    case "NOTION_CREATE_PAGE": return `create a Notion page`;
-    default: return tool.toLowerCase().replace(/_/g, " ");
+    case "GMAIL_SEND_EMAIL":
+      return `send email to ${input["to"] ?? "recipient"}`;
+    case "GMAIL_REPLY_TO_THREAD":
+      return `reply to an email thread`;
+    case "GMAIL_CREATE_EMAIL_DRAFT":
+      return `create a draft email to ${input["to"] ?? "recipient"}`;
+    case "GOOGLECALENDAR_CREATE_EVENT":
+      return `create calendar event: "${input["summary"] ?? "event"}"`;
+    case "GOOGLECALENDAR_DELETE_EVENT":
+      return `delete calendar event`;
+    case "GOOGLECALENDAR_UPDATE_EVENT":
+      return `update calendar event: "${input["summary"] ?? "event"}"`;
+    case "NOTION_CREATE_PAGE":
+      return `create Notion page: "${input["title"] ?? "page"}"`;
+    case "NOTION_UPDATE_PAGE":
+      return `update Notion page`;
+    case "NOTION_DELETE_PAGE":
+      return `delete Notion page`;
+    case "SLACK_SENDS_A_MESSAGE_AS_THE_APP":
+    case "SLACK_SEND_MESSAGE":
+      return `send Slack message to ${input["channel"] ?? "channel"}`;
+    case "GITHUB_CREATE_AN_ISSUE":
+      return `create GitHub issue: "${input["title"] ?? "issue"}"`;
+    case "GITHUB_CREATE_PULL_REQUEST":
+      return `create pull request: "${input["title"] ?? "PR"}"`;
+    case "LINEAR_CREATE_ISSUE":
+      return `create Linear issue: "${input["title"] ?? "issue"}"`;
+    case "LINEAR_UPDATE_ISSUE":
+      return `update Linear issue`;
+    default:
+      return tool.toLowerCase().replace(/_/g, " ");
   }
 }

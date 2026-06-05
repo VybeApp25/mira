@@ -4,8 +4,8 @@ import Foundation
 // MARK: - Event
 
 enum HoverEvent {
-    /// Interesting content identified — ≤5 word summary. Category is recorded automatically.
-    case summary(String, CGPoint)
+    /// Interesting content identified. Carries summary text, optional reason ("why you're seeing this"), and position.
+    case summary(String, String?, CGPoint)
     /// ⌥-held dwell fired; loading state should appear immediately.
     case explainStart(CGPoint)
     /// Richer explanation ready (⌥-held path). Category is recorded automatically.
@@ -41,6 +41,7 @@ final class HoverSummaryService {
         let summary:     String
         let interesting: Bool
         let category:    String
+        let reason:      String?
     }
 
     private struct ExplainResponse: Decodable {
@@ -71,7 +72,7 @@ final class HoverSummaryService {
     // MARK: - Private
 
     private func tick() {
-        guard isEnabled, !isFetching else { return }
+        guard isEnabled, prefs.screenCompanionEnabled, !isFetching else { return }
         let pos = NSEvent.mouseLocation
 
         if dist(pos, dwellOrigin) > 20 {
@@ -80,7 +81,7 @@ final class HoverSummaryService {
             return
         }
 
-        guard Date().timeIntervalSince(dwellStart) >= 3.0,
+        guard Date().timeIntervalSince(dwellStart) >= prefs.sensitivity.dwellSeconds,
               dist(pos, lastFetchOrigin) > 80 else { return }
 
         fetch(at: pos, explain: NSEvent.modifierFlags.contains(.option))
@@ -133,7 +134,7 @@ final class HoverSummaryService {
                     let raw = try await claude.ask(
                         prompt: """
                         Look at this screenshot. Return JSON only — no markdown:
-                        {"summary":"<5 words max>","interesting":<true if chart/error/code/data/diagram/product/medical/financial, false if navigation/button/icon/empty space/generic UI>,"category":"<code|financial|medical|gaming|data|product|error|other>"}
+                        {"summary":"<5 words max>","interesting":<true if chart/error/code/data/diagram/product/medical/financial, false if navigation/button/icon/empty space/generic UI>,"category":"<code|financial|medical|gaming|data|product|error|other>","reason":"<8 words max why this is worth noticing, or omit if not interesting>"}
                         """,
                         screenshot: img,
                         system: systemPrompt
@@ -141,9 +142,13 @@ final class HoverSummaryService {
                     guard let result = parseSummary(raw), result.interesting else { return }
                     let text = String(result.summary.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
                     guard !text.isEmpty else { return }
+                    let reason = result.reason.flatMap { r in
+                        let t = r.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return t.isEmpty ? nil : String(t.prefix(80))
+                    }
                     await MainActor.run {
                         self.prefs.recordShown(category: result.category)
-                        self.onEvent?(.summary(text, pos))
+                        self.onEvent?(.summary(text, reason, pos))
                     }
                 }
             } catch {}
