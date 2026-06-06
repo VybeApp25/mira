@@ -1,15 +1,53 @@
 import ScreenCaptureKit
 import AppKit
 
+// MARK: - Capability state
+
+/// Typed result of evaluating a macOS TCC capability at runtime.
+///
+/// macOS permissions are not boolean — they are identity-scoped capabilities.
+/// TCC binds each grant to a (bundle-id, code-signing-identity) tuple, so the
+/// same app can appear "granted" in System Settings while a different build of
+/// that app has no grant at all. This enum makes that distinction explicit.
+///
+/// When Mira gains mic, accessibility, or automation permissions, each should
+/// produce a value of this type from its own `evaluateState()` so all capability
+/// decisions follow the same classification model.
+enum CapabilityState {
+    /// Permission granted and runtime call succeeded — capability is usable.
+    case available
+    /// TCC preflight said granted, but runtime call failed (-3801).
+    /// The grant belongs to a different code-signing identity (e.g. a prior build).
+    /// Remediation: re-approve this binary in System Settings, then relaunch.
+    case identityMismatch
+    /// TCC preflight said not granted. Remediation: grant in System Settings.
+    case denied
+}
+
+// MARK: - Screen capture
+
 class ScreenCaptureService {
 
     // True after the first SCK -3801 so we stop queuing capture work until relaunch.
-    // Reset happens automatically on restart since this is not persisted.
+    // Resets on restart since this is not persisted.
     private static var permissionDenied = false
 
-    // Whether CGPreflight said "granted" at launch time. Used to distinguish
-    // "genuinely not granted" from "granted to a different code-signing identity".
+    // Captured once at launch so evaluateState() can classify identity-mismatch
+    // vs genuine-denial without re-querying at every capture site.
     private static var preflightGranted = false
+
+    // MARK: - Capability evaluation
+
+    /// Pure function: classifies screen capture state from the two available signals.
+    /// Separated from side-effecting code so the logic is testable and reusable.
+    static func evaluateState(preflight: Bool, sckError: NSError?) -> CapabilityState {
+        guard let err = sckError else { return .available }
+        guard err.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain",
+              err.code == -3801 else { return .available }
+        return preflight ? .identityMismatch : .denied
+    }
+
+    // MARK: - Launch
 
     /// Call once at launch. Only prompts if permission hasn't been granted yet.
     static func requestAccessIfNeeded() {
@@ -17,14 +55,14 @@ class ScreenCaptureService {
         preflightGranted = CGPreflightScreenCaptureAccess()
         guard !preflightGranted else {
             #if DEBUG
-            // TCC says granted. Log the executable identity so any future
-            // "permission OK but capture fails" mismatch is immediately traceable.
             print("[ScreenCapture] TCC preflight: granted — identity: \(Bundle.main.executablePath ?? "unknown")")
             #endif
             return
         }
         CGRequestScreenCaptureAccess()
     }
+
+    // MARK: - Capture
 
     func captureMainDisplay() async throws -> NSImage {
         guard !Self.permissionDenied else {
@@ -53,26 +91,21 @@ class ScreenCaptureService {
 
             return NSImage(cgImage: cgImage, size: CGSize(width: display.width, height: display.height))
 
-        } catch let error as NSError where error.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain" && error.code == -3801 {
-            // SCK -3801: not authorized for this binary's signing identity.
-            //
-            // Two distinct causes, distinguishable by preflightGranted:
-            //  • preflightGranted = true  → TCC has an entry for a *different* identity
-            //    (e.g. app was replaced by a new build with a new ad-hoc signature).
-            //    The old entry appears "granted" in System Settings but is bound to the
-            //    old binary — this running binary has no entry.
-            //  • preflightGranted = false → permission was genuinely never granted.
-            //
-            // CGRequestScreenCaptureAccess() is correct in both cases: it opens the
-            // System Settings prompt (not-decided) or the "open System Settings" banner
-            // (decided but stale), surfacing the right action to the user.
-            Self.permissionDenied = true
-            CGRequestScreenCaptureAccess()
-
-            let message = Self.preflightGranted
-                ? "Screen Recording is granted to a different version of Mira. Re-approve this version in System Settings › Privacy & Security › Screen Recording, then relaunch."
-                : "Screen Recording permission required. Grant access in System Settings › Privacy & Security › Screen Recording, then relaunch Mira."
-            throw MiraError.api(message)
+        } catch let error as NSError {
+            let state = Self.evaluateState(preflight: Self.preflightGranted, sckError: error)
+            switch state {
+            case .available:
+                throw MiraError.api("Screen capture failed: \(error.localizedDescription)")
+            case .identityMismatch, .denied:
+                Self.permissionDenied = true
+                // Re-prompt regardless of cause: opens the permission dialog or the
+                // "open System Settings" banner for the currently-running binary.
+                CGRequestScreenCaptureAccess()
+                let message: String = state == .identityMismatch
+                    ? "Screen Recording is granted to a different version of Mira. Re-approve this version in System Settings › Privacy & Security › Screen Recording, then relaunch."
+                    : "Screen Recording permission required. Grant access in System Settings › Privacy & Security › Screen Recording, then relaunch Mira."
+                throw MiraError.api(message)
+            }
         }
     }
 }
