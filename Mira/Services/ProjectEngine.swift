@@ -21,8 +21,20 @@ final class ProjectEngine: ObservableObject {
 
     // MARK: - Init
 
+    // MARK: - Evidence snapshot (Phase 14)
+    // The latest EvidenceSnapshot is the sole source of delegation authority.
+    // Written by BackgroundScheduler via EvidenceEvaluator — never by the UI.
+    // Loaded on launch so governance state survives process restarts (Recovery invariant).
+    @Published private(set) var latestEvidenceSnapshot: EvidenceSnapshot? = nil
+
+    func recordEvidenceSnapshot(_ snapshot: EvidenceSnapshot) {
+        latestEvidenceSnapshot = snapshot
+        persistSnapshot()
+    }
+
     private init() {
         load()
+        loadSnapshot()
     }
 
     // MARK: - CRUD
@@ -660,6 +672,27 @@ final class ProjectEngine: ObservableObject {
     private func persist() {
         guard let data = try? JSONEncoder().encode(projects) else { return }
         try? data.write(to: storeURL, options: .atomic)
+    }
+
+    private func loadSnapshot() {
+        guard let data    = try? Data(contentsOf: snapshotURL),
+              let decoded = try? JSONDecoder().decode(EvidenceSnapshot.self, from: data)
+        else { return }
+        latestEvidenceSnapshot = decoded
+    }
+
+    private func persistSnapshot() {
+        guard let snapshot = latestEvidenceSnapshot,
+              let data = try? JSONEncoder().encode(snapshot) else { return }
+        try? data.write(to: snapshotURL, options: .atomic)
+    }
+
+    private var snapshotURL: URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory,
+                                               in: .userDomainMask).first!
+        let dir = support.appendingPathComponent("Mira", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("evidence_snapshot.json")
     }
 
     private var storeURL: URL {

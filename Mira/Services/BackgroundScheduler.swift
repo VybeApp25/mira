@@ -191,6 +191,22 @@ final class BackgroundScheduler {
         postNotification(title: "\(persona.displayName) checked in on \(project.name)",
                          body: notificationBody)
 
+        // ── Phase 14: evidence evaluation ────────────────────────────────────
+        // BackgroundScheduler MUST NOT compute any governance signal directly.
+        // All governance derives from EvidenceEvaluator output recorded here.
+        // Date() is the legitimate anchor here — the scheduler fire time is the
+        // time reference for this snapshot, per the Determinism invariant.
+        let allProposals = ProjectEngine.shared.projects
+            .flatMap { ProposalStore.shared.load(for: $0.id) }
+        let evidenceSnapshot = EvidenceEvaluator.evaluate(
+            proposals: allProposals,
+            anchor:    Date()
+        )
+        ProjectEngine.shared.recordEvidenceSnapshot(evidenceSnapshot)
+        #if DEBUG
+        EvidenceEvaluator.runIsolationVerification()
+        #endif
+
         // ── Phase 13C insertion point ─────────────────────────────────────────
         // After user approves a proposal via ProposalStore.update(status: .approved),
         // a subsequent session would call AgentService.run() to apply it.

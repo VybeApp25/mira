@@ -50,10 +50,6 @@ struct ProposalMetricsView: View {
             }
         }
         .frame(width: 420, height: 560)
-        .onAppear {
-            proposalStore.loadDelegationState()
-            proposalStore.observeEvidenceStrength(globalEvidenceStrength)
-        }
     }
 
     // MARK: - Header
@@ -411,21 +407,19 @@ struct ProposalMetricsView: View {
         return Color(red: 1.0, green: 0.40, blue: 0.40)
     }
 
+    // Delegation state is derived entirely from the latest EvidenceSnapshot written
+    // by BackgroundScheduler. No UI event may produce or change authority state.
     private var regressionLockRow: some View {
-        let authorized = proposalStore.delegationAuthorized
-        let strength   = globalEvidenceStrength
-        let hadStrong  = proposalStore.hadReachedStrong
-
-        if !hadStrong {
+        guard let snapshot = engine.latestEvidenceSnapshot else {
             return AnyView(EmptyView())
         }
 
-        if authorized {
+        if snapshot.delegationAllowed() {
             return AnyView(HStack(spacing: 6) {
                 Image(systemName: "checkmark.shield.fill")
                     .font(.system(size: 10))
                     .foregroundColor(successG)
-                Text("Delegation authorized — evidence remains strong.")
+                Text("Delegation authorized — evidence is Strong and trustworthy.")
                     .font(.system(size: 10))
                     .foregroundColor(successG.opacity(0.80))
             }
@@ -434,12 +428,12 @@ struct ProposalMetricsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6)))
         }
 
-        if strength < .strong {
+        if snapshot.strength < .strong {
             return AnyView(HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.shield.fill")
                     .font(.system(size: 10))
                     .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40))
-                Text("Delegation revoked — evidence regression. Restore Strong evidence to re-authorize.")
+                Text("Delegation pending — evidence must reach Strong.")
                     .font(.system(size: 10))
                     .foregroundColor(Color(red: 1.0, green: 0.40, blue: 0.40).opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
@@ -449,21 +443,16 @@ struct ProposalMetricsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6)))
         }
 
-        // Strong but not yet authorized — show grant button
-        return AnyView(HStack(spacing: 8) {
+        // Strength is Strong but trustworthiness threshold not yet met
+        return AnyView(HStack(spacing: 6) {
             Image(systemName: "shield")
                 .font(.system(size: 10))
                 .foregroundColor(amber.opacity(0.75))
-            Text("Evidence is Strong. Delegation not yet authorized.")
+            Text(String(format: "Evidence Strong — trustworthiness %.0f%% (threshold 60%%).",
+                        snapshot.trustworthiness.isNaN ? 0 : snapshot.trustworthiness * 100))
                 .font(.system(size: 10))
                 .foregroundColor(amber.opacity(0.70))
-            Spacer()
-            Button("Authorize") {
-                proposalStore.grantDelegation(currentStrength: strength)
-            }
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(successG)
-            .buttonStyle(.plain)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(8)
         .background(amber.opacity(0.06))
