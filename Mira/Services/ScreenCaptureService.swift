@@ -1,7 +1,25 @@
 import ScreenCaptureKit
 import AppKit
 
-// MARK: - Capability state
+// MARK: - Capability pipeline types
+
+/// Normalized OS-level denial signal, independent of the specific framework.
+///
+/// Each permission domain maps its own error type to this:
+///   Screen capture  → SCStreamErrorDomain -3801
+///   Microphone      → AVAuthorizationStatus.denied
+///   Accessibility   → AXError / kAXErrorNotImplemented
+///   Automation      → NSCocoaErrorDomain -600
+///
+/// evaluateState() accepts this type so the classification logic never
+/// imports framework-specific error codes. The mapping stays local to
+/// each service (ScreenCaptureService, future MicService, etc.).
+enum CapabilityError {
+    /// The runtime API reported that access was not authorized.
+    case notAuthorized
+    /// Some other error unrelated to authorization.
+    case other(Error)
+}
 
 /// Typed result of evaluating a macOS TCC capability at runtime.
 ///
@@ -10,18 +28,27 @@ import AppKit
 /// same app can appear "granted" in System Settings while a different build of
 /// that app has no grant at all. This enum makes that distinction explicit.
 ///
-/// When Mira gains mic, accessibility, or automation permissions, each should
-/// produce a value of this type from its own `evaluateState()` so all capability
-/// decisions follow the same classification model.
+/// All permission domains (screen, mic, accessibility, automation) produce
+/// this type from their own `evaluateState(preflight:runtimeError:)` calls
+/// so every capability decision follows the same classification model.
 enum CapabilityState {
     /// Permission granted and runtime call succeeded — capability is usable.
     case available
-    /// TCC preflight said granted, but runtime call failed (-3801).
+    /// TCC preflight said granted, but runtime call failed with notAuthorized.
     /// The grant belongs to a different code-signing identity (e.g. a prior build).
     /// Remediation: re-approve this binary in System Settings, then relaunch.
     case identityMismatch
     /// TCC preflight said not granted. Remediation: grant in System Settings.
     case denied
+}
+
+/// Pure classification function — no OS calls, no side effects.
+/// Inputs: the two normalized signals any permission domain can provide.
+/// Output: a domain-level capability state safe to switch on for UI + remediation.
+func evaluateCapabilityState(preflight: Bool, runtimeError: CapabilityError?) -> CapabilityState {
+    guard let error = runtimeError else { return .available }
+    if case .other = error { return .available }          // non-auth error — treat as available
+    return preflight ? .identityMismatch : .denied
 }
 
 // MARK: - Screen capture
@@ -36,15 +63,14 @@ class ScreenCaptureService {
     // vs genuine-denial without re-querying at every capture site.
     private static var preflightGranted = false
 
-    // MARK: - Capability evaluation
+    // MARK: - SCK error mapping
 
-    /// Pure function: classifies screen capture state from the two available signals.
-    /// Separated from side-effecting code so the logic is testable and reusable.
-    static func evaluateState(preflight: Bool, sckError: NSError?) -> CapabilityState {
-        guard let err = sckError else { return .available }
-        guard err.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain",
-              err.code == -3801 else { return .available }
-        return preflight ? .identityMismatch : .denied
+    /// Maps a raw SCK NSError to the normalized CapabilityError type.
+    /// Keeps SCK-specific error codes (domain string, -3801) local to this service.
+    private static func capabilityError(from error: NSError) -> CapabilityError {
+        guard error.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain",
+              error.code  == -3801 else { return .other(error) }
+        return .notAuthorized
     }
 
     // MARK: - Launch
@@ -92,7 +118,10 @@ class ScreenCaptureService {
             return NSImage(cgImage: cgImage, size: CGSize(width: display.width, height: display.height))
 
         } catch let error as NSError {
-            let state = Self.evaluateState(preflight: Self.preflightGranted, sckError: error)
+            let state = evaluateCapabilityState(
+                preflight:    Self.preflightGranted,
+                runtimeError: Self.capabilityError(from: error)
+            )
             switch state {
             case .available:
                 throw MiraError.api("Screen capture failed: \(error.localizedDescription)")
