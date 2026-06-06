@@ -37,9 +37,16 @@ class ScreenCaptureService {
             return NSImage(cgImage: cgImage, size: CGSize(width: display.width, height: display.height))
 
         } catch let error as NSError where error.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain" && error.code == -3801 {
-            // TCC denied — latch the flag so we never call SCK again until the app restarts.
+            // SCK reports not-authorized (-3801). This can happen when:
+            //  • permission was genuinely denied, OR
+            //  • the app binary changed (dev builds / ad-hoc resign) and TCC's cached
+            //    entry is now for a different code signature than the running binary.
+            // In both cases, calling CGRequestScreenCaptureAccess() is the correct
+            // response — it either opens the System Settings prompt (if not decided yet)
+            // or shows the "go to System Settings" banner (if decided but stale).
             Self.permissionDenied = true
-            throw MiraError.api("Screen Recording permission denied. Enable Mira in System Settings › Privacy & Security › Screen Recording, then relaunch.")
+            CGRequestScreenCaptureAccess()
+            throw MiraError.api("Screen Recording permission required. Grant access in System Settings › Privacy & Security › Screen Recording, then relaunch Mira.")
         }
     }
 }
