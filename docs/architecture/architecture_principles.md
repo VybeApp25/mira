@@ -8,15 +8,16 @@ These principles weren't designed up front — they were discovered by observing
 
 ## The journal's role at each phase
 
-| Phase  | Journal Role         |
-|--------|----------------------|
-| 1–7    | Persistence          |
-| 8–10   | Retrieval            |
-| 11–12  | Coordination         |
-| 13A    | Evaluation           |
-| 13B    | Judgment calibration |
-| 13C    | Delegated execution  |
-| Future | Authority management |
+| Phase  | Journal Role              | Status    |
+|--------|---------------------------|-----------|
+| 1–7    | Persistence               | Complete  |
+| 8–10   | Retrieval                 | Complete  |
+| 11–12  | Coordination              | Complete  |
+| 13A    | Evaluation                | Complete  |
+| 13B    | Judgment calibration      | Complete  |
+| 14     | Evidence-driven authority | **Complete** |
+| 13C    | Delegated execution       | Pending evidence gate |
+| Future | Authority management      | —         |
 
 **You can't skip a layer without creating a trust gap.** Each layer produces the evidence that the next layer requires. This is why the phased approach isn't preference — it's the mechanism that prevents autonomy from outrunning its own justification.
 
@@ -321,3 +322,54 @@ Evidence → Delegation        (future: authority earned statistically)
 Not: "Can Mira do this?" But: "How much authority has Mira statistically earned in this domain?"
 
 That is a different category of system. The journal stops being an audit log and becomes a calibration mechanism.
+
+---
+
+## Phase 14 — Evidence-Driven Delegation (Complete)
+
+Phase 14 is a closed governance loop. Delegation is derived exclusively from journaled evidence. No UI event, no persisted flag, and no ad-hoc computation participates in any authority decision.
+
+**Sole authority components:**
+
+| Component | Role |
+|---|---|
+| `BackgroundScheduler` | Only trigger source — provides `Date()` as the anchor |
+| `EvidenceEvaluator.evaluate(proposals:anchor:)` | Only authority derivation function — pure, stateless, no side effects |
+| `EvidenceSnapshot` | Only persisted governance record — written to `evidence_snapshot.json` |
+| `ProjectEngine.latestEvidenceSnapshot` | Only authority read path — loaded on launch for crash recovery |
+| `delegationAllowed()` | Only derivation call site — computed, never stored |
+| `ProposalMetricsView` | Read-only projection of snapshot state |
+
+**Authority chain (final form):**
+
+```
+BackgroundScheduler (time trigger)
+    ↓
+Proposal generation + checkpointing
+    ↓
+EvidenceEvaluator.evaluate(proposals, anchor)
+    ↓
+EvidenceSnapshot (persisted journal state)
+    ↓
+ProjectEngine.latestEvidenceSnapshot (recovered on restart)
+    ↓
+delegationAllowed() (derived, not stored)
+    ↓
+UI (read-only projection)
+```
+
+**Phase 14 completion criteria — all satisfied:**
+
+- Determinism invariant: enforced via anchor injection; `EvidenceEvaluator` never calls `Date()` internally
+- Recovery invariant: `EvidenceSnapshot` persists to disk; `loadSnapshot()` runs in `ProjectEngine.init()` before any session starts
+- Headless invariant: `ProposalMetricsView.onAppear` no longer calls `observeEvidenceStrength` or `loadDelegationState`; removing the dashboard from the process cannot change governance state
+- Journal Authority invariant: `delegationAllowed()` is only reachable through `EvidenceSnapshot`; no `UserDefaults` flag, no in-memory `delegationAuthorized` property, participates in any live authority decision
+- Isolation verification: `EvidenceEvaluator.runIsolationVerification()` runs on every debug launch and after every scheduler-produced snapshot; crashes immediately on any invariant drift
+
+**Closure statement:**
+
+> Authority in the system is no longer computed ad hoc. It is reconstructed from a journaled timeline of evidence snapshots.
+
+---
+
+> **Regression boundary:** Phase 14 is complete. Any future change that reintroduces UI-derived authority, `Date()`-dependent evaluation outside `BackgroundScheduler`, or stored delegation flags constitutes a regression of the governance model and must be rejected at review time.

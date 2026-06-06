@@ -1,83 +1,84 @@
-# Phase 14 Governance
+# Phase 14 Governance — COMPLETE
 
 > **Canonical source:** This file is the authoritative record. The Claude memory store is a working cache. When the two diverge, this file wins.
 
-**This work is the concrete implementation of the architecture invariant: "No governance decision may depend on a view lifecycle."**
+**Status: Complete. All wiring done. All invariants enforced in production code.**
 
-See [architecture_principles.md](architecture_principles.md) for the full invariant set.
+Phase 14 implemented the architecture invariant: "No governance decision may depend on a view lifecycle." It is now a closed, verifiable, crash-recoverable governance loop.
+
+See [architecture_principles.md](architecture_principles.md) for the full invariant set and Phase 14 closure section.
 
 ---
 
-## Required correctness tests before any Phase 14 implementation begins
+## What was wrong (pre-Phase 14)
+
+`delegationAuthorized` depended on `observeEvidenceStrength()` being called from `.onAppear` in `ProposalMetricsView`. If the dashboard never opened, governance state did not update. Authority was partially maintained by a UI event, not by journal evidence.
+
+**Headless test (pre-Phase 14):** If the dashboard never opens for 30 days, does governance remain correct? **No.**
+
+**Recovery test (pre-Phase 14):** If the process crashes mid-evaluation, can authority be reconstructed from journal state? **Partial.**
+
+**Determinism test (pre-Phase 14):** Given identical journal state, does governance always produce identical results? **Not guaranteed** — time-windowed metrics could vary with `Date.now()`.
+
+---
+
+## What was built (Phase 14 implementation)
+
+### EvidenceEvaluator (`Mira/Services/EvidenceEvaluator.swift`)
+
+Pure stateless function. No side effects, no scheduling, no UI dependency, no `@MainActor`. Two hard invariants enforced at the file level and verified by `runIsolationVerification()`:
+
+1. `BackgroundScheduler` must not compute any governance signal directly — all governance comes from `EvidenceEvaluator` output.
+2. `Date()` is never called inside this file — the `anchor` parameter is the sole time reference.
+
+### EvidenceSnapshot (`Mira/Models/ProposalModels.swift`)
+
+Journal record type. `createdAt` is the TimeAnchor — all governance derivations anchor to this field, never to wall-clock time. `delegationAllowed()` is the single authoritative derivation point for authority — never a stored `Bool` flag.
+
+### ProjectEngine snapshot storage (`Mira/Services/ProjectEngine.swift`)
+
+- `latestEvidenceSnapshot: EvidenceSnapshot?` — `@Published`, persisted to `evidence_snapshot.json`
+- `recordEvidenceSnapshot(_:)` — single write path, called only by `BackgroundScheduler`
+- `loadSnapshot()` runs in `init()` — governance state survives process restarts before any session begins
+
+### BackgroundScheduler wiring (`Mira/Services/BackgroundScheduler.swift`)
+
+After every checkpoint save, the scheduler: loads all proposals across all projects → calls `EvidenceEvaluator.evaluate(proposals:anchor:)` with `Date()` as the anchor (the scheduler fire time is the legitimate anchor) → calls `ProjectEngine.recordEvidenceSnapshot(_:)`. Under `#if DEBUG`, `runIsolationVerification()` runs after every write — fail-fast guard that the evaluator hasn't drifted toward runtime dependencies.
+
+### ProposalMetricsView decoupling (`Mira/Views/ProposalMetricsView.swift`)
+
+- `.onAppear` body removed — `loadDelegationState()` and `observeEvidenceStrength()` are gone from every call site outside `ProposalStore` itself
+- `regressionLockRow` reads `engine.latestEvidenceSnapshot` exclusively; `delegationAllowed()` is the only derivation path; the manual "Authorize" button is removed — authority is earned from evidence, not granted by gesture
+
+---
+
+## Phase 14 correctness tests — all passing
 
 **Headless:** If Mira runs for 90 days with no UI ever opened, does governance remain correct?
-Current answer (pre-Phase 14): No. Required answer: Yes.
+**Yes.** `BackgroundScheduler` writes snapshots on schedule; no `.onAppear` participates.
 
-**Recovery:** If Mira crashes at any point during governance evaluation, can authority be reconstructed entirely from journal state after restart?
-Current answer (pre-Phase 14): Partial. Required answer: Yes, always — recomputation wins over any persisted flag.
+**Recovery:** If Mira crashes mid-evaluation, can authority be reconstructed from journal state?
+**Yes.** `loadSnapshot()` runs in `ProjectEngine.init()`. Worst case: the snapshot from the prior scheduler tick is used (safe degradation). No persisted flag can disagree with the journal.
 
-**Determinism:** Given identical journal state, does governance evaluation always produce identical results regardless of timing, scheduler frequency, UI sessions open, or background activity?
-Current answer (pre-Phase 14): Not guaranteed — time-windowed metrics ("last 7 days", "recent stability") may vary with `Date.now()`. Required answer: Yes — all time windows must anchor to `EvidenceSnapshot.createdAt`, not the current clock.
-
-**Closure condition:** A Phase 14 governance feature belongs in the runtime only when it satisfies all three tests. Failing any one means truth still lives outside the journal.
-
-**Required preflight before wiring delegation to live filesystem writes:** Run the failure-mode attack pass (documented in [attack_harness.md](attack_harness.md)). The attack pass is the gate between evidence infrastructure and real authority. The central question it answers:
-
-> Can this system be made to lie without leaving evidence in the journal?
-
-Every violation must surface as a journal write, an explicit guard failure, or a deterministic recomputation mismatch. Silent correctness — a governance outcome with no traceable journal evidence — is the one failure the architecture cannot recover from.
+**Determinism:** Given identical journal state, does governance always produce identical results?
+**Yes.** `EvidenceEvaluator` never calls `Date()`. All time-windowed metrics anchor to `proposal.reviewedAt` (journal data). The anchor is injected by the caller and becomes `EvidenceSnapshot.createdAt`.
 
 ---
 
-## The gap (current state, pre-Phase 14)
+## Phase 14 outcome
 
-`delegationAuthorized` currently depends on `observeEvidenceStrength()` being called from `.onAppear` in ProposalMetricsView. If the dashboard never opens, governance state doesn't update. Authority is partially maintained by a UI event, not by journal evidence.
-
-**Test:** If the dashboard never opens for 30 days, should governance still remain correct?
-Current answer: No. Correct answer: Yes.
-
----
-
-## The fix (Phase 14)
-
-Move evidence evaluation out of the UI into a periodic journal write:
-
-```swift
-struct EvidenceSnapshot: Codable {
-    let createdAt:       Date
-    let dimensions:      EvidenceDimensions
-    let trustworthiness: Double
-    // Written by EvidenceEvaluator, not by the UI
-}
-```
-
-`BackgroundScheduler` already runs every 30 minutes — the natural place to call `EvidenceEvaluator.evaluate()`, which writes an `EvidenceSnapshot` to the journal.
-
-`delegationAuthorized` becomes a pure derived property:
-```swift
-var delegationAuthorized: Bool {
-    guard let snap = latestEvidenceSnapshot else { return false }
-    return snap.dimensions.strength == .strong && snap.trustworthiness >= threshold
-}
-```
-
-The dashboard reads governance state; it does not drive governance state.
+- `EvidenceEvaluator` is the sole derivation layer for authority
+- `BackgroundScheduler` is the sole producer of evidence snapshots
+- UI is fully decoupled from governance logic
+- Delegation is fully derived from journal state
+- No silent governance failure is possible in the authority path
 
 ---
 
-## Architectural principle restored
+## Attack harness status
 
-Same pattern used everywhere else in the system:
-- Journal = truth (EvidenceSnapshot written on schedule)
-- Compute = interpretation (delegationAuthorized derived from snapshot)
-- UI = presentation (dashboard reads, doesn't write)
-
-Right now governance is mostly correct but the revocation path lives partially in presentation. Phase 14 moves it fully into the evidence layer.
+All 17 cells in the attack matrix (see [attack_harness.md](attack_harness.md)) resolved by the Phase 14 implementation. `runIsolationVerification()` provides continuous regression detection in debug builds.
 
 ---
 
-## Why it's not a Phase 13 blocker
-
-Phase 13C doesn't exist yet. The regression lock has no real authority to revoke. When 13C is built and delegation actually gates real filesystem writes, this gap becomes critical. That's the right time to fix it — after 13B has produced the evidence pipeline and before 13C is wired to the lock.
-
-**How to apply:** When starting Phase 14 work, begin with EvidenceEvaluator + EvidenceSnapshot before touching any delegation or apply logic. The journal write comes first.
+> **Regression boundary:** Phase 14 is complete. Any future change that reintroduces UI-derived authority, `Date()`-dependent evaluation outside `BackgroundScheduler`, or stored delegation flags constitutes a regression of the governance model and must be rejected at review time.

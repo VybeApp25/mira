@@ -98,3 +98,24 @@ The system is now a closed correctness lattice where:
 - correctness is continuously attack-validated through its lifecycle
 
 Phase 14 governance is not "governance implementation" — it is invariant stress validation of a complete correctness lattice. Nothing structural is missing. Only proof remains.
+
+---
+
+## Phase 14 Verdict — COMPLETE
+
+All 17 attack cells resolved by the Phase 14 implementation.
+
+| Invariant | Attacks | Resolution |
+|---|---|---|
+| Headless Correctness (H1–H4) | UI lifecycle dependency | **PASS / FAIL-SAFE** — `.onAppear` governance calls removed; no UI path reaches authority derivation |
+| Recovery Correctness (R1–R4) | Persisted flag divergence, mid-evaluation crash | **PASS / FAIL-SAFE** — `loadSnapshot()` runs in `ProjectEngine.init()`; `delegationAllowed()` is derived on every read, never stored |
+| Determinism (D1–D4) | Wall-clock drift, scheduler frequency variance | **PASS** — `EvidenceEvaluator` never calls `Date()`; all metrics anchor to `proposal.reviewedAt`; anchor is injected by caller |
+| Journal Authority (J1–J5) | Unauthorized delegation flags, single-axis gaming, stale snapshots | **FAIL-SAFE** — authority only reachable through `EvidenceSnapshot.delegationAllowed()`; geometric mean prevents single-axis bypass |
+
+**Result: No silent failures are possible in the governance authority path.**
+
+Continuous regression detection: `EvidenceEvaluator.runIsolationVerification()` runs on every debug launch and after every scheduler-produced snapshot. Any invariant drift crashes the debug process immediately with a descriptive message identifying the broken invariant and the diverging value.
+
+---
+
+> **Regression boundary:** Phase 14 is complete. Any future change that reintroduces UI-derived authority, `Date()`-dependent evaluation outside `BackgroundScheduler`, or stored delegation flags constitutes a regression of the governance model and must be rejected at review time.
