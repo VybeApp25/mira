@@ -55,7 +55,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(width: 360, height: 720)
+        .frame(width: 360, height: 760)
         .onAppear {
             keyInput = state.userAPIKey
             hoverCategories = HoverPreferences.shared.categories
