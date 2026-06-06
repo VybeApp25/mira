@@ -160,7 +160,7 @@ enum EvidenceStrength: Int, Comparable, CaseIterable {
 /// Four independent axes of evidence quality.
 /// Strength = geometric mean (4th root of product) so no single axis can dominate.
 /// A high-volume single-project dataset cannot reach Strong — diversityScore caps it.
-struct EvidenceDimensions {
+struct EvidenceDimensions: Codable {
     let volumeScore:         Double   // reviewed/50, capped at 1.0
     let diversityScore:      Double   // projects_with_reviews/5, capped at 1.0
     let coverageScore:       Double   // reviewed/total, 0–1
@@ -178,6 +178,39 @@ struct EvidenceDimensions {
         if c >= 0.50 { return .moderate }
         if c >= 0.30 { return .emerging }
         return .weak
+    }
+}
+
+// MARK: - EvidenceSnapshot
+
+/// Journal record of a single point-in-time evidence evaluation.
+///
+/// Written by EvidenceEvaluator on a schedule — never by the UI.
+/// DelegationAuthority is always derived from this record; it is never stored
+/// as an independent flag that could disagree with the journal.
+///
+/// Phase 14: BackgroundScheduler writes one every 30 minutes via
+/// EvidenceEvaluator.evaluate(). Until then this type exists so the
+/// evaluator can be tested in isolation before scheduler wiring begins.
+struct EvidenceSnapshot: Codable, Identifiable {
+    let id:                      UUID
+    /// TimeAnchor — the sole time reference for this evaluation.
+    /// All time-windowed calculations inside EvidenceEvaluator anchor to this,
+    /// never to Date() at call time. This is what makes evaluations deterministic.
+    let createdAt:               Date
+    let dimensions:              EvidenceDimensions
+    /// Global composite: approvalRate × coverage × weightedApproval × calibration.
+    /// NaN when insufficient data. isPartial = true when weighted/calibration factors
+    /// were unavailable and fell out of the product.
+    let trustworthiness:         Double
+    let isPartialTrustworthiness: Bool
+
+    var strength: EvidenceStrength { dimensions.strength }
+
+    /// The one place delegationAuthorized may be derived. Never use a persisted Bool flag —
+    /// always re-derive from the latest snapshot so recomputation wins over stored state.
+    func delegationAllowed(trustworthinessThreshold: Double = 0.60) -> Bool {
+        strength == .strong && !trustworthiness.isNaN && trustworthiness >= trustworthinessThreshold
     }
 }
 

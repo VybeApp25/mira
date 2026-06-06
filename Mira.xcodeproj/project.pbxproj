@@ -73,6 +73,7 @@
 		F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */; };
 		F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */; };
 		F957E4929A175438F6FA0F24 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5AB62B5302AD934D3ED258F /* AgentService.swift */; };
+		3FFB9057807F48739A429756 /* EvidenceEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A9D915D2A44AA380581745 /* EvidenceEvaluator.swift */; };
 		FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */; };
 		FA4EE357304AEC81E5114B8A /* HoverTrackingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */; };
 		FE2C1FD8706A8BEB3631B71C /* NotchHUDController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */; };
@@ -101,6 +102,7 @@
 		3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsTabView.swift; sourceTree = "<group>"; };
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
+		C6A9D915D2A44AA380581745 /* EvidenceEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvidenceEvaluator.swift; sourceTree = "<group>"; };
 		4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundScheduler.swift; sourceTree = "<group>"; };
 		4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEvent.swift; sourceTree = "<group>"; };
 		525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceStore.swift; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 				2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */,
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
+				C6A9D915D2A44AA380581745 /* EvidenceEvaluator.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				47BAF16D6CB27982CEA34F14 /* ContextService.swift */,
 				D26A0E1791C3F80BB04E5A24 /* CoordinatorSimulation.swift */,
@@ -421,6 +424,7 @@
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
+				3FFB9057807F48739A429756 /* EvidenceEvaluator.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
 				B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */,
