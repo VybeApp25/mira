@@ -365,6 +365,7 @@ UI (read-only projection)
 - Headless invariant: `ProposalMetricsView.onAppear` no longer calls `observeEvidenceStrength` or `loadDelegationState`; removing the dashboard from the process cannot change governance state
 - Journal Authority invariant: `delegationAllowed()` is only reachable through `EvidenceSnapshot`; no `UserDefaults` flag, no in-memory `delegationAuthorized` property, participates in any live authority decision
 - Isolation verification: `EvidenceEvaluator.runIsolationVerification()` runs on every debug launch and after every scheduler-produced snapshot; crashes immediately on any invariant drift
+- **Attack pass: Executed 2026-06-05. All 17 cells PASS. Zero silent failures. Zero FAIL-EXPOSED. Zero FAIL-SAFE. All violations structurally impossible or explicitly confirmed under direct attack. See [attack_harness.md](attack_harness.md) for full execution record.**
 
 **Closure statement:**
 

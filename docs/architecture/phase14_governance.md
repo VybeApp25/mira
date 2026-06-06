@@ -75,9 +75,9 @@ After every checkpoint save, the scheduler: loads all proposals across all proje
 
 ---
 
-## Attack harness status
+## Attack harness status — PASS (2026-06-05)
 
-All 17 cells in the attack matrix (see [attack_harness.md](attack_harness.md)) resolved by the Phase 14 implementation. `runIsolationVerification()` provides continuous regression detection in debug builds.
+All 17 cells in the attack matrix (see [attack_harness.md](attack_harness.md)) resolved by the Phase 14 implementation. Attack pass executed 2026-06-05. Zero silent failures. All violations structurally impossible or explicitly confirmed PASS under direct attack. `runIsolationVerification()` provides continuous regression detection in debug builds.
 
 ---
 
