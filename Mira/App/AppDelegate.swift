@@ -5,6 +5,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        EvidenceEvaluator.runIsolationVerification()
+        #endif
+
         NSApp.setActivationPolicy(.accessory)
 
         ScreenCaptureService.requestAccessIfNeeded()
