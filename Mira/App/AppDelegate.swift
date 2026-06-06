@@ -9,7 +9,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EvidenceEvaluator.runIsolationVerification()
         #endif
 
-        NSApp.setActivationPolicy(.regular)
+        // Activate once so the dock running indicator appears. Mira's panels are
+        // all .nonactivatingPanel, so without this the app never enters active state
+        // and the dock dot never shows despite LSUIElement = false.
+        NSApp.activate(ignoringOtherApps: true)
 
         ScreenCaptureService.requestAccessIfNeeded()
         AgentProcessManager.shared.start()
