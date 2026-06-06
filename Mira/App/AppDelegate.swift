@@ -9,7 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EvidenceEvaluator.runIsolationVerification()
         #endif
 
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
 
         ScreenCaptureService.requestAccessIfNeeded()
         AgentProcessManager.shared.start()

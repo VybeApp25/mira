@@ -6,9 +6,10 @@ class ScreenCaptureService {
     // Set to true after the first TCC denial so we stop spamming the permission dialog.
     private static var permissionDenied = false
 
-    /// Call once at launch. Only prompts if permission hasn't been decided yet.
+    /// Call once at launch. Only prompts if permission hasn't been granted yet.
     static func requestAccessIfNeeded() {
         guard !permissionDenied else { return }
+        guard !CGPreflightScreenCaptureAccess() else { return }  // already granted — skip
         CGRequestScreenCaptureAccess()
     }
 
