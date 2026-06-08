@@ -105,6 +105,8 @@ struct AgentsTabView: View {
                 LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
 
                     // Awaiting Approval — highest priority
+                    // .id scoped per card type prevents LazyVStack from recycling
+                    // RunningJobCard bodies when a job transitions into this section.
                     if !confirmation.isEmpty {
                         Section {
                             ForEach(confirmation) { job in
@@ -113,6 +115,7 @@ struct AgentsTabView: View {
                                     onApprove: { jobStore.approveConfirmation(id: job.id) },
                                     onDeny:    { jobStore.denyConfirmation(id: job.id) }
                                 )
+                                .id("confirm-\(job.id)")
                                 .padding(.horizontal, 12)
                                 .padding(.top, 6)
                             }
@@ -126,6 +129,7 @@ struct AgentsTabView: View {
                         Section {
                             ForEach(blocked) { job in
                                 BlockedJobCard(job: job, store: jobStore)
+                                    .id("blocked-\(job.id)")
                                     .padding(.horizontal, 12)
                                     .padding(.top, 6)
                             }
@@ -143,6 +147,7 @@ struct AgentsTabView: View {
                                     onAnswer: { answeringJob = job },
                                     onCancel: { jobStore.cancelJob(id: job.id) }
                                 )
+                                .id("input-\(job.id)")
                                 .padding(.horizontal, 12)
                                 .padding(.top, 6)
                             }
@@ -156,6 +161,7 @@ struct AgentsTabView: View {
                         Section {
                             ForEach(active) { job in
                                 RunningJobCard(job: job, store: jobStore)
+                                    .id("run-\(job.id)")
                                     .padding(.horizontal, 12)
                                     .padding(.top, 6)
                             }
@@ -1041,48 +1047,49 @@ private struct WaitingForConfirmationCard: View {
                     .foregroundColor(.white.opacity(0.22))
             }
 
-            // Change summary + risk
+            // Summary (1 line) + risk badge inline with approve/deny
             if let req = req {
-                Divider().background(Color.white.opacity(0.06))
-
                 Text(req.summary)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.65))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.50))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
-                HStack(spacing: 5) {
+            // Risk badge + Approve / Deny on same row — keeps card compact
+            HStack(spacing: 8) {
+                if let req = req {
                     Image(systemName: req.riskLevel.icon)
                         .font(.system(size: 10))
                         .foregroundColor(riskColor(req.riskLevel))
-                    Text("Risk: \(req.riskLevel.displayName)")
+                    Text(req.riskLevel.displayName)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(riskColor(req.riskLevel))
                 }
-            }
 
-            // Approve / Deny
-            HStack(spacing: 8) {
-                Button(action: onApprove) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(req?.approveLabel ?? "Approve")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(amber)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
+                Spacer()
 
                 Button(action: onDeny) {
                     Text(req?.denyLabel ?? "Deny")
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.40))
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.white.opacity(0.06))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color.white.opacity(0.07))
                         .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onApprove) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(req?.approveLabel ?? "Approve")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(amber)
+                    .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
