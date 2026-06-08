@@ -116,8 +116,11 @@ struct MiraIslandView: View {
     // When idle the pill is pure black — indistinguishable from the hardware notch.
     // Only active states (voice, agent) render a visible indicator.
 
+    @ObservedObject private var hudVM = HUDViewModel.shared
+
     private var collapsedContent: some View {
         HStack(spacing: 7) {
+            // Animated indicator (voice/realtime)
             switch miraState.realtimeState {
             case .thinking:
                 CollapsedThinkingDots()
@@ -131,7 +134,18 @@ struct MiraIslandView: View {
                 if voice.isListening { LiveBars() }
             }
 
-            if !taskStore.tasks.isEmpty, case .idle = miraState.realtimeState {
+            // HUD status text — shown for agent/tool/search routes
+            if !hudVM.statusText.isEmpty, case .idle = miraState.realtimeState {
+                Text(hudVM.statusText)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.80))
+                    .lineLimit(1)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.18), value: hudVM.statusText)
+            }
+
+            // Agent job count badge
+            if !taskStore.tasks.isEmpty, case .idle = miraState.realtimeState, hudVM.statusText.isEmpty {
                 Text("\(taskStore.tasks.count)")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white)
@@ -378,7 +392,7 @@ struct MiraIslandView: View {
 
             Spacer()
 
-            // Right group — status + utilities
+            // Right group — HUD controls + status + utilities
             if voice.isListening {
                 HStack(spacing: 3) {
                     Circle().fill(Color.red).frame(width: 5, height: 5)
@@ -389,6 +403,30 @@ struct MiraIslandView: View {
                 }
                 .padding(.horizontal, 8)
             }
+
+            // Stop — shown whenever HUD has an active route
+            if hudVM.state.isActive {
+                Button { hudVM.send(.cancelRequested) } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(red: 1.0, green: 0.35, blue: 0.35))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Mute toggle
+            Button { hudVM.send(.muteToggled(hudVM.state != .muted)) } label: {
+                Image(systemName: hudVM.state == .muted ? "mic.slash.fill" : "mic")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(hudVM.state == .muted
+                        ? Color(red: 1.0, green: 0.35, blue: 0.35)
+                        : .white.opacity(0.30))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             if !miraState.isPro {
                 Text("\(miraState.dailyUsageCount)/\(MiraState.freeLimit)")

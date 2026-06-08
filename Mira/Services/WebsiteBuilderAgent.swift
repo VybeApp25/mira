@@ -74,21 +74,24 @@ enum WebsiteBuilderAgent {
 
         SITE PLAN: \(structure)
 
-        REQUIREMENTS — follow every rule below exactly:
+        CRITICAL RENDERING RULES — the site must open in a browser and look great immediately:
         - Output ONLY valid HTML5. Nothing else. No explanation. No markdown code fences.
         - Start with <!DOCTYPE html> and end with </html>
         - Embed ALL CSS in a <style> tag inside <head>
-        - Use a bold, dark design: deep black/navy backgrounds (#0a0a0f or similar), vibrant accent color matching the brand, white text
-        - Include these sections: Hero (with headline, subheadline, CTA button), Features/About (3-column grid), Social proof or stats bar, Contact/Footer
-        - Typography: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif
+        - NEVER use CSS custom properties (var(--x)) for background-color or color on body, headings, or hero text — use literal hex values (#ffffff, #1a1a2e, etc.) so the site renders even if variables fail
+        - Color palette: match the brand's requested colors from the REQUEST. If no colors specified, use a clean, light design: white (#ffffff) or very light grey (#f8f9fa) background, dark text (#1a1a2e), with a vibrant accent color
+        - Hero section: min-height: 100vh, display: flex, align-items: center, justify-content: center, with explicit background-color and color set in literal hex
+        - Include these sections: Hero (headline + subheadline + CTA button), Features/About (3-column grid), Social proof or testimonials, Contact/Footer
+        - Typography: font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif on body element
         - Mobile-responsive using CSS Grid and Flexbox; add @media (max-width: 768px)
-        - Smooth scroll, hover effects on buttons/cards, subtle gradient backgrounds
-        - hero section must have min-height: 100vh and center content vertically
-        - CTA buttons must have real styling: gradient background, padding, border-radius, hover transform
-        - NO external CDN links. NO placeholder images (use CSS gradient backgrounds instead)
-        - Body must have background-color set, never transparent or white
-        - All text must be visible — check contrast against background colors
-        - Include real placeholder content that matches the business (no Lorem Ipsum)
+        - Smooth scroll behavior: html { scroll-behavior: smooth; }
+        - Hover effects on buttons and cards, subtle gradient backgrounds
+        - CTA buttons: explicit padding (16px 36px), border-radius: 50px, background-color in hex, color in hex, transition for hover
+        - NO external CDN links, NO Google Fonts imports, NO placeholder images (use CSS gradient backgrounds or solid colors instead)
+        - body must have explicit background-color and color in literal hex — NO var() on body
+        - All text must be legible: minimum 4.5:1 contrast ratio against its background
+        - Include real, specific content matching the business (no Lorem Ipsum, no generic placeholder text)
+        - The site must look professional and complete when opened directly as a local file (file://)
 
         Output the complete HTML file. Start immediately with <!DOCTYPE html>.
         """

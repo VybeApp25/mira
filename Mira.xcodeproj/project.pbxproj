@@ -45,6 +45,7 @@
 		825EC947F9C5C17BF1B8C8F6 /* MiraIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D4739EA771EF0C39908A69 /* MiraIslandView.swift */; };
 		8515B0E439F051BCA9860043 /* MiraCursorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */; };
 		86D7C02AEB6C8AC60F2B4E0E /* AgentJobStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */; };
+		89AFBF88CAFA03724659FAF3 /* HUDStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB775F6CE844E78162C50C54 /* HUDStateMachine.swift */; };
 		91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */; };
 		932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */; };
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
@@ -54,6 +55,7 @@
 		A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16778FFCF54471FB1ABBB110 /* VoiceService.swift */; };
 		A203B2E97FF34162072AC381 /* ProposalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE89AA4E41C972A58C582686 /* ProposalStore.swift */; };
 		A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B2C1A5B3D357A621F2541F /* RouterService.swift */; };
+		A3DAE65741A1B34B9FF019F0 /* HUDViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */; };
 		A51FF4A8B940A0489C642CCE /* HoverTooltipController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */; };
 		A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E550071C015B2092E04A1 /* WakeWordService.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
@@ -141,6 +143,7 @@
 		7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentResultView.swift; sourceTree = "<group>"; };
 		803E550071C015B2092E04A1 /* WakeWordService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeWordService.swift; sourceTree = "<group>"; };
 		80ED8ED7A6C8DC6CE506BB1E /* WebsiteBuilderAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteBuilderAgent.swift; sourceTree = "<group>"; };
+		820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDViewModel.swift; sourceTree = "<group>"; };
 		8261E0EB0C3813433E9281F9 /* AnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationController.swift; sourceTree = "<group>"; };
 		83B706458B64024088E8769D /* ActionChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipsView.swift; sourceTree = "<group>"; };
 		847AFAFC451130DC3C6A6545 /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
@@ -181,6 +184,7 @@
 		F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeService.swift; sourceTree = "<group>"; };
 		F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverHistoryStore.swift; sourceTree = "<group>"; };
+		FB775F6CE844E78162C50C54 /* HUDStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDStateMachine.swift; sourceTree = "<group>"; };
 		FE89AA4E41C972A58C582686 /* ProposalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -293,6 +297,7 @@
 				F41806DE60A2909E73385AE1 /* HoverInsightManager.swift */,
 				A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */,
 				5A7FDDF0CA6E6F4084A0B4D6 /* HUDService.swift */,
+				820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */,
 				979DE80CA67152EBCA55AC4D /* MiraToolService.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				4486101C5C80FCD26BD6F11C /* OnboardingService.swift */,
@@ -322,6 +327,7 @@
 				E5298E4DE78C50A514F1EF15 /* HoverInsightModel.swift */,
 				BF8712738938AEA845880976 /* HoverPreferences.swift */,
 				D589CE01ED3B0EC9E026A052 /* HUDModels.swift */,
+				FB775F6CE844E78162C50C54 /* HUDStateMachine.swift */,
 				0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */,
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
 				4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */,
@@ -482,6 +488,8 @@
 				3E2DB0D90E9E847491E02103 /* GuidanceOverlayView.swift in Sources */,
 				D14BFE3D0956F3D8F58457E2 /* HUDModels.swift in Sources */,
 				61613FB579F0EB03230277BC /* HUDService.swift in Sources */,
+				89AFBF88CAFA03724659FAF3 /* HUDStateMachine.swift in Sources */,
+				A3DAE65741A1B34B9FF019F0 /* HUDViewModel.swift in Sources */,
 				95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */,
 				E94F6F02EDBDAB3EACF251DB /* HoverDetectionService.swift in Sources */,
 				58C7FB3B6DF3539FEA5AD3C7 /* HoverHistoryStore.swift in Sources */,
