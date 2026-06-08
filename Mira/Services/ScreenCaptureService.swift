@@ -112,7 +112,11 @@ class ScreenCaptureService {
             config.captureResolution = .best
             config.showsCursor = false
 
-            let filter = SCContentFilter(display: display, excludingWindows: [])
+            // Exclude Mira's own windows so the model sees the user's screen, not our panel.
+            let miraWindows = content.windows.filter {
+                $0.owningApplication?.bundleIdentifier == Bundle.main.bundleIdentifier
+            }
+            let filter = SCContentFilter(display: display, excludingWindows: miraWindows)
             let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
 
             return NSImage(cgImage: cgImage, size: CGSize(width: display.width, height: display.height))

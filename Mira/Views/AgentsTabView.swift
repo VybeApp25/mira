@@ -4,6 +4,7 @@ private let surface  = Color(red: 0.11, green: 0.11, blue: 0.13)
 private let surface2 = Color(red: 0.14, green: 0.14, blue: 0.17)
 private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
 private let green    = Color(red: 0.20, green: 0.84, blue: 0.29)
+private let amber    = Color(red: 1.0,  green: 0.78, blue: 0.20)
 private let orange   = Color(red: 1.0,  green: 0.60, blue: 0.20)
 private let red      = Color(red: 1.0,  green: 0.35, blue: 0.35)
 
@@ -20,7 +21,7 @@ struct AgentsTabView: View {
     @StateObject private var entitlements = EntitlementService.shared
     @State private var input = ""
     @State private var detailJob: AgentJob? = nil
-    @State private var answeringJob: AgentJob? = nil  // drives the answer sheet
+    @State private var answeringJob: AgentJob? = nil
     @State private var detectedType: AgentJobType = .custom
 
     var body: some View {
@@ -91,29 +92,66 @@ struct AgentsTabView: View {
 
     @ViewBuilder
     private var jobList: some View {
-        let active    = jobStore.runningJobs.filter { $0.status != .waitingForInput }
-        let waiting   = jobStore.runningJobs.filter { $0.status == .waitingForInput }
-        let completed = jobStore.completedJobs
+        let confirmation = jobStore.confirmationPendingJobs
+        let blocked      = jobStore.blockedJobs
+        let waiting      = jobStore.waitingForInputJobs
+        let active       = jobStore.activeJobs
+        let completed    = jobStore.completedJobs
 
-        if active.isEmpty && waiting.isEmpty && completed.isEmpty {
+        if confirmation.isEmpty && blocked.isEmpty && waiting.isEmpty && active.isEmpty && completed.isEmpty {
             emptyState
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
-                    // Waiting for Input — highest priority, shown first
+
+                    // Awaiting Approval — highest priority
+                    if !confirmation.isEmpty {
+                        Section {
+                            ForEach(confirmation) { job in
+                                WaitingForConfirmationCard(
+                                    job: job,
+                                    onApprove: { jobStore.approveConfirmation(id: job.id) },
+                                    onDeny:    { jobStore.denyConfirmation(id: job.id) }
+                                )
+                                .padding(.horizontal, 12)
+                                .padding(.top, 6)
+                            }
+                        } header: {
+                            sectionHeader("Awaiting Approval", count: confirmation.count, color: amber)
+                        }
+                    }
+
+                    // Blocked — permission or tool missing
+                    if !blocked.isEmpty {
+                        Section {
+                            ForEach(blocked) { job in
+                                BlockedJobCard(job: job, store: jobStore)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 6)
+                            }
+                        } header: {
+                            sectionHeader("Blocked", count: blocked.count, color: red)
+                        }
+                    }
+
+                    // Waiting for Input
                     if !waiting.isEmpty {
                         Section {
                             ForEach(waiting) { job in
-                                WaitingForInputCard(job: job, onAnswer: { answeringJob = job }, onCancel: { jobStore.cancelJob(id: job.id) })
-                                    .padding(.horizontal, 12)
-                                    .padding(.top, 6)
+                                WaitingForInputCard(
+                                    job: job,
+                                    onAnswer: { answeringJob = job },
+                                    onCancel: { jobStore.cancelJob(id: job.id) }
+                                )
+                                .padding(.horizontal, 12)
+                                .padding(.top, 6)
                             }
                         } header: {
                             sectionHeader("Waiting for Input", count: waiting.count, color: orange)
                         }
                     }
 
-                    // Running / Queued
+                    // Running / Queued / Preparing / Reading / Writing
                     if !active.isEmpty {
                         Section {
                             ForEach(active) { job in
@@ -533,15 +571,18 @@ struct AgentDetailView: View {
     }
 
     private func statusPill(_ status: AgentJobStatus) -> some View {
-        let color: Color
-        switch status {
-        case .completed:       color = green
-        case .running:         color = accent
-        case .failed:          color = red
-        case .cancelled:       color = .white.opacity(0.3)
-        case .queued:          color = orange
-        case .waitingForInput: color = orange
-        }
+        let color: Color = {
+            switch status {
+            case .completed:                        return green
+            case .running, .preparing,
+                 .reading, .writing:                return accent
+            case .failed:                           return red
+            case .cancelled:                        return .white.opacity(0.3)
+            case .queued, .waitingForInput:         return orange
+            case .waitingForConfirmation:           return amber
+            case .blockedPermission, .blockedTool:  return red
+            }
+        }()
         return Text(status.displayName)
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(color)
@@ -632,13 +673,18 @@ struct AgentDetailView: View {
     }
 
     private func stepDot(_ status: AgentJobStatus) -> some View {
-        let color: Color
-        switch status {
-        case .completed: color = green
-        case .running:   color = accent
-        case .failed:    color = red
-        default:         color = .white.opacity(0.15)
-        }
+        let color: Color = {
+            switch status {
+            case .completed:                        return green
+            case .running, .preparing,
+                 .reading, .writing:                return accent
+            case .failed, .blockedPermission,
+                 .blockedTool:                      return red
+            case .waitingForConfirmation:           return amber
+            case .waitingForInput:                  return orange
+            default:                               return .white.opacity(0.15)
+            }
+        }()
         return Circle()
             .fill(color)
             .frame(width: 7, height: 7)
@@ -647,10 +693,14 @@ struct AgentDetailView: View {
 
     private func stepTextColor(_ status: AgentJobStatus) -> Color {
         switch status {
-        case .completed: return .white.opacity(0.75)
-        case .running:   return .white
-        case .failed:    return red
-        default:         return .white.opacity(0.30)
+        case .completed:                        return .white.opacity(0.75)
+        case .running, .preparing,
+             .reading, .writing:                return .white
+        case .failed, .blockedPermission,
+             .blockedTool:                      return red
+        case .waitingForConfirmation:           return amber
+        case .waitingForInput:                  return orange
+        default:                               return .white.opacity(0.30)
         }
     }
 
@@ -939,5 +989,178 @@ struct AnswerQuestionsSheet: View {
                 .padding(20)
             }
         }
+    }
+}
+
+// MARK: - Waiting For Confirmation Card
+
+private struct WaitingForConfirmationCard: View {
+    let job: AgentJob
+    let onApprove: () -> Void
+    let onDeny: () -> Void
+
+    @State private var pulse = false
+
+    var body: some View {
+        let req = job.confirmationRequest
+        VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(amber.opacity(0.12))
+                        .frame(width: 26, height: 26)
+                    Circle()
+                        .fill(amber.opacity(0.22))
+                        .frame(width: 26, height: 26)
+                        .scaleEffect(pulse ? 1.5 : 1.0)
+                        .opacity(pulse ? 0 : 1)
+                    Image(systemName: job.type.icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(amber)
+                }
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                        pulse = true
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(req?.title ?? job.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                    Text("Approval required to continue")
+                        .font(.system(size: 11))
+                        .foregroundColor(amber.opacity(0.75))
+                }
+
+                Spacer()
+
+                Text(job.relativeTime)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.22))
+            }
+
+            // Change summary + risk
+            if let req = req {
+                Divider().background(Color.white.opacity(0.06))
+
+                Text(req.summary)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 5) {
+                    Image(systemName: req.riskLevel.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(riskColor(req.riskLevel))
+                    Text("Risk: \(req.riskLevel.displayName)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(riskColor(req.riskLevel))
+                }
+            }
+
+            // Approve / Deny
+            HStack(spacing: 8) {
+                Button(action: onApprove) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(req?.approveLabel ?? "Approve")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(amber)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDeny) {
+                    Text(req?.denyLabel ?? "Deny")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.40))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(Color(red: 0.12, green: 0.11, blue: 0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(amber.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private func riskColor(_ level: RiskLevel) -> Color {
+        switch level {
+        case .low:    return green
+        case .medium: return orange
+        case .high:   return red
+        }
+    }
+}
+
+// MARK: - Blocked Job Card
+
+private struct BlockedJobCard: View {
+    let job: AgentJob
+    @ObservedObject var store: AgentJobStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(red.opacity(0.12))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: job.status == .blockedPermission ? "lock.fill" : "wrench.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(red)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(job.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                    Text(job.status == .blockedPermission ? "Permission required" : "Tool unavailable")
+                        .font(.system(size: 11))
+                        .foregroundColor(red.opacity(0.75))
+                }
+
+                Spacer()
+
+                Button { store.cancelJob(id: job.id) } label: {
+                    Text("Dismiss")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.28))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let error = job.errorMessage {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.50))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(8)
+                    .background(red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+        }
+        .padding(12)
+        .background(Color(red: 0.12, green: 0.09, blue: 0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(red.opacity(0.18), lineWidth: 1)
+        )
     }
 }

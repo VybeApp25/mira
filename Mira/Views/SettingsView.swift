@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showTraces        = false
     @State private var showIntegrations  = false
     @State private var showProposalMetrics = false
+    @ObservedObject private var updater = UpdateService.shared
     @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
     @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
     @State private var hoverCategories: [String: CategoryStats] = [:]
@@ -48,6 +49,8 @@ struct SettingsView: View {
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
                         usageSection
+                        Divider().background(Color.white.opacity(0.08))
+                        updatesSection
                         Divider().background(Color.white.opacity(0.08))
                         toolActivityButton
                     }
@@ -769,6 +772,44 @@ struct SettingsView: View {
                 }
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Updates section
+
+    private var updatesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Updates", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Mira \(updater.currentVersion)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                    Text(updater.lastCheckedString)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.32))
+                }
+
+                Spacer()
+
+                Button("Check for Updates") {
+                    updater.checkForUpdates()
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(accent)
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text("Build \(updater.buildNumber) · Updates delivered automatically")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.22))
         }
     }
 

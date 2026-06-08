@@ -115,10 +115,27 @@ enum WebsiteBuilderAgent {
             return
         }
 
-        // Step 5: Save to disk
-        await store.updateStep(id: jobId, stepTitle: "Preparing preview", progress: 0.85, stepIndex: 5)
-
+        // Step 5: Await approval before writing any files
+        let siteName = extractSiteName(from: enrichedPrompt)
+        let lineCount = cleaned.components(separatedBy: "\n").count
         let outputDir = websiteDirectory(for: jobId)
+
+        await store.updateStep(id: jobId, stepTitle: "Awaiting approval", progress: 0.80, stepIndex: 5)
+
+        let confirmRequest = ConfirmationRequest(
+            title: "Save website to disk?",
+            summary: "Mira will write \(lineCount) lines of HTML to:\n\(outputDir.appendingPathComponent("index.html").path)",
+            riskLevel: .low,
+            approveLabel: "Save Website",
+            denyLabel: "Discard"
+        )
+        let approved = await store.requestConfirmation(id: jobId, request: confirmRequest)
+        guard approved else { return }  // denyConfirmation already set status to .cancelled
+
+        // Step 6: Write files (user approved)
+        await store.markWriting(id: jobId)
+        await store.updateStep(id: jobId, stepTitle: "Saving project", progress: 0.88, stepIndex: 6)
+
         do {
             try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
             let indexURL = outputDir.appendingPathComponent("index.html")
@@ -128,13 +145,11 @@ enum WebsiteBuilderAgent {
             return
         }
 
-        // Step 6: Save project record
+        // Finish project record
         await store.updateStep(id: jobId, stepTitle: "Saving project", progress: 0.96, stepIndex: 6)
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        let siteName = extractSiteName(from: enrichedPrompt)
         let outputPath = outputDir.appendingPathComponent("index.html").path
-        let lineCount = cleaned.components(separatedBy: "\n").count
 
         let result = AgentJobResult(
             summary: "Built \(siteName) — \(lineCount) lines of code.",

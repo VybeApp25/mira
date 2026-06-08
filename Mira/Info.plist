@@ -34,5 +34,13 @@
 	<string>Mira sees your screen to show you exactly where to click.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Mira transcribes your voice to text.</string>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/VybeApp25/mira/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>PASTE_SPARKLE_PUBLIC_KEY_HERE</string>
 </dict>
 </plist>

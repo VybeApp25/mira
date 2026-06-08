@@ -4,20 +4,32 @@ import Foundation
 
 enum AgentJobStatus: String, Codable, Equatable {
     case queued
+    case preparing
+    case reading
     case running
+    case writing
     case waitingForInput
+    case waitingForConfirmation
+    case blockedPermission
+    case blockedTool
     case completed
     case failed
     case cancelled
 
     var displayName: String {
         switch self {
-        case .queued:          return "Queued"
-        case .running:         return "Running"
-        case .waitingForInput: return "Waiting for Input"
-        case .completed:       return "Completed"
-        case .failed:          return "Failed"
-        case .cancelled:       return "Cancelled"
+        case .queued:                 return "Queued"
+        case .preparing:              return "Preparing"
+        case .reading:                return "Reading"
+        case .running:                return "Running"
+        case .writing:                return "Writing"
+        case .waitingForInput:        return "Waiting for Input"
+        case .waitingForConfirmation: return "Awaiting Approval"
+        case .blockedPermission:      return "Blocked — Permission"
+        case .blockedTool:            return "Blocked — Tool"
+        case .completed:              return "Completed"
+        case .failed:                 return "Failed"
+        case .cancelled:              return "Cancelled"
         }
     }
 
@@ -27,6 +39,72 @@ enum AgentJobStatus: String, Codable, Equatable {
         default: return false
         }
     }
+
+    var isBlocked: Bool {
+        self == .blockedPermission || self == .blockedTool
+    }
+
+    var isActive: Bool {
+        switch self {
+        case .queued, .preparing, .reading, .running, .writing: return true
+        default: return false
+        }
+    }
+}
+
+// MARK: - Risk Level
+
+enum RiskLevel: String, Codable {
+    case low
+    case medium
+    case high
+
+    var displayName: String {
+        switch self {
+        case .low:    return "Low"
+        case .medium: return "Medium"
+        case .high:   return "High"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .low:    return "checkmark.shield"
+        case .medium: return "exclamationmark.shield"
+        case .high:   return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
+// MARK: - Confirmation Request
+
+struct ConfirmationRequest: Codable, Identifiable {
+    let id: UUID
+    let title: String
+    let summary: String
+    let riskLevel: RiskLevel
+    let approveLabel: String
+    let denyLabel: String
+    let generatedAt: Date
+
+    init(title: String, summary: String, riskLevel: RiskLevel,
+         approveLabel: String = "Approve", denyLabel: String = "Deny") {
+        self.id = UUID()
+        self.title = title
+        self.summary = summary
+        self.riskLevel = riskLevel
+        self.approveLabel = approveLabel
+        self.denyLabel = denyLabel
+        self.generatedAt = Date()
+    }
+}
+
+// MARK: - Approval Decision (audit trail, persisted)
+
+struct ApprovalDecision: Codable {
+    let approved: Bool
+    let timestamp: Date
+    let userReason: String?
 }
 
 // MARK: - Job Type
@@ -61,22 +139,22 @@ enum AgentJobType: String, Codable, CaseIterable {
             ]
         case .deepResearch:
             return [
-                AgentJobAction(title: "Open Report",          icon: "doc.text",                 identifier: "open_report"),
-                AgentJobAction(title: "Create Summary",        icon: "list.bullet.rectangle",    identifier: "summarize"),
-                AgentJobAction(title: "Export PDF",            icon: "arrow.down.doc",           identifier: "export_pdf"),
-                AgentJobAction(title: "Create Presentation",  icon: "rectangle.on.rectangle",   identifier: "create_presentation"),
+                AgentJobAction(title: "Open Report",         icon: "doc.text",               identifier: "open_report"),
+                AgentJobAction(title: "Create Summary",      icon: "list.bullet.rectangle",  identifier: "summarize"),
+                AgentJobAction(title: "Export PDF",          icon: "arrow.down.doc",         identifier: "export_pdf"),
+                AgentJobAction(title: "Create Presentation", icon: "rectangle.on.rectangle", identifier: "create_presentation"),
             ]
         case .appBuilder:
             return [
-                AgentJobAction(title: "Open Project", icon: "folder",            identifier: "open_project"),
-                AgentJobAction(title: "Run Preview",  icon: "play.circle",       identifier: "run_preview"),
-                AgentJobAction(title: "Export Source", icon: "arrow.down.doc",   identifier: "export_source"),
+                AgentJobAction(title: "Open Project",  icon: "folder",          identifier: "open_project"),
+                AgentJobAction(title: "Run Preview",   icon: "play.circle",     identifier: "run_preview"),
+                AgentJobAction(title: "Export Source", icon: "arrow.down.doc",  identifier: "export_source"),
             ]
         case .contentGeneration:
             return [
-                AgentJobAction(title: "Copy Text",    icon: "doc.on.clipboard",  identifier: "copy_text"),
-                AgentJobAction(title: "Export PDF",   icon: "arrow.down.doc",    identifier: "export_pdf"),
-                AgentJobAction(title: "Open File",    icon: "doc",               identifier: "open_file"),
+                AgentJobAction(title: "Copy Text",  icon: "doc.on.clipboard", identifier: "copy_text"),
+                AgentJobAction(title: "Export PDF", icon: "arrow.down.doc",   identifier: "export_pdf"),
+                AgentJobAction(title: "Open File",  icon: "doc",              identifier: "open_file"),
             ]
         default:
             return [
@@ -85,7 +163,6 @@ enum AgentJobType: String, Codable, CaseIterable {
         }
     }
 
-    // Detect job type from a plain-text user prompt
     static func detect(from prompt: String) -> AgentJobType {
         let lower = prompt.lowercased()
         if lower.contains("website") || lower.contains("site") || lower.contains("landing page") ||
@@ -124,7 +201,7 @@ struct AgentJobStep: Identifiable, Codable {
     }
 }
 
-// MARK: - Action (contextual buttons shown after completion)
+// MARK: - Action
 
 struct AgentJobAction: Identifiable, Codable {
     let id: UUID
@@ -140,17 +217,16 @@ struct AgentJobAction: Identifiable, Codable {
     }
 }
 
-// MARK: - Build Readiness (requirements validation)
+// MARK: - Build Readiness
 
 struct BuildReadiness: Codable {
-    let score: Double                       // 0–100
-    let missingRequirements: [String]       // questions to ask the user
-    let assumptions: [String]              // what the agent would have to assume
-    let summary: String                     // one-line assessment
+    let score: Double
+    let missingRequirements: [String]
+    let assumptions: [String]
+    let summary: String
 
-    /// < 70: stop and ask. 70–89: build with warnings. ≥ 90: build immediately.
-    var shouldAsk: Bool    { score < 70 }
-    var hasWarnings: Bool  { score >= 70 && score < 90 }
+    var shouldAsk: Bool   { score < 70 }
+    var hasWarnings: Bool { score >= 70 && score < 90 }
 }
 
 // MARK: - Result
@@ -169,7 +245,7 @@ struct AgentJob: Identifiable, Codable {
     let type: AgentJobType
     let prompt: String
     var status: AgentJobStatus
-    var progress: Double            // 0.0–1.0
+    var progress: Double
     var currentStep: String
     var steps: [AgentJobStep]
     var result: AgentJobResult?
@@ -178,10 +254,10 @@ struct AgentJob: Identifiable, Codable {
     var startedAt: Date?
     var completedAt: Date?
     var estimatedDuration: TimeInterval
-    // Requirements validation — nil until analysis runs
     var buildReadiness: BuildReadiness?
-    // Answers the user provided after a waitingForInput state
     var userProvidedInfo: String?
+    var confirmationRequest: ConfirmationRequest?
+    var approvalDecision: ApprovalDecision?
 
     init(type: AgentJobType, prompt: String) {
         self.id = UUID()
@@ -197,6 +273,8 @@ struct AgentJob: Identifiable, Codable {
         self.startedAt = nil
         self.completedAt = nil
         self.estimatedDuration = 60
+        self.confirmationRequest = nil
+        self.approvalDecision = nil
     }
 
     var timeElapsed: TimeInterval? {
@@ -213,8 +291,8 @@ struct AgentJob: Identifiable, Codable {
     var relativeTime: String {
         let date = completedAt ?? startedAt ?? createdAt
         let diff = Date().timeIntervalSince(date)
-        if diff < 60   { return "just now" }
-        if diff < 3600 { return "\(Int(diff / 60))m ago" }
+        if diff < 60    { return "just now" }
+        if diff < 3600  { return "\(Int(diff / 60))m ago" }
         if diff < 86400 { return "\(Int(diff / 3600))h ago" }
         return "\(Int(diff / 86400))d ago"
     }
