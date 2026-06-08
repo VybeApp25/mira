@@ -1,4 +1,5 @@
 import Cocoa
+import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchManager:        NotchManager?
@@ -23,6 +24,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         MiraCursorManager.shared.activate()
 
         statusBarController = StatusBarController(miraState: manager.miraState)
+
+        // Show onboarding on first launch, after the island is ready
+        if OnboardingService.shared.isFirstLaunch {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                OnboardingWindowController.shared.show()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

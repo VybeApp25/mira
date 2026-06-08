@@ -20,12 +20,14 @@ struct IslandChatView: View {
     @ObservedObject var wakeWord:  WakeWordService
 
     @State private var messages:        [ChatMessage] = []
-    @State private var input:           String        = ""
-    @State private var isLoading:       Bool          = false
-    @State private var pendingAction:   PendingAction? = nil
-    @State private var errorText:       String?       = nil
-    @State private var agentOnline:     Bool          = false
-    @State private var streamingMsgId:  UUID?         = nil
+    @State private var input:                 String             = ""
+    @State private var isLoading:             Bool               = false
+    @State private var pendingAction:         PendingAction?     = nil
+    @State private var pendingClarification:  ClarificationSpec? = nil
+    @State private var pendingPermission:     MiraPermission?    = nil
+    @State private var retryPrompt:           String?            = nil
+    @State private var errorText:             String?            = nil
+    @State private var streamingMsgId:        UUID?              = nil
 
     @StateObject private var realtime = RealtimeVoiceService()
     private var isVoiceActive: Bool {
@@ -42,11 +44,28 @@ struct IslandChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messageArea
+            ClarificationCard(spec: $pendingClarification) { assembled in
+                input = assembled
+                Task { await submit() }
+            }
+            if let perm = pendingPermission {
+                PermissionRecoveryCard(permission: perm) {
+                    // permission granted — auto-retry blocked request
+                    pendingPermission = nil
+                    if let prompt = retryPrompt {
+                        retryPrompt = nil
+                        input = prompt
+                        Task { await submit() }
+                    }
+                } onDismiss: {
+                    pendingPermission = nil
+                    retryPrompt = nil
+                }
+            }
             if let action = pendingAction { confirmCard(action) }
             if let err    = errorText     { errorBanner(err)    }
             if isVoiceActive { voiceStatusBar } else { inputBar }
         }
-        .task { agentOnline = await AgentService.shared.checkHealth() }
         .onAppear {
             wireRealtime()
             loadHistory()
@@ -274,6 +293,10 @@ struct IslandChatView: View {
                 tint: realtime.state == .idle ? nil : .red
             ) { toggleRealtime() }
 
+            #if DEBUG
+            inputIconButton(icon: "viewfinder.circle") { overlay.showTest() }
+            #endif
+
             inputIconButton(icon: "arrow.up.circle.fill",
                             tint: canSend ? accent : nil,
                             disabled: !canSend) {
@@ -395,31 +418,48 @@ struct IslandChatView: View {
             return
         }
 
-        input         = ""
-        errorText     = nil
-        pendingAction = nil
+        input              = ""
+        errorText          = nil
+        pendingAction      = nil
+        pendingPermission  = nil
         messages.append(ChatMessage(role: .user, text: prompt))
-        isLoading     = true
+        isLoading          = true
 
-        do {
-            if agentOnline {
-                let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: miraState.effectiveAPIKey)
-                if let pending = result.requiresConfirmation {
-                    pendingAction = pending
-                } else {
-                    messages.append(ChatMessage(role: .mira, text: result.reply))
+        let context = RouterContext(recentMessageCount: messages.count)
+        let result  = await RouterService.shared.handle(
+            prompt:  prompt,
+            context: context,
+            apiKey:  miraState.effectiveAPIKey,
+            capture: capture
+        )
+
+        switch result.route {
+        case .clarificationRequired:
+            if let spec = result.clarificationSpec {
+                if let opening = result.reply {
+                    messages.append(ChatMessage(role: .mira, text: opening))
                 }
+                pendingClarification = spec
+            } else if let q = result.clarificationQuestion {
+                messages.append(ChatMessage(role: .mira, text: q))
+            }
+        case .confirmationRequired:
+            pendingAction = result.pendingConfirmation
+        case .permissionRequired:
+            if let perm = result.missingPermission {
+                retryPrompt       = prompt      // save so the card can auto-retry
+                pendingPermission = perm
             } else {
-                let screenshot = try? await capture.captureMainDisplay()
-                let text = try await claude.ask(prompt: prompt, screenshot: screenshot)
-                messages.append(ChatMessage(role: .mira, text: text))
-                if let img = screenshot, let pt = try? await claude.locateElement(prompt, in: img) {
-                    overlay.show(at: pt, label: "Here")
-                }
+                errorText = result.permissionNeeded
+            }
+        default:
+            if let reply = result.reply {
+                messages.append(ChatMessage(role: .mira, text: reply))
+            }
+            if let target = result.guidanceTarget, target.confidence >= 0.60 {
+                overlay.showGuidance(GuidanceFrame(timestamp: .now, targets: [target]))
             }
             miraState.recordUsage()
-        } catch {
-            errorText = error.localizedDescription
         }
 
         isLoading = false
