@@ -76,6 +76,38 @@ final class AgentJobStore: ObservableObject {
         }
     }
 
+    /// Called by the agent when requirements analysis returns score < 70.
+    /// Stores the readiness analysis; job waits until provideInput is called.
+    func markWaitingForInput(id: UUID, readiness: BuildReadiness) {
+        update(id) { job in
+            job.status = .waitingForInput
+            job.buildReadiness = readiness
+            job.currentStep = "Waiting for input"
+            job.progress = 0.10   // analysis is done; generation hasn't started
+        }
+    }
+
+    /// Called when the user submits answers to the requirements questions.
+    /// Stores the answers, flips status back to running, and resumes the agent.
+    func provideInput(id: UUID, answers: String, apiKey: String) {
+        update(id) { job in
+            job.status = .running
+            job.userProvidedInfo = answers
+            job.currentStep = "Resuming with new information"
+        }
+        guard let job = job(id: id) else { return }
+        let prompt = job.prompt
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let store = self else { return }
+            switch job.type {
+            case .websiteBuilder:
+                await WebsiteBuilderAgent.run(jobId: id, prompt: prompt, apiKey: apiKey, store: store, userProvidedInfo: answers)
+            default:
+                await GenericAgent.run(jobId: id, prompt: "\(prompt)\n\nAdditional context: \(answers)", apiKey: apiKey, store: store)
+            }
+        }
+    }
+
     // MARK: - Progress updates (called by agent runners via await — hops to main actor)
 
     func markRunning(id: UUID) {

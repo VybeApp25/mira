@@ -20,6 +20,7 @@ struct AgentsTabView: View {
     @StateObject private var entitlements = EntitlementService.shared
     @State private var input = ""
     @State private var detailJob: AgentJob? = nil
+    @State private var answeringJob: AgentJob? = nil  // drives the answer sheet
     @State private var detectedType: AgentJobType = .custom
 
     var body: some View {
@@ -35,6 +36,14 @@ struct AgentsTabView: View {
         .sheet(item: $detailJob) { job in
             AgentDetailView(jobId: job.id, store: jobStore)
                 .frame(width: 660, height: 500)
+        }
+        .sheet(item: $answeringJob) { job in
+            AnswerQuestionsSheet(
+                job: job,
+                store: jobStore,
+                apiKey: miraState.effectiveAPIKey
+            )
+            .frame(width: 560, height: 460)
         }
     }
 
@@ -82,23 +91,38 @@ struct AgentsTabView: View {
 
     @ViewBuilder
     private var jobList: some View {
-        let running   = jobStore.runningJobs
+        let active    = jobStore.runningJobs.filter { $0.status != .waitingForInput }
+        let waiting   = jobStore.runningJobs.filter { $0.status == .waitingForInput }
         let completed = jobStore.completedJobs
 
-        if running.isEmpty && completed.isEmpty {
+        if active.isEmpty && waiting.isEmpty && completed.isEmpty {
             emptyState
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
-                    if !running.isEmpty {
+                    // Waiting for Input — highest priority, shown first
+                    if !waiting.isEmpty {
                         Section {
-                            ForEach(running) { job in
+                            ForEach(waiting) { job in
+                                WaitingForInputCard(job: job, onAnswer: { answeringJob = job }, onCancel: { jobStore.cancelJob(id: job.id) })
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 6)
+                            }
+                        } header: {
+                            sectionHeader("Waiting for Input", count: waiting.count, color: orange)
+                        }
+                    }
+
+                    // Running / Queued
+                    if !active.isEmpty {
+                        Section {
+                            ForEach(active) { job in
                                 RunningJobCard(job: job, store: jobStore)
                                     .padding(.horizontal, 12)
                                     .padding(.top, 6)
                             }
                         } header: {
-                            sectionHeader("Running", count: running.count, color: green)
+                            sectionHeader("Running", count: active.count, color: green)
                         }
                     }
 
@@ -650,5 +674,270 @@ struct AgentDetailView: View {
             .font(.system(size: 9, weight: .semibold))
             .foregroundColor(.white.opacity(0.25))
             .kerning(0.8)
+    }
+}
+
+// MARK: - Waiting For Input Card
+
+private struct WaitingForInputCard: View {
+    let job: AgentJob
+    let onAnswer: () -> Void
+    let onCancel: () -> Void
+
+    private let orangeColor = Color(red: 1.0, green: 0.60, blue: 0.20)
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(orangeColor.opacity(0.12))
+                        .frame(width: 26, height: 26)
+                    Circle()
+                        .fill(orangeColor.opacity(0.20))
+                        .frame(width: 26, height: 26)
+                        .scaleEffect(pulse ? 1.5 : 1.0)
+                        .opacity(pulse ? 0 : 1)
+                    Image(systemName: job.type.icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(orangeColor)
+                }
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                        pulse = true
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(job.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                    Text("Information needed to continue")
+                        .font(.system(size: 11))
+                        .foregroundColor(orangeColor.opacity(0.75))
+                }
+
+                Spacer()
+
+                Text(job.relativeTime)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.22))
+            }
+
+            // Score badge if available
+            if let readiness = job.buildReadiness {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(orangeColor.opacity(0.6))
+                    Text("Readiness: \(Int(readiness.score))% — \(readiness.summary)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.35))
+                        .lineLimit(1)
+                }
+            }
+
+            // Requirements list
+            if let readiness = job.buildReadiness, !readiness.missingRequirements.isEmpty {
+                Divider().background(Color.white.opacity(0.06))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("MISSING INFORMATION")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.25))
+                        .kerning(0.8)
+                    ForEach(Array(readiness.missingRequirements.prefix(5).enumerated()), id: \.offset) { idx, question in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("\(idx + 1).")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(orangeColor.opacity(0.5))
+                                .frame(width: 14, alignment: .trailing)
+                            Text(question)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.65))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+
+            // Action buttons
+            HStack(spacing: 8) {
+                Button(action: onAnswer) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.bubble.fill")
+                            .font(.system(size: 10))
+                        Text("Answer Questions")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(orangeColor)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.30))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(Color(red: 0.13, green: 0.11, blue: 0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(orangeColor.opacity(0.20), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Answer Questions Sheet
+
+struct AnswerQuestionsSheet: View {
+    let job: AgentJob
+    let store: AgentJobStore
+    let apiKey: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var answers = ""
+
+    private let orangeColor = Color(red: 1.0, green: 0.60, blue: 0.20)
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(orangeColor.opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: job.type.icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(orangeColor)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Answer to continue")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(job.type.rawValue)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.35))
+                    }
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.30))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(20)
+
+                Divider().background(Color.white.opacity(0.07))
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Questions
+                        if let readiness = job.buildReadiness, !readiness.missingRequirements.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("QUESTIONS")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.25))
+                                    .kerning(0.8)
+                                ForEach(Array(readiness.missingRequirements.enumerated()), id: \.offset) { idx, q in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("\(idx + 1).")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(orangeColor.opacity(0.6))
+                                            .frame(width: 18, alignment: .trailing)
+                                        Text(q)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white.opacity(0.70))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Answer input
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("YOUR ANSWERS")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.25))
+                                .kerning(0.8)
+                            TextEditor(text: $answers)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .frame(minHeight: 120)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                                )
+                            if answers.isEmpty {
+                                Text("Type your answers here — address each question above…")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.18))
+                                    .padding(.top, -100)
+                                    .padding(.leading, 6)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+
+                Divider().background(Color.white.opacity(0.07))
+
+                // Footer buttons
+                HStack(spacing: 10) {
+                    Button { dismiss() } label: {
+                        Text("Cancel")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.35))
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(Color.white.opacity(0.06))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button {
+                        let trimmed = answers.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        store.provideInput(id: job.id, answers: trimmed, apiKey: apiKey)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 12))
+                            Text("Continue Building")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .background(answers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? orangeColor.opacity(0.3) : orangeColor)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(answers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(20)
+            }
+        }
     }
 }

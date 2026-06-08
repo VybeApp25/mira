@@ -140,6 +140,19 @@ struct AgentJobAction: Identifiable, Codable {
     }
 }
 
+// MARK: - Build Readiness (requirements validation)
+
+struct BuildReadiness: Codable {
+    let score: Double                       // 0–100
+    let missingRequirements: [String]       // questions to ask the user
+    let assumptions: [String]              // what the agent would have to assume
+    let summary: String                     // one-line assessment
+
+    /// < 70: stop and ask. 70–89: build with warnings. ≥ 90: build immediately.
+    var shouldAsk: Bool    { score < 70 }
+    var hasWarnings: Bool  { score >= 70 && score < 90 }
+}
+
 // MARK: - Result
 
 struct AgentJobResult: Codable {
@@ -165,6 +178,10 @@ struct AgentJob: Identifiable, Codable {
     var startedAt: Date?
     var completedAt: Date?
     var estimatedDuration: TimeInterval
+    // Requirements validation — nil until analysis runs
+    var buildReadiness: BuildReadiness?
+    // Answers the user provided after a waitingForInput state
+    var userProvidedInfo: String?
 
     init(type: AgentJobType, prompt: String) {
         self.id = UUID()
