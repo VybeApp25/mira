@@ -4,6 +4,7 @@ import AppKit
 class ClaudeService {
     private let apiKey: String
     private let model = "claude-haiku-4-5-20251001"
+    private let guidanceModel = "claude-sonnet-4-6"
     private let baseURL = URL(string: "https://api.anthropic.com/v1/messages")!
 
     init(apiKey: String) {
@@ -55,15 +56,15 @@ class ClaudeService {
 
     // MARK: - Public
 
-    func ask(prompt: String, screenshot: NSImage? = nil, system: String = MiraPrompts.system) async throws -> String {
+    func ask(prompt: String, screenshot: NSImage? = nil, system: String = MiraPrompts.system, modelOverride: String? = nil, maxTokensOverride: Int? = nil) async throws -> String {
         var content: [APIContent] = []
         if let img = screenshot, let b64 = img.pngBase64() {
             content.append(.image(b64, "image/png"))
         }
         content.append(.text(prompt))
 
-        let maxTokens = screenshot != nil ? 800 : 400
-        let body = APIRequest(model: model, max_tokens: maxTokens, system: system,
+        let maxTokens = maxTokensOverride ?? (screenshot != nil ? 800 : 400)
+        let body = APIRequest(model: modelOverride ?? model, max_tokens: maxTokens, system: system,
                               messages: [APIMessage(role: "user", content: content)])
 
         var req = URLRequest(url: baseURL)
@@ -256,6 +257,107 @@ class ClaudeService {
         )
     }
 
+    func locateGuidanceTarget(goal: String, in screenshot: NSImage) async throws -> GuidanceTarget? {
+        let startTime = Date()
+        let prompt = """
+        Find the UI element that answers: "\(goal)"
+
+        Respond ONLY with JSON (no markdown, no explanation):
+        {
+          "label": "Short element name (1-4 words)",
+          "x": <left edge in physical pixels from left of image>,
+          "y": <top edge in physical pixels from top of image>,
+          "width": <element width in physical pixels>,
+          "height": <element height in physical pixels>,
+          "explanation": "One sentence: what this element is and why it answers the question",
+          "confidence": 0.90
+        }
+
+        If the element is not visible: {"label":"","x":0,"y":0,"width":0,"height":0,"explanation":"Not visible on screen","confidence":0}
+        """
+
+        let raw = try await ask(prompt: prompt, screenshot: screenshot,
+                                system: MiraPrompts.guidance, modelOverride: guidanceModel)
+
+        struct Raw: Decodable {
+            let label: String
+            let x, y, width, height: Double
+            let explanation: String
+            let confidence: Double
+        }
+
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+
+        guard let range = raw.range(of: #"\{[\s\S]*\}"#, options: .regularExpression),
+              let data = String(raw[range]).data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(Raw.self, from: data),
+              decoded.confidence > 0.0,
+              decoded.width > 0, decoded.height > 0 else {
+            #if DEBUG
+            let latency = Date().timeIntervalSince(startTime)
+            print("[Guidance] PARSE FAIL goal=\"\(goal)\" latency=\(String(format: "%.2f", latency))s raw=\(raw.prefix(200))")
+            saveGuidanceDiagnostic(goal: goal, screenshot: screenshot, raw: raw, target: nil)
+            #endif
+            return nil
+        }
+
+        let rect = CGRect(
+            x: decoded.x / scale,
+            y: decoded.y / scale,
+            width: decoded.width / scale,
+            height: decoded.height / scale
+        )
+
+        let target = GuidanceTarget(
+            id: UUID(),
+            rect: rect,
+            confidence: decoded.confidence,
+            label: decoded.label,
+            explanation: decoded.explanation
+        )
+
+        #if DEBUG
+        let latency = Date().timeIntervalSince(startTime)
+        print("""
+        [Guidance] goal="\(goal)"
+          image: \(Int(screenshot.size.width))×\(Int(screenshot.size.height)) px (scale=\(scale) → \(Int(screenshot.size.width/scale))×\(Int(screenshot.size.height/scale)) pts)
+          model: label="\(decoded.label)" x=\(Int(decoded.x)) y=\(Int(decoded.y)) w=\(Int(decoded.width)) h=\(Int(decoded.height)) conf=\(decoded.confidence)
+          logical rect: (\(Int(rect.origin.x)),\(Int(rect.origin.y))) \(Int(rect.width))×\(Int(rect.height)) pts
+          explanation: \(decoded.explanation)
+          latency: \(String(format: "%.2f", latency))s
+        """)
+        saveGuidanceDiagnostic(goal: goal, screenshot: screenshot, raw: raw, target: target)
+        #endif
+
+        return target
+    }
+
+    #if DEBUG
+    private func saveGuidanceDiagnostic(goal: String, screenshot: NSImage, raw: String, target: GuidanceTarget?) {
+        let base = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/Mira/Guidance")
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+
+        let ts = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+
+        if let b64 = screenshot.pngBase64(), let data = Data(base64Encoded: b64) {
+            try? data.write(to: base.appendingPathComponent("\(ts)_screenshot.png"))
+        }
+        try? raw.write(to: base.appendingPathComponent("\(ts)_response.json"),
+                       atomically: true, encoding: .utf8)
+        let summary = """
+        goal: \(goal)
+        label: \(target?.label ?? "nil")
+        confidence: \(target?.confidence ?? 0)
+        rect: \(target.map { "\($0.rect)" } ?? "nil")
+        explanation: \(target?.explanation ?? "nil")
+        """
+        try? summary.write(to: base.appendingPathComponent("\(ts)_target.txt"),
+                           atomically: true, encoding: .utf8)
+    }
+    #endif
+
     func locateElement(_ description: String, in screenshot: NSImage) async throws -> CGPoint? {
         let prompt = """
         Find "\(description)" in this screenshot.
@@ -311,6 +413,14 @@ enum MiraPrompts {
     static let vision = """
     You are a precise UI element locator. Return only a JSON object with pixel coordinates.
     Analyze the screenshot carefully. Coordinates are from the top-left corner of the image.
+    """
+
+    static let guidance = """
+    You are a precise UI element locator for a screen guidance overlay. \
+    Analyze the screenshot and return the bounding box of the exact UI element that answers the user's question. \
+    Coordinates are physical pixels measured from the top-left corner of the image. \
+    The bounding box should tightly enclose the element — not the whole panel or window. \
+    Return ONLY the JSON object, no markdown, no preamble, no trailing text.
     """
 
     /// Phase 13B proposal generation — produces a concrete artifact proposal.

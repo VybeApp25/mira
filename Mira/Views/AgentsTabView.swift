@@ -1,170 +1,654 @@
 import SwiftUI
 
-private let surface = Color(red: 0.11, green: 0.11, blue: 0.13)
-private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let surface  = Color(red: 0.11, green: 0.11, blue: 0.13)
+private let surface2 = Color(red: 0.14, green: 0.14, blue: 0.17)
+private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let green    = Color(red: 0.20, green: 0.84, blue: 0.29)
+private let orange   = Color(red: 1.0,  green: 0.60, blue: 0.20)
+private let red      = Color(red: 1.0,  green: 0.35, blue: 0.35)
+
+// MARK: - Main Tab
 
 struct AgentsTabView: View {
-    @ObservedObject var taskStore: AgentTaskStore
+    @ObservedObject var taskStore: AgentTaskStore  // legacy Composio tasks (kept for compatibility)
     @ObservedObject var miraState: MiraState
     @ObservedObject var overlay: OverlayWindowController
     let capture: ScreenCaptureService
     @ObservedObject var voice: VoiceService
 
+    @StateObject private var jobStore = AgentJobStore.shared
+    @StateObject private var entitlements = EntitlementService.shared
     @State private var input = ""
-    @State private var isRunning = false
+    @State private var detailJob: AgentJob? = nil
+    @State private var detectedType: AgentJobType = .custom
 
     var body: some View {
         VStack(spacing: 0) {
-            agentInputBar
-            Divider().background(Color.white.opacity(0.07))
-            taskList
+            if entitlements.can(.runAgents) {
+                inputBar
+                Divider().background(Color.white.opacity(0.07))
+                jobList
+            } else {
+                upgradePrompt
+            }
+        }
+        .sheet(item: $detailJob) { job in
+            AgentDetailView(jobId: job.id, store: jobStore)
+                .frame(width: 660, height: 500)
         }
     }
 
     // MARK: - Input bar
 
-    private var agentInputBar: some View {
+    private var inputBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "bolt.fill")
+            // Job type indicator
+            Image(systemName: detectedType.icon)
                 .font(.system(size: 11))
                 .foregroundColor(accent.opacity(0.7))
+                .frame(width: 16)
 
-            TextField("Hey Mira Agent, do something...", text: $input)
+            TextField("What should I build or research?", text: $input)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundColor(.white)
-                .onSubmit { Task { await runAgentTask() } }
-
-            if isRunning {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .scaleEffect(0.6)
-                    .tint(accent)
-            } else {
-                Button(action: { Task { await runAgentTask() } }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(input.isEmpty ? .white.opacity(0.15) : accent)
+                .onChange(of: input) { newValue in
+                    detectedType = AgentJobType.detect(from: newValue)
                 }
-                .buttonStyle(.plain)
-                .disabled(input.isEmpty)
+                .onSubmit { submitJob() }
+
+            if !input.isEmpty {
+                Text(detectedType.rawValue)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(accent.opacity(0.6))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(accent.opacity(0.10))
+                    .clipShape(Capsule())
             }
+
+            Button(action: submitJob) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(input.isEmpty ? .white.opacity(0.15) : accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(input.isEmpty || miraState.effectiveAPIKey.isEmpty)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
 
-    // MARK: - Task list
+    // MARK: - Job list
 
     @ViewBuilder
-    private var taskList: some View {
-        if taskStore.tasks.isEmpty {
+    private var jobList: some View {
+        let running   = jobStore.runningJobs
+        let completed = jobStore.completedJobs
+
+        if running.isEmpty && completed.isEmpty {
             emptyState
         } else {
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 6) {
-                    ForEach(taskStore.tasks) { task in
-                        taskRow(task)
+                LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
+                    if !running.isEmpty {
+                        Section {
+                            ForEach(running) { job in
+                                RunningJobCard(job: job, store: jobStore)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 6)
+                            }
+                        } header: {
+                            sectionHeader("Running", count: running.count, color: green)
+                        }
+                    }
+
+                    if !completed.isEmpty {
+                        Section {
+                            ForEach(completed) { job in
+                                CompletedJobCard(job: job)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 6)
+                                    .onTapGesture { detailJob = job }
+                            }
+                        } header: {
+                            sectionHeader("Completed", count: completed.count, color: .white.opacity(0.3))
+                        }
                     }
                 }
-                .padding(12)
+                .padding(.bottom, 12)
             }
         }
     }
 
+    private func sectionHeader(_ title: String, count: Int, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(color)
+            Text("\(count)")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(color.opacity(0.5))
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.95))
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "cpu")
+            Image(systemName: "cpu.fill")
                 .font(.system(size: 28))
-                .foregroundColor(.white.opacity(0.1))
-            Text("No agent tasks yet")
+                .foregroundColor(.white.opacity(0.08))
+            Text("No agent jobs yet")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.3))
-            Text("Type above or say \"Hey Mira Agent...\"")
+                .foregroundColor(.white.opacity(0.25))
+            Text("Type a task above to start a background agent")
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.2))
+                .foregroundColor(.white.opacity(0.15))
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
     }
 
-    private func taskRow(_ task: AgentTask) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Tool icon
+    // MARK: - Upgrade prompt
+
+    private var upgradePrompt: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 26))
+                .foregroundColor(accent.opacity(0.5))
+            Text("Agents require Pro")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.80))
+            Text("Run background agents that build websites, research topics, generate content, and more — without blocking your chat.")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.35))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+            Button {
+                // Opens the pricing page — replace with real URL
+                NSWorkspace.shared.open(URL(string: "https://mira.ai/pricing")!)
+            } label: {
+                Text("Upgrade to Pro")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .background(accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    // MARK: - Submit
+
+    private func submitJob() {
+        let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty, !miraState.effectiveAPIKey.isEmpty else { return }
+        input = ""
+        detectedType = .custom
+        jobStore.submitJob(prompt: prompt, apiKey: miraState.effectiveAPIKey)
+    }
+}
+
+// MARK: - Running Job Card
+
+private struct RunningJobCard: View {
+    let job: AgentJob
+    @ObservedObject var store: AgentJobStore
+    @State private var pulse = false
+
+    private var liveJob: AgentJob? { store.job(id: job.id) }
+
+    var body: some View {
+        let j = liveJob ?? job
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(green.opacity(0.15))
+                        .frame(width: 26, height: 26)
+                    Circle()
+                        .fill(green.opacity(0.25))
+                        .frame(width: 26, height: 26)
+                        .scaleEffect(pulse ? 1.4 : 1.0)
+                        .opacity(pulse ? 0 : 1)
+                    Image(systemName: j.type.icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(green)
+                }
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: false)) {
+                        pulse = true
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(j.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.90))
+                    Text(j.currentStep)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.40))
+                }
+
+                Spacer()
+
+                Text(timeLabel(j))
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.07))
+                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(green)
+                        .frame(width: geo.size.width * j.progress, height: 3)
+                        .animation(.linear(duration: 0.4), value: j.progress)
+                }
+            }
+            .frame(height: 3)
+
+            HStack {
+                Text(j.prompt)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+                    .lineLimit(1)
+                Spacer()
+                Text("\(Int(j.progress * 100))%")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(green.opacity(0.7))
+            }
+        }
+        .padding(12)
+        .background(surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(green.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func timeLabel(_ j: AgentJob) -> String {
+        if let remaining = j.estimatedTimeRemaining {
+            let secs = Int(remaining)
+            return secs > 60 ? "~\(secs / 60)m left" : "~\(secs)s left"
+        }
+        if let start = j.startedAt {
+            let elapsed = Int(Date().timeIntervalSince(start))
+            return elapsed > 60 ? "\(elapsed / 60)m" : "\(elapsed)s"
+        }
+        return "Starting…"
+    }
+}
+
+// MARK: - Completed Job Card
+
+private struct CompletedJobCard: View {
+    let job: AgentJob
+
+    private var statusColor: Color {
+        switch job.status {
+        case .completed: return green
+        case .failed:    return red
+        case .cancelled: return .white.opacity(0.3)
+        default:         return accent
+        }
+    }
+
+    private var statusIcon: String {
+        switch job.status {
+        case .completed: return "checkmark.circle.fill"
+        case .failed:    return "xmark.circle.fill"
+        case .cancelled: return "minus.circle.fill"
+        default:         return "circle"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(statusColor.opacity(0.12))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: job.type.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(statusColor)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(job.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                    Text(job.result?.summary ?? job.errorMessage ?? job.prompt)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.38))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 11))
+                        .foregroundColor(statusColor)
+                    Text(job.relativeTime)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.22))
+                }
+            }
+
+            // Action bubbles (completed only)
+            if job.status == .completed {
+                actionBubbles
+            }
+        }
+        .padding(12)
+        .background(surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var actionBubbles: some View {
+        let actions = job.actions
+        if !actions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(actions.prefix(4)) { action in
+                        ActionBubble(action: action, job: job)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+        }
+    }
+}
+
+// MARK: - Action Bubble
+
+private struct ActionBubble: View {
+    let action: AgentJobAction
+    let job: AgentJob
+
+    var body: some View {
+        Button {
+            handleAction(action.identifier)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 10, weight: .medium))
+                Text(action.title)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(.white.opacity(0.65))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.white.opacity(0.07))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func handleAction(_ identifier: String) {
+        switch identifier {
+        case "open_browser":
+            if let path = job.result?.outputPath {
+                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            }
+        case "open_report", "open_file", "view_result":
+            if let path = job.result?.outputPath {
+                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            }
+        case "export_code", "export_pdf", "export_source":
+            if let path = job.result?.outputPath {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            }
+        case "open_project":
+            if let dir = job.result?.metadata["outputDirectory"] {
+                NSWorkspace.shared.open(URL(fileURLWithPath: dir))
+            }
+        case "suggest_edits":
+            NotificationCenter.default.post(
+                name: .miraChipPromptSelected,
+                object: nil,
+                userInfo: ["prompt": "Suggest improvements for the \(job.type.rawValue.lowercased()) I just built: \(job.prompt)"]
+            )
+        case "summarize":
+            NotificationCenter.default.post(
+                name: .miraChipPromptSelected,
+                object: nil,
+                userInfo: ["prompt": "Create a concise executive summary of the research report: \(job.result?.summary ?? job.prompt)"]
+            )
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - Agent Detail View
+
+struct AgentDetailView: View {
+    let jobId: UUID
+    @ObservedObject var store: AgentJobStore
+    @Environment(\.dismiss) private var dismiss
+
+    private var job: AgentJob? { store.job(id: jobId) }
+
+    var body: some View {
+        if let job = job {
             ZStack {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(accent.opacity(0.12))
-                    .frame(width: 30, height: 30)
-                Image(systemName: task.toolIcon)
-                    .font(.system(size: 12))
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    detailHeader(job)
+                    Divider().background(Color.white.opacity(0.07))
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if let result = job.result {
+                                resultSection(result)
+                            }
+                            if let err = job.errorMessage {
+                                errorSection(err)
+                            }
+                            stepsTimeline(job.steps)
+                            if job.status == .completed {
+                                actionsSection(job)
+                            }
+                        }
+                        .padding(20)
+                    }
+                }
+            }
+        }
+    }
+
+    private func detailHeader(_ job: AgentJob) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(accent.opacity(0.15))
+                    .frame(width: 34, height: 34)
+                Image(systemName: job.type.icon)
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(accent)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(task.prompt)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
-                    .lineLimit(1)
-                Text(task.reply)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(job.type.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(job.prompt)
                     .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.4))
-                    .lineLimit(2)
+                    .foregroundColor(.white.opacity(0.35))
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "clock.fill")
+            statusPill(job.status)
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
                     .font(.system(size: 11))
-                    .foregroundColor(task.isCompleted
-                        ? Color(red: 0.20, green: 0.84, blue: 0.29)
-                        : .orange)
-                Text(task.relativeTime)
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.3))
+                    .foregroundColor(.white.opacity(0.30))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .padding(10)
-        .background(surface)
-        .cornerRadius(10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
     }
 
-    // MARK: - Run task
-
-    @MainActor
-    private func runAgentTask() async {
-        let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, !isRunning, !miraState.effectiveAPIKey.isEmpty else { return }
-
-        input = ""
-        isRunning = true
-
-        // Journal every agent run against the most recently active project so
-        // hasActiveUserSession is accurate and Phase 11 scheduler guards hold.
-        let activeProjectId = ProjectEngine.shared.activeProjects.first?.id
-        if let pid = activeProjectId {
-            ProjectEngine.shared.startSession(projectId: pid, trigger: .userCommand)
+    private func statusPill(_ status: AgentJobStatus) -> some View {
+        let color: Color
+        switch status {
+        case .completed:       color = green
+        case .running:         color = accent
+        case .failed:          color = red
+        case .cancelled:       color = .white.opacity(0.3)
+        case .queued:          color = orange
+        case .waitingForInput: color = orange
         }
+        return Text(status.displayName)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(color.opacity(0.14))
+            .clipShape(Capsule())
+    }
 
-        do {
-            let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: miraState.effectiveAPIKey)
-            if let pid = activeProjectId {
-                ProjectEngine.shared.endSession(projectId: pid,
-                                                summary: result.reply.isEmpty ? nil : result.reply)
+    private func resultSection(_ result: AgentJobResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            label("Result")
+            Text(result.summary)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.80))
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let path = result.outputPath {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc")
+                        .font(.system(size: 10))
+                        .foregroundColor(accent.opacity(0.6))
+                    Text(URL(fileURLWithPath: path).lastPathComponent)
+                        .font(.system(size: 11))
+                        .foregroundColor(accent.opacity(0.8))
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Open") { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(accent)
+                        .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(accent.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
             }
-            taskStore.add(
-                prompt: prompt,
-                reply: result.reply,
-                toolsUsed: result.toolsUsed,
-                completed: result.requiresConfirmation == nil
-            )
-        } catch {
-            if let pid = activeProjectId {
-                ProjectEngine.shared.endSession(projectId: pid, summary: nil)
-            }
-            taskStore.add(prompt: prompt, reply: "Error: \(error.localizedDescription)", toolsUsed: [], completed: false)
         }
+    }
 
-        isRunning = false
+    private func errorSection(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            label("Error")
+            Text(message)
+                .font(.system(size: 12))
+                .foregroundColor(red.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(10)
+                .background(red.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+    }
+
+    private func stepsTimeline(_ steps: [AgentJobStep]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            label("Timeline")
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(steps.enumerated()), id: \.element.id) { idx, step in
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(spacing: 0) {
+                            stepDot(step.status)
+                            if idx < steps.count - 1 {
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(width: 1, height: 20)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .font(.system(size: 12))
+                                .foregroundColor(stepTextColor(step.status))
+                            if let log = step.log {
+                                Text(log)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.25))
+                                    .lineLimit(2)
+                            }
+                        }
+                        Spacer()
+                        if let completed = step.completedAt, let started = step.startedAt {
+                            Text("\(Int(completed.timeIntervalSince(started)))s")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.20))
+                        }
+                    }
+                    .padding(.bottom, 6)
+                }
+            }
+        }
+    }
+
+    private func stepDot(_ status: AgentJobStatus) -> some View {
+        let color: Color
+        switch status {
+        case .completed: color = green
+        case .running:   color = accent
+        case .failed:    color = red
+        default:         color = .white.opacity(0.15)
+        }
+        return Circle()
+            .fill(color)
+            .frame(width: 7, height: 7)
+            .padding(.top, 4)
+    }
+
+    private func stepTextColor(_ status: AgentJobStatus) -> Color {
+        switch status {
+        case .completed: return .white.opacity(0.75)
+        case .running:   return .white
+        case .failed:    return red
+        default:         return .white.opacity(0.30)
+        }
+    }
+
+    private func actionsSection(_ job: AgentJob) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            label("Actions")
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(job.actions) { action in
+                    ActionBubble(action: action, job: job)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(.white.opacity(0.25))
+            .kerning(0.8)
     }
 }
