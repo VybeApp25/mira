@@ -154,7 +154,9 @@ final class NotchManager {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: restartWork)
             }
             collapseWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+            // 600ms grace period — long enough for the user to move from the nav bar
+            // to a button at the bottom of the expanded panel without the island vanishing.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.60, execute: work)
         }
 
         hoverManager.start(activationRect: collapsedZone())
@@ -196,12 +198,14 @@ final class NotchManager {
         )
     }
 
-    /// Full expanded panel + padding — keeps the island open while user interacts.
+    /// Full expanded panel + generous padding — keeps the island open while user
+    /// interacts with buttons anywhere in the panel, including at the bottom edge.
     private func expandedZone() -> CGRect {
-        let pad: CGFloat = 20
-        let s   = geometry.screen
-        let w   = AnimationController.expandedW + pad * 2
-        let h   = AnimationController.expandedH + geometry.notchHeight + pad
+        let padH: CGFloat = 60   // horizontal slop
+        let padV: CGFloat = 50   // vertical below the panel bottom
+        let s = geometry.screen
+        let w = AnimationController.expandedW + padH * 2
+        let h = AnimationController.expandedH + geometry.notchHeight + padV
         return CGRect(
             x:      s.frame.midX - w / 2,
             y:      s.frame.maxY - h,

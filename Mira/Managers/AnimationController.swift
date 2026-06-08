@@ -47,7 +47,11 @@ final class AnimationController: ObservableObject {
 
     func collapse() {
         guard state != .collapsed else { return }
-        guard hudMode == .idle else { return }   // keep island open while agent is running
+        guard hudMode == .idle else { return }   // keep open while agent is running
+        // Keep open while the user needs to approve or answer a job — dismissing
+        // mid-decision would leave the agent suspended with no way to resume.
+        guard AgentJobStore.shared.confirmationPendingJobs.isEmpty else { return }
+        guard AgentJobStore.shared.waitingForInputJobs.isEmpty else { return }
         contentVisible = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
             self?.state = .collapsed
