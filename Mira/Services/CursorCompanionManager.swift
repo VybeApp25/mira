@@ -296,12 +296,17 @@ final class CursorCompanionManager {
     private func estimatedSize(for state: CursorCompanionState) -> CGSize {
         switch state {
         case .idle:                            return CGSize(width: 1, height: 1)
-        case .reply:                           return CGSize(width: 240, height: 52)
-        case .agentRunning:                    return CGSize(width: 240, height: 90)
-        case .question(_, let opts, _):        return CGSize(width: 240, height: CGFloat(56 + opts.count * 40))
-        case .confirmation:                    return CGSize(width: 240, height: 108)
-        case .success(_, let a):               return CGSize(width: 240, height: a.isEmpty ? 52 : CGFloat(52 + 38))
-        case .error(_, _, let a):              return CGSize(width: 240, height: a.isEmpty ? 56 : CGFloat(56 + 38))
+        case .reply(let t):
+            // Estimate height based on character count at ~300pt wide, ~19pt per line
+            let charsPerLine: Double = 38
+            let lines = max(1, ceil(Double(t.count) / charsPerLine))
+            let h = lines * 22 + 32     // 22pt per line + padding
+            return CGSize(width: 300, height: h)
+        case .agentRunning:                    return CGSize(width: 300, height: 90)
+        case .question(_, let opts, _):        return CGSize(width: 300, height: CGFloat(56 + opts.count * 40))
+        case .confirmation:                    return CGSize(width: 300, height: 108)
+        case .success(_, let a):               return CGSize(width: 300, height: a.isEmpty ? 52 : CGFloat(52 + 38))
+        case .error(_, _, let a):              return CGSize(width: 300, height: a.isEmpty ? 56 : CGFloat(56 + 38))
         }
     }
 

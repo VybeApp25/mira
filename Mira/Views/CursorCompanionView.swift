@@ -26,7 +26,8 @@ struct CursorCompanionView: View {
                 Color.clear.frame(width: 1, height: 1)
 
             case .reply(let text):
-                replyCard(text: text)
+                TypewriterReplyCard(text: text, isPinned: $isPinned,
+                                    tailOnLeft: tailOnLeft, onAction: onAction)
 
             case .agentRunning(let title, let step, let current, let total, let progress):
                 agentRunningCard(title: title, step: step,
@@ -45,26 +46,9 @@ struct CursorCompanionView: View {
                 errorCard(message: message, actions: actions)
             }
         }
-        .frame(width: 240)
+        // Reply card self-sizes; all other cards use 300pt wide
+        .frame(width: state.isReply ? nil : 300)
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    // MARK: - Reply
-
-    private func replyCard(text: String) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(accent).frame(width: 5, height: 5)
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.92))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            pin
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .background(card)
     }
 
     // MARK: - Agent Running
@@ -308,5 +292,111 @@ private struct PulseDot: View {
                 .frame(width: 6, height: 6)
         }
         .onAppear { if !reduceMotion { pulsing = true } }
+    }
+}
+
+// MARK: - Typewriter Reply Card
+
+/// Full-width reply bubble with typewriter animation.
+/// Reveals the complete response character-by-character next to the cursor.
+private struct TypewriterReplyCard: View {
+    let text: String
+    @Binding var isPinned: Bool
+    let tailOnLeft: Bool
+    let onAction: (String) -> Void
+
+    @State private var displayed = ""
+    @State private var cursor    = true    // blinking cursor
+    @State private var done      = false
+
+    // ~40 chars/second feels natural for reading-speed reveal
+    private let charsPerSecond: Double = 40
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 8) {
+                // Mira dot
+                Circle()
+                    .fill(accent)
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 5)
+
+                // Typewriter text + blinking cursor
+                (Text(displayed) + (done ? Text("") : Text(cursor ? "▋" : " ")
+                    .foregroundColor(accent.opacity(0.8))))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.white.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Pin button — top-right
+                Button {
+                    isPinned.toggle()
+                    CursorCompanionTelemetry.shared.pinToggled(pinned: isPinned)
+                } label: {
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 9))
+                        .foregroundColor(isPinned ? accent : .white.opacity(0.20))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+        }
+        .background(bubbleCard(tailOnLeft: tailOnLeft))
+        .onAppear { startTypewriter() }
+        .onChange(of: text) { _ in
+            displayed = ""
+            done      = false
+            startTypewriter()
+        }
+    }
+
+    private func startTypewriter() {
+        // Blinking cursor timer
+        Task {
+            while !done {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                cursor.toggle()
+            }
+        }
+
+        // Character reveal loop
+        Task {
+            let chars = Array(text)
+            let delay = UInt64(1_000_000_000 / charsPerSecond)
+            for ch in chars {
+                try? await Task.sleep(nanoseconds: delay)
+                displayed.append(ch)
+            }
+            done = true
+            cursor = false
+        }
+    }
+
+    // Speech bubble card with tail
+    private func bubbleCard(tailOnLeft: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(surface.opacity(0.97))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+            GeometryReader { geo in
+                let midY = geo.size.height / 2
+                Path { p in
+                    if tailOnLeft {
+                        p.move(to: CGPoint(x: 0,         y: midY - 5))
+                        p.addLine(to: CGPoint(x: -9,     y: midY))
+                        p.addLine(to: CGPoint(x: 0,      y: midY + 5))
+                    } else {
+                        p.move(to: CGPoint(x: geo.size.width,     y: midY - 5))
+                        p.addLine(to: CGPoint(x: geo.size.width + 9, y: midY))
+                        p.addLine(to: CGPoint(x: geo.size.width,  y: midY + 5))
+                    }
+                }
+                .fill(surface.opacity(0.97))
+            }
+        }
+        .shadow(color: .black.opacity(0.45), radius: 20, x: 0, y: 6)
     }
 }

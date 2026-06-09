@@ -42,6 +42,11 @@ enum CursorCompanionState: Equatable {
     case success(title: String, actions: [CompanionActionSpec])
     case error(message: String, recoverable: Bool, actions: [CompanionActionSpec])
 
+    var isReply: Bool {
+        if case .reply = self { return true }
+        return false
+    }
+
     var isInteractive: Bool {
         switch self {
         case .question, .confirmation:  return true
@@ -52,7 +57,7 @@ enum CursorCompanionState: Equatable {
 
     var autoDismissDelay: TimeInterval? {
         switch self {
-        case .reply:              return 4
+        case .reply(let t):       return max(8, Double(t.count) * 0.04 + 3) // scales with length
         case .success:            return 6
         case .error(_, false, _): return 8
         default:                  return nil

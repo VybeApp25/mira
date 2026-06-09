@@ -94,8 +94,11 @@ class ScreenCaptureService {
     // MARK: - Capture
 
     func captureMainDisplay() async throws -> NSImage {
-        guard !Self.permissionDenied else {
-            throw MiraError.api("Screen Recording permission denied.")
+        // Reset permissionDenied so a new attempt can succeed after the user
+        // grants/re-grants permission in System Settings. Without this, one
+        // failed attempt permanently blocks all subsequent captures this session.
+        if Self.permissionDenied {
+            Self.permissionDenied = false
         }
 
         do {
