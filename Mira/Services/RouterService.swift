@@ -460,7 +460,12 @@ final class RouterService: ObservableObject {
          "read my screen", "look at my screen", "analyze my screen", "analyze this screen",
          "what do you see", "explain this", "translate this", "summarize this",
          "where do i click", "show me where", "what's open on",
-         "describe what's on", "what's on screen"].contains { lower.contains($0) }
+         "describe what's on", "what's on screen",
+         // "can you see my screen?", "see my screen", "do you see", etc.
+         "can you see", "see my screen", "do you see", "can you view",
+         "view my screen", "you see my", "see the screen", "see what's",
+         "see what i", "show my screen", "what's happening on",
+         "look at what", "see this", "what is this"].contains { lower.contains($0) }
     }
 
     private func matchesWebsiteBuilder(_ lower: String) -> Bool {
@@ -591,14 +596,20 @@ final class RouterService: ObservableObject {
         apiKey:  String,
         capture: ScreenCaptureService
     ) async -> RouteResult {
-        guard CGPreflightScreenCaptureAccess() else {
-            return .permission("Screen Recording lets Mira see your screen to show you where to click.",
-                               for: .screenRecording)
-        }
+        // Do NOT use CGPreflightScreenCaptureAccess() — it is unreliable on
+        // macOS Sequoia and returns false even when permission is granted.
+        // Just attempt the capture and let SCK surface the real error.
         let screenshot = try? await capture.captureMainDisplay()
         let claude     = ClaudeService(apiKey: apiKey)
-        let text       = (try? await claude.ask(prompt: prompt, screenshot: screenshot))
-                         ?? "I couldn't process your screen request."
+
+        // Always pass the screenshot when available — this is what "screen-aware" means.
+        let text = (try? await claude.ask(
+            prompt: prompt,
+            screenshot: screenshot,
+            system: "You are Mira, a screen-aware Mac assistant. You CAN see the user's screen — a screenshot is attached to this message. Describe what you see accurately. Be concise and direct.",
+            maxTokensOverride: 600
+        )) ?? "I couldn't read your screen. Make sure Screen Recording is enabled for Mira in System Settings → Privacy & Security."
+
         var target: GuidanceTarget? = nil
         if let img = screenshot {
             target = try? await claude.locateGuidanceTarget(goal: prompt, in: img)
@@ -614,6 +625,20 @@ final class RouterService: ObservableObject {
         capture: ScreenCaptureService,
         route:   MiraRoute
     ) async -> RouteResult {
+        // For general reasoning (higherModel), use Claude directly with a screenshot
+        // so Mira can actually see the screen. The TypeScript agent is text-only
+        // (Composio integrations) and should only be used for integration routes.
+        if route == .higherModel {
+            let screenshot = try? await capture.captureMainDisplay()
+            let claude     = ClaudeService(apiKey: apiKey)
+            let text       = (try? await claude.ask(
+                prompt: prompt,
+                screenshot: screenshot,
+                maxTokensOverride: 600
+            )) ?? "I had trouble processing that request."
+            return .reply(text, route: route)
+        }
+
         let online = await checkAgentHealth()
         if online {
             do {
