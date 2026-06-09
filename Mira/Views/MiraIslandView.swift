@@ -67,10 +67,20 @@ struct MiraIslandView: View {
         return isNew ? .briefing : .chat
     }()
     @State private var showSettings = false
+    @StateObject private var pillState = PillStateModel()
 
     private var isExpanded: Bool { animController.state == .expanded }
 
-    private var pillW: CGFloat { isExpanded ? AnimationController.expandedW : geometry.notchWidth  }
+    // True whenever any non-idle visual indicator should appear in the collapsed pill.
+    private var collapsedIndicatorActive: Bool {
+        pillState.mode != .idle
+    }
+
+    // Widen the pill to fit label + indicator when active.
+    private var pillW: CGFloat {
+        if isExpanded { return AnimationController.expandedW }
+        return collapsedIndicatorActive ? geometry.notchWidth + 110 : geometry.notchWidth
+    }
     private var pillH: CGFloat { isExpanded ? AnimationController.expandedH : geometry.notchHeight }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
     private var botR:  CGFloat { isExpanded ? AnimationController.expandedBotR : AnimationController.collapsedBotR }
@@ -91,6 +101,28 @@ struct MiraIslandView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(state: miraState)
         }
+        // Sync existing RealtimeState → PillStateModel (debounced)
+        .onChange(of: miraState.realtimeState) { _, new in
+            if case .error = new { pillState.postEvent(.error) }
+            pillState.syncFromRealtime(new, isListening: voice.isListening, isLoading: miraState.isLoading)
+        }
+        .onChange(of: voice.isListening) { _, new in
+            if new { pillState.postEvent(.listening) }
+            pillState.syncFromRealtime(miraState.realtimeState, isListening: new, isLoading: miraState.isLoading)
+        }
+        .onChange(of: miraState.isLoading) { _, new in
+            pillState.syncFromRealtime(miraState.realtimeState, isListening: voice.isListening, isLoading: new)
+        }
+        .onChange(of: animController.hudMode) { _, new in
+            if new == .done    { pillState.postEvent(.complete) }
+            if new == .blocked { pillState.postEvent(.error)    }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miraActivateVoice)) { _ in
+            pillState.postEvent(.shortcut)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miraActivateText)) { _ in
+            pillState.postEvent(.shortcut)
+        }
     }
 
     // MARK: - Pill container
@@ -107,10 +139,46 @@ struct MiraIslandView: View {
                     .opacity(animController.contentVisible ? 0 : 1)
                     .animation(.easeInOut(duration: 0.10), value: animController.contentVisible)
             }
+
+            // Always-mounted SharedStatusView — never recreated on expand/collapse because it
+            // lives at a stable ZStack slot above the content branches.
+            // Collapsed: trailing edge, vertically centered.
+            // Expanded:  top-right area of nav bar (88 pt from trailing to clear gear/mic).
+            SharedStatusView(pillState: pillState, isCompact: !isExpanded)
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: isExpanded ? .topTrailing : .trailing)
+                .padding(.trailing, isExpanded ? 88 : 12)
+                .padding(.top, isExpanded ? 12 : 0)
+                .allowsHitTesting(false)
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.10)
+                                 : .spring(response: 0.32, dampingFraction: 0.78),
+                    value: isExpanded
+                )
+
+            // Event toast — bottom of expanded pill only
+            VStack {
+                Spacer()
+                EventToastView(event: pillState.event)
+                    .padding(.bottom, 8)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(isExpanded ? 1 : 0)
+            .animation(.easeInOut(duration: 0.12), value: isExpanded)
+            .animation(.spring(response: 0.25, dampingFraction: 0.80), value: pillState.event)
+            .allowsHitTesting(false)
         }
         .frame(width: pillW, height: pillH)
         .clipShape(IslandShape(topRadius: topR, bottomRadius: botR))
-        .shadow(color: isExpanded ? .black.opacity(0.70) : .clear, radius: 20, x: 0, y: 22)
+        // Colored halo under the pill when an active state is present; fades when idle.
+        .shadow(
+            color: isExpanded
+                ? .black.opacity(0.70)
+                : collapsedAccent.opacity(collapsedIndicatorActive && !reduceMotion ? 0.45 : 0),
+            radius: isExpanded ? 20 : 10,
+            x: 0,
+            y: isExpanded ? 22 : 6
+        )
         .animation(
             reduceMotion
                 ? .easeInOut(duration: 0.10)
@@ -118,6 +186,11 @@ struct MiraIslandView: View {
                     ? .spring(response: 0.40, dampingFraction: 0.74, blendDuration: 0)
                     : .spring(response: 0.30, dampingFraction: 0.82, blendDuration: 0)),
             value: isExpanded
+        )
+        // Animate the width change when the collapsed indicator activates/deactivates.
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
+            value: collapsedIndicatorActive
         )
     }
 
@@ -127,52 +200,61 @@ struct MiraIslandView: View {
 
     @ObservedObject private var hudVM = HUDViewModel.shared
 
-    private var collapsedContent: some View {
-        HStack(spacing: 7) {
-            // Animated indicator (voice/realtime)
-            switch miraState.realtimeState {
-            case .thinking:
-                CollapsedThinkingDots()
-            case .speaking:
-                LiveBars(color: Color(red: 0.75, green: 0.35, blue: 0.95))
-            case .recording:
-                CollapsedRecordingDot()
-            case .connecting, .transcribing:
-                CollapsedConnectingDot()
-            default:
-                if voice.isListening { LiveBars() }
-            }
-
-            // HUD status text — shown for agent/tool/search routes
-            if !hudVM.statusText.isEmpty, case .idle = miraState.realtimeState {
-                Text(hudVM.statusText)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.80))
-                    .lineLimit(1)
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.18), value: hudVM.statusText)
-            }
-
-            // Agent job count badge
-            if !taskStore.tasks.isEmpty, case .idle = miraState.realtimeState, hudVM.statusText.isEmpty {
-                Text("\(taskStore.tasks.count)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4).padding(.vertical, 2)
-                    .background(Color(red: 0.29, green: 0.62, blue: 1.0))
-                    .clipShape(Capsule())
-            }
+    // Human-readable label for the active state shown on the left of the collapsed pill.
+    private var collapsedStateLabel: String? {
+        switch miraState.realtimeState {
+        case .connecting:              return "Connecting"
+        case .recording:               return "Listening"
+        case .transcribing:            return "Processing"
+        case .thinking:                return "Thinking"
+        case .speaking:                return "Speaking"
+        case .error:                   return nil
+        case .idle:
+            if voice.isListening   { return "Listening" }
+            if miraState.isLoading { return "Thinking"  }
+            return nil
         }
-        .padding(.horizontal, 10)
+    }
+
+    private var collapsedContent: some View {
+        HStack(spacing: 0) {
+            // Left: active state label, or HUD status text, or agent badge when idle
+            Group {
+                if let label = collapsedStateLabel {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
+                } else if !hudVM.statusText.isEmpty {
+                    Text(hudVM.statusText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.80))
+                        .lineLimit(1)
+                        .transition(.opacity)
+                } else if !taskStore.tasks.isEmpty {
+                    Text("\(taskStore.tasks.count)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(Color(red: 0.29, green: 0.62, blue: 1.0))
+                        .clipShape(Capsule())
+                        .transition(.opacity)
+                }
+            }
+            // SharedStatusView provides the right-side animated indicator (in the ZStack overlay)
+        }
+        .padding(.horizontal, 12)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: miraState.realtimeState)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: miraState.isLoading)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voice.isListening)
     }
 
     private var collapsedAccent: Color {
-        switch miraState.realtimeState {
-        case .thinking:                   return Color(red: 1.0,  green: 0.75, blue: 0.20)
-        case .speaking:                   return Color(red: 0.75, green: 0.35, blue: 0.95)
-        case .recording:                  return Color(red: 0.20, green: 0.84, blue: 0.29)
-        case .connecting, .transcribing:  return Color(red: 0.29, green: 0.62, blue: 1.0)
-        default:                          return Color(red: 0.29, green: 0.62, blue: 1.0)
+        switch pillState.mode {
+        case .thinking: return miraViolet
+        case .working:  return miraViolet
+        case .speaking: return miraTeale
+        case .idle:     return miraTeale
         }
     }
 
@@ -597,23 +679,39 @@ private struct CombinedProjectsView: View {
 
 private struct LiveBars: View {
     var color: Color = Color.red.opacity(0.80)
+
+    // Organic waveform: 5 bars with varied heights/delays so the shape looks alive.
+    private static let maxHeights: [CGFloat] = [7,  12, 16, 10,  6]
+    private static let delays:     [Double]  = [0.00, 0.14, 0.07, 0.21, 0.10]
+    private static let durations:  [Double]  = [0.38, 0.44, 0.36, 0.42, 0.40]
+
     var body: some View {
         HStack(spacing: 2) {
-            Bar(delay: 0.00, color: color)
-            Bar(delay: 0.12, color: color)
-            Bar(delay: 0.24, color: color)
+            ForEach(0..<5, id: \.self) { i in
+                Bar(delay:    Self.delays[i],
+                    maxH:     Self.maxHeights[i],
+                    duration: Self.durations[i],
+                    color:    color)
+            }
         }
     }
+
     private struct Bar: View {
-        let delay: Double
-        let color: Color
-        @State private var h: CGFloat = 4
+        let delay:    Double
+        let maxH:     CGFloat
+        let duration: Double
+        let color:    Color
+        @State private var h: CGFloat = 3
         var body: some View {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(color)
-                .frame(width: 3, height: h)
+                .frame(width: 2.5, height: h)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: 0.40).repeatForever(autoreverses: true).delay(delay)) { h = 14 }
+                    withAnimation(
+                        .easeInOut(duration: duration)
+                        .repeatForever(autoreverses: true)
+                        .delay(delay)
+                    ) { h = maxH }
                 }
         }
     }
@@ -621,26 +719,30 @@ private struct LiveBars: View {
 
 // MARK: - Collapsed state indicators
 
-private struct CollapsedThinkingDots: View {
+/// Four amber dots that bounce up/down in a staggered wave — used for thinking states.
+private struct ThinkingBubbles: View {
+    private let delays: [Double] = [0.00, 0.13, 0.26, 0.39]
     var body: some View {
-        HStack(spacing: 3) {
-            Dot(delay: 0.00)
-            Dot(delay: 0.18)
-            Dot(delay: 0.36)
+        HStack(spacing: 3.5) {
+            ForEach(0..<4, id: \.self) { i in
+                Bubble(delay: delays[i])
+            }
         }
     }
-    private struct Dot: View {
+    private struct Bubble: View {
         let delay: Double
-        @State private var scale: CGFloat = 0.5
+        @State private var up = false
         var body: some View {
             Circle()
                 .fill(Color(red: 1.0, green: 0.75, blue: 0.20))
-                .frame(width: 4, height: 4)
-                .scaleEffect(scale)
+                .frame(width: 5, height: 5)
+                .offset(y: up ? -3.5 : 3.5)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(delay)) {
-                        scale = 1.0
-                    }
+                    withAnimation(
+                        .easeInOut(duration: 0.38)
+                        .repeatForever(autoreverses: true)
+                        .delay(delay)
+                    ) { up = true }
                 }
         }
     }

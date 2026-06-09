@@ -38,6 +38,7 @@
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		4F78913E764350E22C107F25 /* AgentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */; };
 		5115F2CE84E84A8009B70C81 /* AgentResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */; };
+		516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 714E5F324015327B7790838A /* SharedStatusView.swift */; };
 		5170064F0268D08C8AB32BD4 /* WebsiteHealthAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 463BF5B30736DAB269B90717 /* WebsiteHealthAgent.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */; };
@@ -85,6 +86,7 @@
 		A51FF4A8B940A0489C642CCE /* HoverTooltipController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */; };
 		A6BCC47EFE83944A8B55BDC4 /* CorrelationInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = BADFDB17A53387AA9FBC4867 /* CorrelationInsight.swift */; };
 		A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E550071C015B2092E04A1 /* WakeWordService.swift */; };
+		A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0ACABB44793DCD72302E5A /* AudioCueService.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
 		B07910E3464FCC8CF14C2852 /* CoordinatorSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26A0E1791C3F80BB04E5A24 /* CoordinatorSimulation.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
@@ -118,6 +120,8 @@
 		E6A689A9A3667D0837875C10 /* CausalInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3263BDB62DACABB0645CE6 /* CausalInsight.swift */; };
 		E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401567F80D6C5B2881BDD843 /* NotchManager.swift */; };
 		E94F6F02EDBDAB3EACF251DB /* HoverDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93DBC03A1DAE3A288E46D27D /* HoverDetectionService.swift */; };
+		EA34E17889F5809A0D65D945 /* PillStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03C7457034E97EA40219216 /* PillStateModel.swift */; };
+		EC74F404278D05BF53DE5BB0 /* EventToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6995F4FEBB36CE47DC199EA1 /* EventToastView.swift */; };
 		EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */; };
 		F06EAD3B5F62AAC1380A9EC8 /* OutcomeEvaluation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F7A089D0333A61E16D3BBA4 /* OutcomeEvaluation.swift */; };
 		F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F06E43F02224F648C3BC05E6 /* AppDelegate.swift */; };
@@ -183,10 +187,12 @@
 		63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		641B7CB66B672FC642BC96AE /* AttentionDirective.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionDirective.swift; sourceTree = "<group>"; };
 		6688CC8565B3DE43E7FDD327 /* WorkspaceDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDashboardView.swift; sourceTree = "<group>"; };
+		6995F4FEBB36CE47DC199EA1 /* EventToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventToastView.swift; sourceTree = "<group>"; };
 		6AAB411962D3D66F94EE5483 /* MiraPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraPanel.swift; sourceTree = "<group>"; };
 		6B0C9E1FD8F90CE47EF00C91 /* GuidanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceModels.swift; sourceTree = "<group>"; };
 		6B1D5BB4ABB1EFCD6F34122C /* CorrelationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrelationEngine.swift; sourceTree = "<group>"; };
 		6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTooltipController.swift; sourceTree = "<group>"; };
+		714E5F324015327B7790838A /* SharedStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStatusView.swift; sourceTree = "<group>"; };
 		724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementService.swift; sourceTree = "<group>"; };
 		7453264472C5BA542F725096 /* ImprovementOutcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImprovementOutcome.swift; sourceTree = "<group>"; };
 		79790F66243B041B7E65898D /* HomeTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTabView.swift; sourceTree = "<group>"; };
@@ -238,10 +244,12 @@
 		D6A379AF3382596E92921264 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDView.swift; sourceTree = "<group>"; };
 		DA0389949E9946918CEE0916 /* Mira.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mira.entitlements; sourceTree = "<group>"; };
+		E03C7457034E97EA40219216 /* PillStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PillStateModel.swift; sourceTree = "<group>"; };
 		E5298E4DE78C50A514F1EF15 /* HoverInsightModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInsightModel.swift; sourceTree = "<group>"; };
 		E60A3BC0F1CEC3BC60BC98A7 /* WorkspaceReviewAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReviewAgent.swift; sourceTree = "<group>"; };
 		E814E13E9DB836D50FA2620E /* AgentHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDView.swift; sourceTree = "<group>"; };
 		EABB60070E502F8E675BD22D /* PointerOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointerOverlay.swift; sourceTree = "<group>"; };
+		ED0ACABB44793DCD72302E5A /* AudioCueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCueService.swift; sourceTree = "<group>"; };
 		F06E43F02224F648C3BC05E6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F41806DE60A2909E73385AE1 /* HoverInsightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInsightManager.swift; sourceTree = "<group>"; };
 		F7230251B147A0AA2C01D691 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
@@ -357,6 +365,7 @@
 				2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */,
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */,
+				ED0ACABB44793DCD72302E5A /* AudioCueService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
 				3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
@@ -424,6 +433,7 @@
 				AA5914547C8201C6C6241551 /* MiraState.swift */,
 				5F7A089D0333A61E16D3BBA4 /* OutcomeEvaluation.swift */,
 				99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */,
+				E03C7457034E97EA40219216 /* PillStateModel.swift */,
 				CF3ECA23BA4BB2FC05E4365B /* PolicyRecommendation.swift */,
 				4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */,
 				04F1B30EBD78983473632ED6 /* ProjectModels.swift */,
@@ -455,6 +465,7 @@
 				077436ECE19C7096BAC241EC /* BriefingView.swift */,
 				4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */,
 				803FFD5EEBDE9BDFAF14C988 /* CursorCompanionView.swift */,
+				6995F4FEBB36CE47DC199EA1 /* EventToastView.swift */,
 				9CDE4D9FFAA2573FD2BE0E42 /* GuidanceOverlayView.swift */,
 				79790F66243B041B7E65898D /* HomeTabView.swift */,
 				A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */,
@@ -470,6 +481,7 @@
 				AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */,
 				2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */,
 				F7668116B1E1B08C2A630FA1 /* SettingsView.swift */,
+				714E5F324015327B7790838A /* SharedStatusView.swift */,
 				9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */,
 				1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */,
 				6688CC8565B3DE43E7FDD327 /* WorkspaceDashboardView.swift */,
@@ -579,6 +591,7 @@
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				0F2017378D1394AAD7234E25 /* AttentionDirective.swift in Sources */,
 				533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */,
+				A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */,
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
 				23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */,
@@ -597,6 +610,7 @@
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,
 				9F6476CCB1151DDCBE55BCC1 /* ErrorService.swift in Sources */,
+				EC74F404278D05BF53DE5BB0 /* EventToastView.swift in Sources */,
 				57A3C2DE8BEF627CB6B8AC54 /* EvidenceEvaluator.swift in Sources */,
 				00A95EDCC39057E3E0D58A2F /* FailureMemory.swift in Sources */,
 				01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */,
@@ -641,6 +655,7 @@
 				672A2547217E0BAB12193C2E /* OutputStore.swift in Sources */,
 				E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */,
 				4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */,
+				EA34E17889F5809A0D65D945 /* PillStateModel.swift in Sources */,
 				E547C59E6FE420CA4B4922B3 /* PointerOverlay.swift in Sources */,
 				5BC999BCDF2CB2E5859ED059 /* PolicyEngine.swift in Sources */,
 				75CB230870D4445F41C4E423 /* PolicyRecommendation.swift in Sources */,
@@ -660,6 +675,7 @@
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
+				516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */,
 				BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */,
 				29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
