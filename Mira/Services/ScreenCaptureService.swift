@@ -75,17 +75,20 @@ class ScreenCaptureService {
 
     // MARK: - Launch
 
-    /// Call once at launch. Only prompts if permission hasn't been granted yet.
+    /// Call once at launch. Records preflight state; does NOT prompt —
+    /// SCK itself handles the permission request on first capture attempt.
+    /// Calling CGRequestScreenCaptureAccess() at launch is unreliable on
+    /// macOS Sequoia and causes a confusing prompt loop when permission
+    /// is already granted to a prior build.
     static func requestAccessIfNeeded() {
         guard !permissionDenied else { return }
+        // CGPreflightScreenCaptureAccess is unreliable on Sequoia — it can
+        // return false even when permission IS granted. We record it for
+        // classification purposes only; we do not use it as a gate.
         preflightGranted = CGPreflightScreenCaptureAccess()
-        guard !preflightGranted else {
-            #if DEBUG
-            print("[ScreenCapture] TCC preflight: granted — identity: \(Bundle.main.executablePath ?? "unknown")")
-            #endif
-            return
-        }
-        CGRequestScreenCaptureAccess()
+        #if DEBUG
+        print("[ScreenCapture] TCC preflight: \(preflightGranted) — identity: \(Bundle.main.executablePath ?? "unknown")")
+        #endif
     }
 
     // MARK: - Capture
@@ -129,15 +132,18 @@ class ScreenCaptureService {
             switch state {
             case .available:
                 throw MiraError.api("Screen capture failed: \(error.localizedDescription)")
-            case .identityMismatch, .denied:
+            case .identityMismatch:
+                // Permission IS granted (toggle is on) but to a different build identity.
+                // Do NOT call CGRequestScreenCaptureAccess() — that opens System Settings
+                // and looks like Mira is asking for permission again even though the toggle
+                // is already on. Just tell the user to remove and re-add this build.
                 Self.permissionDenied = true
-                // Re-prompt regardless of cause: opens the permission dialog or the
-                // "open System Settings" banner for the currently-running binary.
-                CGRequestScreenCaptureAccess()
-                let message: String = state == .identityMismatch
-                    ? "Screen Recording is granted to a different version of Mira. Re-approve this version in System Settings › Privacy & Security › Screen Recording, then relaunch."
-                    : "Screen Recording permission required. Grant access in System Settings › Privacy & Security › Screen Recording, then relaunch Mira."
-                throw MiraError.api(message)
+                throw MiraError.api("Screen Recording is on but was approved for a different version of Mira. In System Settings → Privacy & Security → Screen Recording, remove Mira and add it again, then relaunch.")
+            case .denied:
+                Self.permissionDenied = true
+                // Genuinely not granted — open System Settings to the right pane.
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                throw MiraError.api("Screen Recording permission required. Grant access in System Settings → Privacy & Security → Screen Recording, then relaunch Mira.")
             }
         }
     }
