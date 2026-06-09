@@ -3,6 +3,7 @@ import SwiftUI
 struct GuidanceOverlayView: View {
     let guidanceFrame: GuidanceFrame
     let screenSize: CGSize
+    var sharpieAnnotations: [SharpieAnnotation] = []
 
     @State private var opacity: Double = 0
 
@@ -11,8 +12,14 @@ struct GuidanceOverlayView: View {
     var body: some View {
         ZStack {
             Color.clear
+
+            // Sharpie strokes underneath labels — replace the plain box when present
+            if !sharpieAnnotations.isEmpty {
+                SharpieOverlayView(annotations: sharpieAnnotations, screenSize: screenSize)
+            }
+
             ForEach(guidanceFrame.targets, id: \.id) { target in
-                highlightBox(target)
+                if sharpieAnnotations.isEmpty { highlightBox(target) }
                 labelBadge(target)
                 explanationBadge(target)
             }

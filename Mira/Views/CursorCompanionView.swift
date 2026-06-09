@@ -13,6 +13,9 @@ struct CursorCompanionView: View {
     let state:    CursorCompanionState
     @Binding var isPinned: Bool
     let onAction: (String) -> Void
+    /// When true, the speech-bubble tail points left (bubble is right of cursor).
+    /// When false, tail points right (bubble is left of cursor).
+    var tailOnLeft: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -257,6 +260,26 @@ struct CursorCompanionView: View {
                 .fill(surface.opacity(0.95))
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.white.opacity(0.07), lineWidth: 0.5)
+            // Speech bubble tail — points toward cursor
+            GeometryReader { geo in
+                let tailW: CGFloat = 8
+                let tailH: CGFloat = 10
+                let midY = geo.size.height / 2
+                Path { p in
+                    if tailOnLeft {
+                        // Tail on left edge, pointing left
+                        p.move(to: CGPoint(x: 0, y: midY - tailW / 2))
+                        p.addLine(to: CGPoint(x: -tailH, y: midY))
+                        p.addLine(to: CGPoint(x: 0, y: midY + tailW / 2))
+                    } else {
+                        // Tail on right edge, pointing right
+                        p.move(to: CGPoint(x: geo.size.width, y: midY - tailW / 2))
+                        p.addLine(to: CGPoint(x: geo.size.width + tailH, y: midY))
+                        p.addLine(to: CGPoint(x: geo.size.width, y: midY + tailW / 2))
+                    }
+                }
+                .fill(surface.opacity(0.95))
+            }
         }
         .shadow(color: .black.opacity(0.40), radius: 18, x: 0, y: 6)
     }

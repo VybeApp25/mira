@@ -21,16 +21,39 @@ class OverlayWindowController: ObservableObject {
 
     // MARK: - Guidance overlay
 
-    func showGuidance(_ guidanceFrame: GuidanceFrame) {
+    func showGuidance(_ guidanceFrame: GuidanceFrame, sharpie: [SharpieAnnotation] = []) {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.frame
         makeWindowIfNeeded(frame: screenFrame)
 
-        let view = GuidanceOverlayView(guidanceFrame: guidanceFrame, screenSize: screenFrame.size)
+        let view = GuidanceOverlayView(
+            guidanceFrame: guidanceFrame,
+            screenSize: screenFrame.size,
+            sharpieAnnotations: sharpie
+        )
         window?.contentView = NSHostingView(rootView: view)
         window?.setFrame(screenFrame, display: true)
         window?.orderFrontRegardless()
         scheduleDismiss(after: 10)
+    }
+
+    // MARK: - Sharpie-only (no guidance box — just animated marker annotations)
+
+    func showSharpie(_ annotations: [SharpieAnnotation]) {
+        guard let screen = NSScreen.main else { return }
+        let screenFrame = screen.frame
+        makeWindowIfNeeded(frame: screenFrame)
+
+        let view = SharpieOverlayView(annotations: annotations, screenSize: screenFrame.size)
+        window?.contentView = NSHostingView(rootView: view)
+        window?.setFrame(screenFrame, display: true)
+        window?.orderFrontRegardless()
+        scheduleDismiss(after: 8)
+    }
+
+    /// Convenience: circle-annotate a rect and optionally show a guidance box too.
+    func annotate(rect: CGRect, style: SharpieStyle = .circle, color: SharpieColor = .orange) {
+        showSharpie([SharpieAnnotation(target: rect, style: style, color: color)])
     }
 
     // MARK: - Test path (Deliverable 2)

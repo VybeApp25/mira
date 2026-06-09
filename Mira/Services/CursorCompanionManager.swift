@@ -161,8 +161,9 @@ final class CursorCompanionManager {
             p.setFrame(frame, display: true, animate: true)
         }
 
-        // Follow mode: companion docks beside cursor during passive agent work
-        if case .agentRunning = newState {
+        // Follow cursor for all visible states — reply, agent, confirmation, etc.
+        // This makes the bubble feel truly attached to the cursor like HeyClicky.
+        if newState != .idle {
             startFollowing()
         } else {
             stopFollowing()
@@ -206,22 +207,19 @@ final class CursorCompanionManager {
         guard followTask == nil else { return }   // already tracking
         followTask = Task { [weak self] in
             while true {
-                try? await Task.sleep(nanoseconds: 66_000_000)  // ~15 fps
+                try? await Task.sleep(nanoseconds: 16_000_000)  // 60 fps — feels attached
                 guard let self, !Task.isCancelled else { return }
-                // Stop automatically if state leaves agentRunning
-                guard case .agentRunning = self.viewModel.state,
+                guard self.viewModel.state != .idle,
                       let p = self.panel, p.alphaValue > 0.5 else {
                     self.stopFollowing()
                     return
                 }
-                let cursor   = NSEvent.mouseLocation
-                let size     = self.estimatedSize(for: self.viewModel.state)
+                let cursor    = NSEvent.mouseLocation
+                let size      = self.estimatedSize(for: self.viewModel.state)
                 let newOrigin = self.position(for: cursor, size: size)
-                // Only move if the cursor shifted enough to warrant repositioning
-                // (avoids jitter when the cursor is nearly still)
                 let dist = hypot(newOrigin.x - p.frame.origin.x,
                                  newOrigin.y - p.frame.origin.y)
-                if dist > 3 {
+                if dist > 2 {
                     p.setFrameOrigin(newOrigin)
                 }
             }
@@ -239,7 +237,7 @@ final class CursorCompanionManager {
         guard panel == nil else { return }
 
         let vm      = viewModel
-        let content = CursorCompanionContent(viewModel: vm) { [weak self] tag in
+        let content = CursorCompanionContent(viewModel: vm, tailDir: tailDir) { [weak self] tag in
             self?.handleAction(tag: tag)
         }
 
@@ -270,10 +268,12 @@ final class CursorCompanionManager {
         // Default: right of cursor, vertically centered on cursor
         var x = cursor.x + offset
         var y = cursor.y - size.height / 2
+        var tailIsLeft = true
 
         // Flip left when near right edge
         if x + size.width + 8 > visible.maxX {
             x = cursor.x - offset - size.width
+            tailIsLeft = false
         }
         // Push down when panel top exceeds visible frame
         if y + size.height + 8 > visible.maxY {
@@ -285,6 +285,8 @@ final class CursorCompanionManager {
         }
         // Final left-edge clamp
         x = max(visible.minX + 8, x)
+
+        if tailDir.tailOnLeft != tailIsLeft { tailDir.tailOnLeft = tailIsLeft }
 
         return CGPoint(x: x, y: y)
     }
@@ -324,21 +326,33 @@ final class CursorCompanionManager {
             self?.hide()
         }
     }
+
+    // MARK: - Tail direction
+
+    private let tailDir = TailDirectionBinding()
+}
+
+// MARK: - Tail direction observable
+
+@MainActor
+final class TailDirectionBinding: ObservableObject {
+    @Published var tailOnLeft: Bool = true
 }
 
 // MARK: - SwiftUI bridge
 
 /// Thin struct that connects the view model to the view.
-/// CursorCompanionViewModel is NOT owned here — no retain cycle.
 struct CursorCompanionContent: View {
     @ObservedObject var viewModel: CursorCompanionViewModel
+    @ObservedObject var tailDir: TailDirectionBinding
     let onAction: (String) -> Void
 
     var body: some View {
         CursorCompanionView(
             state:    viewModel.state,
             isPinned: $viewModel.isPinned,
-            onAction: onAction
+            onAction: onAction,
+            tailOnLeft: tailDir.tailOnLeft
         )
     }
 }
