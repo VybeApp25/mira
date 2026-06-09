@@ -56,7 +56,8 @@ struct MiraIslandView: View {
     @ObservedObject var voice:     VoiceService
     @ObservedObject var wakeWord:  WakeWordService
     let geometry: NotchGeometry
-    @ObservedObject private var engine = ProjectEngine.shared
+    @ObservedObject private var engine   = ProjectEngine.shared
+    @ObservedObject private var pointTo  = PointToService.shared
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -72,8 +73,9 @@ struct MiraIslandView: View {
     private var isExpanded: Bool { animController.state == .expanded }
 
     // True whenever any non-idle visual indicator should appear in the collapsed pill.
+    // Also true while the PointToService cursor is in flight so the pill stays wide.
     private var collapsedIndicatorActive: Bool {
-        pillState.mode != .idle
+        pillState.mode != .idle || pointTo.isActive
     }
 
     // Widen the pill to fit label + indicator when active.
@@ -88,6 +90,14 @@ struct MiraIslandView: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.clear.ignoresSafeArea()
+            // Idle breathing glow — sits behind the pill so it bleeds out like a soft halo.
+            // Only visible when collapsed and idle; fades away the moment a state activates.
+            if !isExpanded && pillState.mode == .idle && !reduceMotion {
+                IdleBreathingGlow(width: pillW, height: pillH)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.40), value: pillState.mode)
+            }
             pill
         }
         .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
@@ -218,7 +228,7 @@ struct MiraIslandView: View {
 
     private var collapsedContent: some View {
         HStack(spacing: 0) {
-            // Left: active state label, or HUD status text, or agent badge when idle
+            // Left: active state label, or HUD status text, or agent badge, or cursor-flight badge
             Group {
                 if let label = collapsedStateLabel {
                     Text(label)
@@ -239,6 +249,19 @@ struct MiraIslandView: View {
                         .background(Color(red: 0.29, green: 0.62, blue: 1.0))
                         .clipShape(Capsule())
                         .transition(.opacity)
+                } else if pointTo.isActive {
+                    // Docked cursor badge — mirrors HeyClicky's dockedCursorBadge.
+                    // Shows a mini teal triangle + label while the agent cursor is in flight.
+                    HStack(spacing: 5) {
+                        Image(systemName: "triangle.fill")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(miraTeale)
+                            .rotationEffect(.degrees(90))
+                        Text("Pointing")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(miraTeale.opacity(0.85))
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.80, anchor: .leading)))
                 }
             }
             // SharedStatusView provides the right-side animated indicator (in the ZStack overlay)
@@ -367,6 +390,7 @@ struct MiraIslandView: View {
 
         case .running:
             AgentHUDView(hud: hudService)
+                .agentHUDPillChrome()
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.2), value: animController.hudMode)
 
@@ -775,5 +799,38 @@ private struct CollapsedConnectingDot: View {
                     opacity = 1.0
                 }
             }
+    }
+}
+
+// MARK: - Idle breathing glow
+
+// Bloom-breath halo behind the collapsed pill — mirrors HeyClicky's bloomBreathPeak pattern.
+// Uses a raised-cosine squared (gamma) curve so it lingers near zero, peaks briefly, retreats.
+private struct IdleBreathingGlow: View {
+    let width:  CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 8.0)) { ctx in
+            let t     = ctx.date.timeIntervalSinceReferenceDate
+            // 3.4 s bloom cycle — same organic rhythm as the sparkle glyph
+            let raw   = CGFloat((cos(t / 3.4 * .pi * 2) + 1) / 2)
+            let bloom = raw * raw   // gamma curve: sharp peak, long trough
+
+            RoundedRectangle(cornerRadius: height / 2 + 10)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            miraTeale.opacity(0.04 + bloom * 0.11),
+                            miraTeale.opacity(0),
+                        ],
+                        center:      .center,
+                        startRadius: 0,
+                        endRadius:   max(width, height) * 0.70
+                    )
+                )
+                .frame(width: width + 52, height: height + 30)
+                .blur(radius: 7)
+        }
     }
 }

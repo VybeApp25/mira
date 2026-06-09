@@ -87,6 +87,9 @@ final class MiraCursorManager {
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         p.contentView = NSHostingView(rootView: MiraArrowCursor())
+        // Position at cursor BEFORE showing so it never flashes at (0,0).
+        let pos = NSEvent.mouseLocation
+        p.setFrameOrigin(CGPoint(x: pos.x - 5, y: pos.y - panelSize.height + 5))
         p.orderFrontRegardless()
         panel = p
     }

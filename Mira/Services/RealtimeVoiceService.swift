@@ -237,10 +237,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         case "response.output_audio_transcript.delta":
             let delta = event["delta"] as? String ?? ""
             aiTranscript += delta
-            aiDraft       = aiTranscript
+            // Strip point tag from live display — it should never appear as spoken text
+            aiDraft = Self.stripPointTag(from: aiTranscript)
 
         case "response.output_audio_transcript.done":
-            if !aiTranscript.isEmpty { onAIMessage?(aiTranscript) }
+            let (cleanText, pt) = Self.extractPointTag(from: aiTranscript)
+            if !cleanText.isEmpty { onAIMessage?(cleanText) }
+            if let pt { PointToService.shared.point(toNormalized: pt) }
 
         // ── Tool call assembly ─────────────────────────────────────────────────
         case "response.output_item.added":
@@ -493,6 +496,37 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         playerNode.stop()
         if playEngine.isRunning { playEngine.stop() }
+    }
+
+    // MARK: - Point-tag parsing
+    // The AI can append <point x=N y=N> to direct the user's eye to a screen element.
+    // x/y are normalized 0–1 fractions from top-left.
+
+    private static let pointTagPattern =
+        try! NSRegularExpression(pattern: #"<point\s+x=([\d.]+)\s+y=([\d.]+)>"#)
+
+    /// Extracts the point tag and returns (cleaned text, optional CGPoint).
+    private static func extractPointTag(from text: String) -> (String, CGPoint?) {
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = pointTagPattern.firstMatch(in: text, range: range),
+              let xRange = Range(match.range(at: 1), in: text),
+              let yRange = Range(match.range(at: 2), in: text),
+              let x = Double(text[xRange]),
+              let y = Double(text[yRange]) else {
+            return (text, nil)
+        }
+        let cleaned = pointTagPattern
+            .stringByReplacingMatches(in: text, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (cleaned, CGPoint(x: x, y: y))
+    }
+
+    /// Strips any point tag for display purposes only.
+    private static func stripPointTag(from text: String) -> String {
+        let range = NSRange(text.startIndex..., in: text)
+        return pointTagPattern
+            .stringByReplacingMatches(in: text, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - WebSocket emit helper

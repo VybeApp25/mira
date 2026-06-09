@@ -36,6 +36,7 @@ struct IslandChatView: View {
     @State private var retryPrompt:           String?            = nil
     @State private var errorText:             String?            = nil
     @State private var streamingMsgId:        UUID?              = nil
+    @State private var isCodeMode:            Bool               = false   // Claude Code bridge
 
     @StateObject private var realtime = RealtimeVoiceService()
     private var isVoiceActive: Bool {
@@ -45,8 +46,9 @@ struct IslandChatView: View {
         }
     }
 
-    private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
-    private let surface = Color(red: 0.14, green: 0.14, blue: 0.17)
+    private let accent    = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let miraTeale = Color(red: 0.20, green: 0.85, blue: 0.75)
+    private let surface   = Color(red: 0.14, green: 0.14, blue: 0.17)
     private var claude: ClaudeService { ClaudeService(apiKey: miraState.effectiveAPIKey) }
 
     var body: some View {
@@ -177,20 +179,65 @@ struct IslandChatView: View {
             }
             .onChange(of: isLoading) { loading in
                 if loading { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
+                // Mirror to miraState so FloatingButtonService and PillStateModel see the loading state.
+                miraState.isLoading = loading
             }
         }
     }
 
-    // MARK: - Placeholder
+    // MARK: - Placeholder (NotchUseCaseCarousel port from HeyClicky)
+    // Shows contextual use-case chips so the empty state actively prompts engagement.
+
+    private static let suggestions: [(icon: String, label: String)] = [
+        ("calendar",           "What's on my calendar?"),
+        ("envelope",           "Draft an email"),
+        ("magnifyingglass",    "Search the web"),
+        ("sparkle",            "Plan my day"),
+        ("doc.text",           "Review my code"),
+        ("music.note",         "What's playing?"),
+    ]
 
     private var placeholder: some View {
-        VStack(spacing: 6) {
-            Text("How can I help you today?")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What can I help with?")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.20))
+                .foregroundColor(.white.opacity(0.18))
+                .padding(.top, 4)
+
+            // 2-column grid of suggestion chips
+            let cols = [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)]
+            LazyVGrid(columns: cols, spacing: 7) {
+                ForEach(Self.suggestions, id: \.label) { s in
+                    suggestionChip(icon: s.icon, s.label)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 10)
+    }
+
+    private func suggestionChip(icon: String, _ label: String) -> some View {
+        Button {
+            input = label
+            Task { await submit() }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(accent.opacity(0.75))
+                    .frame(width: 14)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.60))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.055))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Message row
@@ -213,11 +260,8 @@ struct IslandChatView: View {
             // Agent job card — live status inline in chat
             InlineChatJobCard(jobId: jobId)
         } else {
-            // Mira: plain text, no bubble
-            Text(msg.text)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.90))
-                .lineSpacing(4)
+            // Mira: rendered markdown
+            StreamingMarkdownView(text: msg.text, fontSize: 13)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -307,6 +351,19 @@ struct IslandChatView: View {
                 a11yLabel: realtime.state == .idle ? "Start voice session" : "End voice session"
             ) { toggleRealtime() }
 
+            // Claude Code toggle — routes submission through ClaudeCodeBridge
+            if ClaudeCodeBridge.shared.isAvailable {
+                inputIconButton(
+                    icon: "chevron.left.forwardslash.chevron.right",
+                    tint: isCodeMode ? miraTeale : nil,
+                    a11yLabel: isCodeMode ? "Switch to chat mode" : "Switch to code mode"
+                ) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                        isCodeMode.toggle()
+                    }
+                }
+            }
+
             #if DEBUG
             inputIconButton(icon: "viewfinder.circle", a11yLabel: "Test overlay") { overlay.showTest() }
             #endif
@@ -315,7 +372,11 @@ struct IslandChatView: View {
                             tint: canSend ? accent : nil,
                             disabled: !canSend,
                             a11yLabel: "Send message") {
-                Task { await submit() }
+                if isCodeMode {
+                    Task { await submitWithCode() }
+                } else {
+                    Task { await submit() }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -533,9 +594,75 @@ struct IslandChatView: View {
             try? voice.startListening()
         }
     }
+
+    // MARK: - Claude Code Bridge submission
+
+    @MainActor
+    private func submitWithCode() async {
+        let prompt = input.trimmingCharacters(in: .whitespaces)
+        guard !prompt.isEmpty else { return }
+
+        input     = ""
+        isLoading = true
+        miraState.isLoading = true
+
+        // User message bubble
+        messages.append(ChatMessage(role: .user, text: prompt))
+        ConversationStore.shared.save(role: "user", text: prompt)
+
+        // Streaming Mira response placeholder
+        var miraMsg = ChatMessage(role: .mira, text: "")
+        messages.append(miraMsg)
+        let miraMsgId = miraMsg.id
+        streamingMsgId = miraMsgId
+
+        // Start cursor bubble for collapsed-pill streaming
+        CursorBubbleService.shared.showStreaming()
+
+        do {
+            let result = try await ClaudeCodeBridge.shared.run(
+                prompt: prompt,
+                onToken: { chunk in
+                    // Append streaming text to the last Mira message
+                    if let idx = self.messages.firstIndex(where: { $0.id == miraMsgId }) {
+                        self.messages[idx].text += chunk
+                    }
+                    CursorBubbleService.shared.append(token: chunk)
+                },
+                onArtifact: { artifact in
+                    ResponseCardService.shared.append(artifact: artifact)
+                }
+            )
+
+            // Finalise
+            if let idx = messages.firstIndex(where: { $0.id == miraMsgId }) {
+                if messages[idx].text.isEmpty { messages[idx].text = result.text }
+            }
+            ConversationStore.shared.save(role: "mira", text: result.text)
+
+            if result.costUSD > 0 {
+                let costNote = String(format: "  *(Claude Code · $%.4f)*", result.costUSD)
+                if let idx = messages.firstIndex(where: { $0.id == miraMsgId }) {
+                    messages[idx].text += costNote
+                }
+            }
+        } catch {
+            if let idx = messages.firstIndex(where: { $0.id == miraMsgId }) {
+                messages[idx].text = "*Claude Code error: \(error.localizedDescription)*"
+            }
+        }
+
+        streamingMsgId = nil
+        isLoading = false
+        miraState.isLoading = false
+        CursorBubbleService.shared.finishStreaming()
+    }
 }
 
 // MARK: - Inline Chat Job Card
+
+/// Live agent job status card rendered inside the chat thread.
+/// Observes AgentJobStore so it self-updates without any polling.
 
 /// Live agent job status card rendered inside the chat thread.
 /// Observes AgentJobStore so it self-updates without any polling.

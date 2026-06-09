@@ -50,7 +50,7 @@ final class AudioCueService {
         switch mode {
         case .thinking: play("thinking", sound: "Tink")
         case .speaking: play("speaking", sound: "Pop")
-        case .working:  break   // no sound for working — visual indicator is sufficient
+        case .working:  break
         case .idle:     break
         }
     }
@@ -61,8 +61,25 @@ final class AudioCueService {
         case .complete:  play("complete",  sound: "Glass")
         case .error:     play("error",     sound: "Funk")
         case .listening: play("listening", sound: "Tink")
-        case .handoff:   break
+        case .handoff:   play("handoff",   sound: "Purr")
         }
+    }
+
+    // MARK: - Agent lifecycle cues (ported from HeyClicky's agent-launch/done sounds)
+
+    /// Called when an agent run begins (mirrors HeyClicky agent-launch.mp3).
+    func playAgentLaunch() {
+        play("agentLaunch", sound: "Purr")
+    }
+
+    /// Called when an agent run completes successfully (mirrors HeyClicky agent-done.mp3).
+    func playAgentComplete() {
+        play("agentComplete", sound: "Hero")
+    }
+
+    /// Called when an agent run fails or is blocked.
+    func playAgentBlocked() {
+        play("agentBlocked", sound: "Funk")
     }
 
     // MARK: - Private

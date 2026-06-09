@@ -596,24 +596,26 @@ final class RouterService: ObservableObject {
         apiKey:  String,
         capture: ScreenCaptureService
     ) async -> RouteResult {
-        // Do NOT use CGPreflightScreenCaptureAccess() — it is unreliable on
-        // macOS Sequoia and returns false even when permission is granted.
-        // Just attempt the capture and let SCK surface the real error.
-        let screenshot = try? await capture.captureMainDisplay()
-        let claude     = ClaudeService(apiKey: apiKey)
+        // Capture first — if it fails, tell the user immediately rather than passing
+        // no image to Claude while claiming one is attached (which causes a confusing
+        // "I can't see anything" response from the model).
+        guard let screenshot = try? await capture.captureMainDisplay() else {
+            return .reply(
+                "I can't see your screen right now. To fix this: open System Settings → Privacy & Security → Screen Recording, remove Mira if it's listed, re-add it, then relaunch Mira.",
+                route: .screenGuidance
+            )
+        }
 
-        // Always pass the screenshot when available — this is what "screen-aware" means.
+        let claude = ClaudeService(apiKey: apiKey)
+
         let text = (try? await claude.ask(
             prompt: prompt,
             screenshot: screenshot,
             system: "You are Mira, a screen-aware Mac assistant. You CAN see the user's screen — a screenshot is attached to this message. Describe what you see accurately. Be concise and direct.",
             maxTokensOverride: 600
-        )) ?? "I couldn't read your screen. Make sure Screen Recording is enabled for Mira in System Settings → Privacy & Security."
+        )) ?? "I couldn't process the screenshot. Please try again."
 
-        var target: GuidanceTarget? = nil
-        if let img = screenshot {
-            target = try? await claude.locateGuidanceTarget(goal: prompt, in: img)
-        }
+        let target = try? await claude.locateGuidanceTarget(goal: prompt, in: screenshot)
         return RouteResult(route: .screenGuidance, reply: text,
                            pendingConfirmation: nil, clarificationQuestion: nil,
                            permissionNeeded: nil, guidanceTarget: target)

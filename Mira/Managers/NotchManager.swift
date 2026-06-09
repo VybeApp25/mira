@@ -79,6 +79,9 @@ final class NotchManager {
         shortcutManager.start()
         BackgroundScheduler.shared.start()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer
+        _ = CursorBubbleService.shared      // cursor speech bubble (lazy init)
+        _ = ResponseCardService.shared      // artifact card overlay (lazy init)
+        FloatingButtonService.shared.start(animController: animController, miraState: miraState)
         wireHover()
         wireHoverDetection()
         wireShortcutUpdates()
@@ -101,6 +104,7 @@ final class NotchManager {
     }
 
     private func expandForShortcut() {
+        collapseGeneration += 1   // invalidate any in-flight collapse retries
         collapseWork?.cancel()
         collapseWork = nil
         wakeWordRestartWork?.cancel()
@@ -117,15 +121,18 @@ final class NotchManager {
     // MARK: - Hover wiring
 
     // Pending collapse work item — cancelled if the cursor re-enters before it fires.
-    private var collapseWork:       DispatchWorkItem?
+    private var collapseWork:        DispatchWorkItem?
     // Pending wakeWord restart — cancelled on re-enter so wake word never restarts while island is open.
     private var wakeWordRestartWork: DispatchWorkItem?
+    // Incremented on every re-entry; lets performCollapseIfIdle detect that a newer entry occurred.
+    private var collapseGeneration = 0
 
     private func wireHover() {
         hoverManager.update(activationRect: collapsedZone())
 
         hoverManager.onEnter = { [weak self] in
             guard let self else { return }
+            collapseGeneration += 1   // invalidate any pending collapse retries
             collapseWork?.cancel()
             collapseWork = nil
             wakeWordRestartWork?.cancel()
@@ -143,16 +150,9 @@ final class NotchManager {
         hoverManager.onExit = { [weak self] in
             guard let self else { return }
             hoverManager.update(activationRect: collapsedZone())
+            let gen = collapseGeneration
             let work = DispatchWorkItem { [weak self] in
-                guard let self else { return }
-                animController.collapse()
-                let restartWork = DispatchWorkItem { [weak self] in
-                    self?.windowManager.setInteractive(false)
-                    self?.hoverDetection.resume()
-                    self?.wakeWord.start()
-                }
-                wakeWordRestartWork = restartWork
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: restartWork)
+                self?.performCollapseIfIdle(generation: gen)
             }
             collapseWork = work
             // 600ms grace period — long enough for the user to move from the nav bar
@@ -161,6 +161,31 @@ final class NotchManager {
         }
 
         hoverManager.start(activationRect: collapsedZone())
+    }
+
+    /// Collapses the island after the hover-exit grace period.
+    /// The panel collapses immediately regardless of loading/voice state — the collapsed
+    /// pill shows the active state (thinking/speaking/listening) so the user always knows
+    /// what Mira is doing. Only blocks when the user must actively respond to a pending job.
+    private func performCollapseIfIdle(generation: Int) {
+        guard generation == collapseGeneration else { return }   // cursor re-entered — abort
+        let needsInput = !AgentJobStore.shared.confirmationPendingJobs.isEmpty ||
+                         !AgentJobStore.shared.waitingForInputJobs.isEmpty
+        guard !needsInput else {
+            // User needs to answer before the panel can close — retry shortly.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.50) { [weak self] in
+                self?.performCollapseIfIdle(generation: generation)
+            }
+            return
+        }
+        animController.collapse()
+        let restartWork = DispatchWorkItem { [weak self] in
+            self?.windowManager.setInteractive(false)
+            self?.hoverDetection.resume()
+            self?.wakeWord.start()
+        }
+        wakeWordRestartWork = restartWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: restartWork)
     }
 
     private func wireShortcutUpdates() {

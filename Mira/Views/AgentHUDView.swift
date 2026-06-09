@@ -8,6 +8,55 @@
 
 import SwiftUI
 
+// MARK: - AgentHUDPillChrome ViewModifier
+// Mirrors HeyClicky's AgentHUDPillChrome: animated gradient border + ambient glow
+// that wraps any agent status content in the island.
+
+struct AgentHUDPillChrome: ViewModifier {
+    @State private var phase: CGFloat = 0
+
+    private let colors: [Color] = [
+        Color(red: 0.20, green: 0.85, blue: 0.75),   // miraTeale
+        Color(red: 0.55, green: 0.35, blue: 1.00),   // miraViolet
+        Color(red: 0.29, green: 0.62, blue: 1.00),   // accent blue
+        Color(red: 0.20, green: 0.85, blue: 0.75),   // loop back to teal
+    ]
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        AngularGradient(
+                            colors: colors,
+                            center: .center,
+                            startAngle: .degrees(phase),
+                            endAngle:   .degrees(phase + 360)
+                        ),
+                        lineWidth: 1.0
+                    )
+                    .opacity(0.55)
+            )
+            .shadow(
+                color: Color(red: 0.20, green: 0.85, blue: 0.75).opacity(0.22),
+                radius: 10, x: 0, y: 0
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 3.5).repeatForever(autoreverses: false)) {
+                    phase = 360
+                }
+            }
+    }
+}
+
+extension View {
+    func agentHUDPillChrome() -> some View {
+        modifier(AgentHUDPillChrome())
+    }
+}
+
+// MARK: - AgentHUDView
+
 struct AgentHUDView: View {
     @ObservedObject var hud: HUDService
 

@@ -46,6 +46,13 @@
 		55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */; };
 		55224EC730920EFD365C934D /* OutputEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */; };
 		56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */; };
+		CFE47E1118B44083B4696A87 /* PointToService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B34FBBE5543E2850B4090 /* PointToService.swift */; };
+		D4A82F339E1C45B0A7F62891 /* FloatingButtonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C94B77D3F24A6E9B280F45 /* FloatingButtonService.swift */; };
+		F58E990F74D5444DB40FDE02 /* StreamingMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD46E148F8E843EAB047D650 /* StreamingMarkdownView.swift */; };
+		DDEE7A53DB754F25BCB6CE18 /* ClaudeCodeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830EF728BAF9430CA093306C /* ClaudeCodeBridge.swift */; };
+		35D1A0EC0EA1471D8CA9B4EC /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABCACCB981E404298BB0292 /* ResponseCardService.swift */; };
+		47E07C90A21844A08F2D2050 /* ResponseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 062E0285B5CD4AF6BF413D6F /* ResponseCardView.swift */; };
+		96FB60A8F438430BA04912BF /* CursorBubbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4937B06DFA3E4543A688997F /* CursorBubbleService.swift */; };
 		57A3C2DE8BEF627CB6B8AC54 /* EvidenceEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2898F0CED0E0D77476860AC0 /* EvidenceEvaluator.swift */; };
 		58C7FB3B6DF3539FEA5AD3C7 /* HoverHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */; };
 		5BC999BCDF2CB2E5859ED059 /* PolicyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06B0C92C98D179DE8BF3C3D /* PolicyEngine.swift */; };
@@ -217,6 +224,13 @@
 		9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharpieOverlayView.swift; sourceTree = "<group>"; };
 		9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceService.swift; sourceTree = "<group>"; };
+		257B34FBBE5543E2850B4090 /* PointToService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointToService.swift; sourceTree = "<group>"; };
+		E1C94B77D3F24A6E9B280F45 /* FloatingButtonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButtonService.swift; sourceTree = "<group>"; };
+		AD46E148F8E843EAB047D650 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
+		830EF728BAF9430CA093306C /* ClaudeCodeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeBridge.swift; sourceTree = "<group>"; };
+		EABCACCB981E404298BB0292 /* ResponseCardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardService.swift; sourceTree = "<group>"; };
+		062E0285B5CD4AF6BF413D6F /* ResponseCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardView.swift; sourceTree = "<group>"; };
+		4937B06DFA3E4543A688997F /* CursorBubbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorBubbleService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
 		A402B112ABE83ADE3C4489E6 /* AgentJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJob.swift; sourceTree = "<group>"; };
 		A5AB62B5302AD934D3ED258F /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
@@ -397,6 +411,11 @@
 				ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */,
 				46A1297EEE877A44731A4D04 /* QualityStore.swift */,
 				A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */,
+				257B34FBBE5543E2850B4090 /* PointToService.swift */,
+				E1C94B77D3F24A6E9B280F45 /* FloatingButtonService.swift */,
+				830EF728BAF9430CA093306C /* ClaudeCodeBridge.swift */,
+				EABCACCB981E404298BB0292 /* ResponseCardService.swift */,
+				4937B06DFA3E4543A688997F /* CursorBubbleService.swift */,
 				39B2C1A5B3D357A621F2541F /* RouterService.swift */,
 				BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */,
 				AEA51C6434233B46081A0496 /* TelemetryService.swift */,
@@ -459,6 +478,8 @@
 			children = (
 				83B706458B64024088E8769D /* ActionChipsView.swift */,
 				E814E13E9DB836D50FA2620E /* AgentHUDView.swift */,
+				AD46E148F8E843EAB047D650 /* StreamingMarkdownView.swift */,
+				062E0285B5CD4AF6BF413D6F /* ResponseCardView.swift */,
 				42036566FF695AD6554E8E01 /* AgentOutputsView.swift */,
 				7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */,
 				3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */,
@@ -671,6 +692,13 @@
 				8138AB293018E2F1876422E3 /* PublishingAgent.swift in Sources */,
 				B67F17EFCB9B3D38E0590E0D /* QualityStore.swift in Sources */,
 				56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */,
+				CFE47E1118B44083B4696A87 /* PointToService.swift in Sources */,
+				D4A82F339E1C45B0A7F62891 /* FloatingButtonService.swift in Sources */,
+				F58E990F74D5444DB40FDE02 /* StreamingMarkdownView.swift in Sources */,
+				DDEE7A53DB754F25BCB6CE18 /* ClaudeCodeBridge.swift in Sources */,
+				35D1A0EC0EA1471D8CA9B4EC /* ResponseCardService.swift in Sources */,
+				47E07C90A21844A08F2D2050 /* ResponseCardView.swift in Sources */,
+				96FB60A8F438430BA04912BF /* CursorBubbleService.swift in Sources */,
 				45DCD1E11E23C428C1E23DEC /* ReliabilityDashboardView.swift in Sources */,
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,

@@ -52,12 +52,21 @@ struct SharedStatusView: View {
         }
     }
 
-    // MARK: - Idle: spark glyph
+    // MARK: - Idle: bloom-breath spark
+    // Mirrors HeyClicky's "bloomBreathPeak" pattern: a slow sinusoidal bloom where the
+    // glyph fades up to a soft peak then retreats — giving the pill a living heartbeat.
 
     private var sparkGlyph: some View {
-        Image(systemName: "sparkle")
-            .font(.system(size: isCompact ? 9 : 11, weight: .light))
-            .foregroundColor(miraTeale.opacity(0.28))
+        TimelineView(.animation(minimumInterval: 1.0 / 8.0)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            // Primary bloom: 3.2 s cycle, eased through a raised-cosine for organic feel
+            let raw   = CGFloat((cos(t / 3.2 * .pi * 2) + 1) / 2)   // 0→1→0
+            let bloom = raw * raw                                      // gamma-curve for sharp peak
+            Image(systemName: "sparkle")
+                .font(.system(size: isCompact ? 9 : 11, weight: .light))
+                .foregroundColor(miraTeale.opacity(reduceMotion ? 0.28 : 0.15 + bloom * 0.38))
+                .scaleEffect(reduceMotion ? 1.0 : 0.88 + bloom * 0.20)
+        }
     }
 
     // MARK: - Thinking: breathing constellation

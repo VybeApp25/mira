@@ -47,9 +47,9 @@ final class AnimationController: ObservableObject {
 
     func collapse() {
         guard state != .collapsed else { return }
-        guard hudMode == .idle else { return }   // keep open while agent is running
-        // Keep open while the user needs to approve or answer a job — dismissing
-        // mid-decision would leave the agent suspended with no way to resume.
+        // Block only when the user needs to approve or answer — the collapsed pill
+        // shows active state (thinking/speaking/listening) so there's no need to
+        // keep the panel open just because processing is in flight.
         guard AgentJobStore.shared.confirmationPendingJobs.isEmpty else { return }
         guard AgentJobStore.shared.waitingForInputJobs.isEmpty else { return }
         contentVisible = false
@@ -64,18 +64,19 @@ final class AnimationController: ObservableObject {
     func beginAgentRun(projectName: String? = nil) {
         hudResetTask?.cancel()
         hudMode = .running
-        // Ensure island is open so the HUD is visible
         if state != .expanded { expand() }
         HUDService.shared.startSession(projectName: projectName)
+        AudioCueService.shared.playAgentLaunch()
     }
 
     /// Call when an agent task finishes. Shows result + chips, then auto-returns to .idle.
     func endAgentRun(result: AgentResult, autoClearAfter seconds: TimeInterval = 8) {
         hudResetTask?.cancel()
-        currentResult = result   // Fix 1: store the real result before switching to .done
+        currentResult = result
         hudMode = .done
         HUDService.shared.endSession(result: result)
         ActionChipService.shared.show(from: result)
+        AudioCueService.shared.playAgentComplete()
 
         hudResetTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -99,5 +100,6 @@ final class AnimationController: ObservableObject {
         hudResetTask?.cancel()
         hudMode = .blocked
         HUDService.shared.blockSession(reason: reason)
+        AudioCueService.shared.playAgentBlocked()
     }
 }
