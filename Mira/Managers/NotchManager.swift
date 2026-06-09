@@ -78,6 +78,7 @@ final class NotchManager {
         wakeWord.start()
         shortcutManager.start()
         BackgroundScheduler.shared.start()
+        _ = CursorCompanionManager.shared   // initialize ambient presence layer
         wireHover()
         wireHoverDetection()
         wireShortcutUpdates()

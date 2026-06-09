@@ -11,6 +11,15 @@ private final class IslandPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// NSHostingView subclass that delivers the first mouse-down directly to
+/// SwiftUI buttons without requiring a prior focus-click. Default NSPanel
+/// behaviour (nonactivatingPanel) swallows the first click; this override
+/// ensures buttons like "Save Website" respond on the first tap even when
+/// the panel is not yet the key window.
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 // MARK: - Window manager
 
 /// Creates and owns the NSPanel that hosts the Mira island.
@@ -34,7 +43,7 @@ final class MiraIslandWindowManager {
 
     func install(rootView: some View) {
         let p = buildPanel()
-        let host = NSHostingView(rootView: rootView)
+        let host = FirstMouseHostingView(rootView: rootView)
         host.autoresizingMask = [.width, .height]
         host.frame = NSRect(origin: .zero, size: windowFrame().size)
         p.contentView = host

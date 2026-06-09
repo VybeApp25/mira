@@ -3,11 +3,19 @@ import SwiftUI
 // MARK: - Message model
 
 struct ChatMessage: Identifiable {
-    let id        = UUID()
-    let role:       Role
-    var text:       String
-    let timestamp:  Date = .now
+    let id          = UUID()
+    let role:        Role
+    var text:        String
+    var agentJobId:  UUID?        // non-nil → renders InlineChatJobCard instead of text bubble
+    let timestamp:   Date = .now
     enum Role { case user, mira }
+
+    init(role: Role, text: String) {
+        self.role = role; self.text = text; self.agentJobId = nil
+    }
+    init(role: Role, jobId: UUID) {
+        self.role = role; self.text = ""; self.agentJobId = jobId
+    }
 }
 
 // MARK: - Chat view
@@ -201,8 +209,11 @@ struct IslandChatView: View {
                     .background(accent.opacity(0.85))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+        } else if let jobId = msg.agentJobId {
+            // Agent job card — live status inline in chat
+            InlineChatJobCard(jobId: jobId)
         } else {
-            // Mira: plain text, no bubble — matches mockup Image #7
+            // Mira: plain text, no bubble
             Text(msg.text)
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.90))
@@ -274,6 +285,7 @@ struct IslandChatView: View {
                         wakeWordBadge.padding(.trailing, 4)
                     }
                     .padding(.horizontal, 12)
+                    .accessibilityHidden(true)
                 }
                 TextField("", text: $input)
                     .textFieldStyle(.plain)
@@ -282,6 +294,7 @@ struct IslandChatView: View {
                     .tint(accent)
                     .padding(.horizontal, 12)
                     .onSubmit { Task { await submit() } }
+                    .accessibilityLabel("Message to Mira")
             }
             .frame(height: 34)
             .background(Color.white.opacity(0.06))
@@ -290,16 +303,18 @@ struct IslandChatView: View {
             // Realtime voice mic button — activates GPT-4o Realtime
             inputIconButton(
                 icon: realtime.state == .idle ? "waveform.circle" : "waveform.circle.fill",
-                tint: realtime.state == .idle ? nil : .red
+                tint: realtime.state == .idle ? nil : .red,
+                a11yLabel: realtime.state == .idle ? "Start voice session" : "End voice session"
             ) { toggleRealtime() }
 
             #if DEBUG
-            inputIconButton(icon: "viewfinder.circle") { overlay.showTest() }
+            inputIconButton(icon: "viewfinder.circle", a11yLabel: "Test overlay") { overlay.showTest() }
             #endif
 
             inputIconButton(icon: "arrow.up.circle.fill",
                             tint: canSend ? accent : nil,
-                            disabled: !canSend) {
+                            disabled: !canSend,
+                            a11yLabel: "Send message") {
                 Task { await submit() }
             }
         }
@@ -309,16 +324,19 @@ struct IslandChatView: View {
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
     }
 
-    private func inputIconButton(icon: String, tint: Color? = nil, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+    private func inputIconButton(icon: String, tint: Color? = nil, disabled: Bool = false,
+                                  a11yLabel: String = "", action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16))
                 .foregroundColor((tint ?? .white).opacity(disabled ? 0.15 : (tint == nil ? 0.30 : 1.0)))
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
+                .accessibilityHidden(true)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+        .accessibilityLabel(a11yLabel.isEmpty ? icon : a11yLabel)
     }
 
     private var canSend: Bool { !input.trimmingCharacters(in: .whitespaces).isEmpty && !isLoading }
@@ -418,15 +436,39 @@ struct IslandChatView: View {
             return
         }
 
-        input              = ""
-        errorText          = nil
-        pendingAction      = nil
-        pendingPermission  = nil
+        input             = ""
+        errorText         = nil
+        pendingAction     = nil
+        pendingPermission = nil
         messages.append(ChatMessage(role: .user, text: prompt))
-        isLoading          = true
+        isLoading         = true
 
-        let context = RouterContext(recentMessageCount: messages.count)
-        let result  = await RouterService.shared.handle(
+        // Classify first — intercept website builder before full router dispatch
+        let context  = RouterContext(recentMessageCount: messages.count)
+        let decision = RouterService.shared.route(prompt: prompt, context: context)
+
+        if decision.route == .websiteBuilder && !miraState.effectiveAPIKey.isEmpty {
+            // Launch inline agent job — shows live status card in chat thread
+            let job = AgentJobStore.shared.submitJob(
+                prompt: prompt,
+                apiKey: miraState.effectiveAPIKey,
+                buildMode: .pro
+            )
+            messages.append(ChatMessage(role: .mira, jobId: job.id))
+            miraState.recordUsage()
+            isLoading = false
+            return
+        }
+
+        if decision.route == .clarificationRequired,
+           let spec = decision.clarificationSpec, spec.intent == .websiteBuilder {
+            messages.append(ChatMessage(role: .mira, text: spec.opening))
+            pendingClarification = spec
+            isLoading = false
+            return
+        }
+
+        let result = await RouterService.shared.handle(
             prompt:  prompt,
             context: context,
             apiKey:  miraState.effectiveAPIKey,
@@ -447,7 +489,7 @@ struct IslandChatView: View {
             pendingAction = result.pendingConfirmation
         case .permissionRequired:
             if let perm = result.missingPermission {
-                retryPrompt       = prompt      // save so the card can auto-retry
+                retryPrompt       = prompt
                 pendingPermission = perm
             } else {
                 errorText = result.permissionNeeded
@@ -455,6 +497,11 @@ struct IslandChatView: View {
         default:
             if let reply = result.reply {
                 messages.append(ChatMessage(role: .mira, text: reply))
+                // Surface compact replies in the cursor companion so the island
+                // doesn't need to stay open for short conversational responses.
+                if reply.count < 280 {
+                    CursorCompanionManager.shared.send(.chatReply(reply))
+                }
             }
             if let target = result.guidanceTarget, target.confidence >= 0.60 {
                 overlay.showGuidance(GuidanceFrame(timestamp: .now, targets: [target]))
@@ -484,6 +531,124 @@ struct IslandChatView: View {
         } else {
             await voice.requestPermissions()
             try? voice.startListening()
+        }
+    }
+}
+
+// MARK: - Inline Chat Job Card
+
+/// Live agent job status card rendered inside the chat thread.
+/// Observes AgentJobStore so it self-updates without any polling.
+private struct InlineChatJobCard: View {
+    let jobId: UUID
+    @StateObject private var store = AgentJobStore.shared
+
+    private var job: AgentJob? { store.job(id: jobId) }
+
+    private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let green   = Color(red: 0.20, green: 0.84, blue: 0.29)
+    private let red     = Color(red: 1.0,  green: 0.35, blue: 0.35)
+    private let surface = Color(red: 0.13, green: 0.13, blue: 0.16)
+
+    var body: some View {
+        if let job = job {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(statusColor(job.status).opacity(0.14))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: job.type.icon)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(statusColor(job.status))
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(job.status.isTerminal ? job.status.displayName : job.currentStep)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(job.prompt)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.30))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if job.status.isActive {
+                        Text("\(Int(job.progress * 100))%")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(green.opacity(0.80))
+                    }
+                }
+                .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 6)
+
+                // Progress bar (running only)
+                if job.status.isActive {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Color.white.opacity(0.06).frame(height: 2)
+                            green
+                                .frame(width: max(0, geo.size.width * job.progress), height: 2)
+                                .animation(.linear(duration: 0.4), value: job.progress)
+                        }
+                    }
+                    .frame(height: 2)
+                    .padding(.bottom, 8)
+                }
+
+                // Completion actions
+                if job.status == .completed {
+                    HStack(spacing: 6) {
+                        if let previewPath = job.result?.previewImagePath,
+                           let img = NSImage(contentsOfFile: previewPath) {
+                            Image(nsImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 52, height: 36)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                        }
+                        Button {
+                            NotificationCenter.default.post(
+                                name: .miraTabSelected,
+                                object: IslandTab.projects
+                            )
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder")
+                                    .font(.system(size: 9))
+                                Text("View in Library")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .foregroundColor(accent)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(accent.opacity(0.12))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.bottom, 10)
+                } else if job.status == .failed {
+                    Text(job.errorMessage ?? "Build failed")
+                        .font(.system(size: 10))
+                        .foregroundColor(red.opacity(0.80))
+                        .padding(.horizontal, 10).padding(.bottom, 8)
+                } else if !job.status.isActive {
+                    Color.clear.frame(height: 4)
+                }
+            }
+            .background(surface)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func statusColor(_ status: AgentJobStatus) -> Color {
+        switch status {
+        case .completed:  return green
+        case .failed:     return red
+        case .cancelled:  return .white.opacity(0.30)
+        default:          return accent
         }
     }
 }

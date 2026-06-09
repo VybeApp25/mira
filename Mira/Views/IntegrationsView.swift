@@ -11,6 +11,17 @@ struct Integration: Identifiable {
 }
 
 private let integrations: [Integration] = [
+    // Publishing
+    Integration(id: "vercel",         name: "Vercel",           icon: "triangle.fill",
+                color: Color(red: 0.90, green: 0.90, blue: 0.90),
+                tagline: "Deploy websites instantly"),
+    Integration(id: "netlify",        name: "Netlify",          icon: "bolt.fill",
+                color: Color(red: 0.06, green: 0.83, blue: 0.68),
+                tagline: "Deploy and host websites"),
+    Integration(id: "github",         name: "GitHub",           icon: "chevron.left.forwardslash.chevron.right",
+                color: Color(red: 0.90, green: 0.90, blue: 0.90),
+                tagline: "Issues, PRs, and GitHub Pages"),
+    // Productivity
     Integration(id: "gmail",          name: "Gmail",            icon: "envelope.fill",
                 color: Color(red: 0.93, green: 0.26, blue: 0.21),
                 tagline: "Read and send emails"),
@@ -23,9 +34,6 @@ private let integrations: [Integration] = [
     Integration(id: "slack",          name: "Slack",            icon: "bubble.left.fill",
                 color: Color(red: 0.44, green: 0.12, blue: 0.59),
                 tagline: "Send messages to channels"),
-    Integration(id: "github",         name: "GitHub",           icon: "chevron.left.forwardslash.chevron.right",
-                color: Color(red: 0.90, green: 0.90, blue: 0.90),
-                tagline: "Issues, PRs, and repos"),
     Integration(id: "linear",         name: "Linear",           icon: "square.and.pencil",
                 color: Color(red: 0.36, green: 0.35, blue: 0.94),
                 tagline: "Track issues and projects"),

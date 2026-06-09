@@ -26,6 +26,7 @@ final class BackgroundScheduler {
     static let shared = BackgroundScheduler()
 
     private var scheduler: NSBackgroundActivityScheduler?
+    private var weeklyReviewScheduler: NSBackgroundActivityScheduler?
 
     private init() {}
 
@@ -44,6 +45,20 @@ final class BackgroundScheduler {
             }
         }
         scheduler = s
+
+        let w = NSBackgroundActivityScheduler(identifier: "com.trevonbarbour.Mira.weeklyReview")
+        w.repeats          = true
+        w.interval         = 7 * 24 * 60 * 60
+        w.tolerance        = 60 * 60
+        w.qualityOfService = .utility
+        w.schedule { completion in
+            Task { @MainActor [weak self] in
+                await self?.runWeeklyReview()
+                completion(.finished)
+            }
+        }
+        weeklyReviewScheduler = w
+
         UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
@@ -51,6 +66,14 @@ final class BackgroundScheduler {
     func stop() {
         scheduler?.invalidate()
         scheduler = nil
+        weeklyReviewScheduler?.invalidate()
+        weeklyReviewScheduler = nil
+    }
+
+    // MARK: - Manual review trigger (called from UI)
+
+    func generateWorkspaceReview() async {
+        await runWeeklyReview()
     }
 
     // MARK: - Phase 13A / 13B execution
@@ -226,6 +249,26 @@ final class BackgroundScheduler {
         guard bgCheckpointCount >= 5 else { return false }
         let score = ProjectEngine.shared.backgroundCheckpointSpecificity(for: project)
         return score >= 0.5
+    }
+
+    // MARK: - Weekly Review
+
+    private func runWeeklyReview() async {
+        let apiKey = AppSecrets.anthropicAPIKey
+        guard !apiKey.isEmpty else { return }
+
+        let jobs    = AgentJobStore.shared.jobs
+        let entries = OutputStore.shared.entries
+        guard !entries.isEmpty else { return }
+
+        guard let review = await WorkspaceReviewAgent.run(jobs: jobs, entries: entries, apiKey: apiKey) else { return }
+        ReviewStore.shared.save(review: review)
+
+        let topInsight = review.insights.first ?? "\(review.websitesCreated) websites analyzed"
+        postNotification(
+            title: "Mira Workspace Review",
+            body: topInsight
+        )
     }
 
     // MARK: - Notification

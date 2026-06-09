@@ -10,6 +10,7 @@ enum AgentJobStatus: String, Codable, Equatable {
     case writing
     case waitingForInput
     case waitingForConfirmation
+    case waitingForVariantSelection
     case blockedPermission
     case blockedTool
     case completed
@@ -23,9 +24,10 @@ enum AgentJobStatus: String, Codable, Equatable {
         case .reading:                return "Reading"
         case .running:                return "Running"
         case .writing:                return "Writing"
-        case .waitingForInput:        return "Waiting for Input"
-        case .waitingForConfirmation: return "Awaiting Approval"
-        case .blockedPermission:      return "Blocked — Permission"
+        case .waitingForInput:              return "Waiting for Input"
+        case .waitingForConfirmation:       return "Awaiting Approval"
+        case .waitingForVariantSelection:   return "Awaiting Selection"
+        case .blockedPermission:            return "Blocked — Permission"
         case .blockedTool:            return "Blocked — Tool"
         case .completed:              return "Completed"
         case .failed:                 return "Failed"
@@ -99,6 +101,20 @@ struct ConfirmationRequest: Codable, Identifiable {
     }
 }
 
+// MARK: - Variant Option (Studio mode — HTML + name only; previews held in AgentJobStore memory)
+
+struct VariantOption: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let html: String
+
+    init(name: String, html: String) {
+        self.id = UUID()
+        self.name = name
+        self.html = html
+    }
+}
+
 // MARK: - Approval Decision (audit trail, persisted)
 
 struct ApprovalDecision: Codable {
@@ -107,24 +123,74 @@ struct ApprovalDecision: Codable {
     let userReason: String?
 }
 
-// MARK: - Job Type
+// MARK: - Website Build Mode
 
-enum AgentJobType: String, Codable, CaseIterable {
-    case websiteBuilder    = "Website Builder"
-    case appBuilder        = "App Builder"
-    case deepResearch      = "Deep Research"
-    case contentGeneration = "Content Generation"
-    case dataExport        = "Data Export"
-    case custom            = "Custom"
+enum WebsiteBuildMode: String, Codable, CaseIterable {
+    case fast       = "Fast"
+    case pro        = "Pro"
+    case studio     = "Studio"
+    case multiAgent = "Multi-Agent"
 
     var icon: String {
         switch self {
-        case .websiteBuilder:    return "globe"
-        case .appBuilder:        return "app.badge"
-        case .deepResearch:      return "magnifyingglass.circle.fill"
-        case .contentGeneration: return "doc.text.fill"
-        case .dataExport:        return "arrow.down.doc.fill"
-        case .custom:            return "bolt.fill"
+        case .fast:       return "bolt.fill"
+        case .pro:        return "sparkles"
+        case .studio:     return "wand.and.stars"
+        case .multiAgent: return "person.3.fill"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .fast:       return "~1 min"
+        case .pro:        return "~3 min"
+        case .studio:     return "~7 min"
+        case .multiAgent: return "~10 min"
+        }
+    }
+
+    var estimatedDuration: TimeInterval {
+        switch self {
+        case .fast:       return 50
+        case .pro:        return 180
+        case .studio:     return 420
+        case .multiAgent: return 600
+        }
+    }
+
+    var requiresReferences: Bool { self == .studio }
+    var runsQualityPass: Bool    { self != .fast }
+    var runsTwoPasses: Bool      { self == .studio }
+    var runReferenceAnalysis: Bool { self != .fast }
+    var runsRepairPass: Bool     { self == .pro || self == .multiAgent }
+}
+
+// MARK: - Job Type
+
+enum AgentJobType: String, Codable, CaseIterable {
+    case websiteBuilder      = "Website Builder"
+    case websiteEdit         = "Website Edit"
+    case websiteImprovement  = "Website Improvement"
+    case websiteHealth       = "Website Health"
+    case publishWebsite      = "Publish Website"
+    case appBuilder          = "App Builder"
+    case deepResearch        = "Deep Research"
+    case contentGeneration   = "Content Generation"
+    case dataExport          = "Data Export"
+    case custom              = "Custom"
+
+    var icon: String {
+        switch self {
+        case .websiteBuilder:     return "globe"
+        case .websiteEdit:        return "wand.and.sparkles"
+        case .websiteImprovement: return "star.leadinghalf.filled"
+        case .websiteHealth:      return "heart.text.square.fill"
+        case .publishWebsite:     return "paperplane.fill"
+        case .appBuilder:         return "app.badge"
+        case .deepResearch:       return "magnifyingglass.circle.fill"
+        case .contentGeneration:  return "doc.text.fill"
+        case .dataExport:         return "arrow.down.doc.fill"
+        case .custom:             return "bolt.fill"
         }
     }
 
@@ -132,10 +198,31 @@ enum AgentJobType: String, Codable, CaseIterable {
         switch self {
         case .websiteBuilder:
             return [
-                AgentJobAction(title: "Open in Browser", icon: "safari",             identifier: "open_browser"),
-                AgentJobAction(title: "Suggest Edits",   icon: "pencil",             identifier: "suggest_edits"),
-                AgentJobAction(title: "Export Code",     icon: "arrow.down.doc",     identifier: "export_code"),
-                AgentJobAction(title: "Duplicate",       icon: "doc.on.doc",         identifier: "duplicate"),
+                AgentJobAction(title: "Open in Browser",  icon: "safari",                       identifier: "open_browser"),
+                AgentJobAction(title: "Improve Website",  icon: "star.leadinghalf.filled",       identifier: "improve_website"),
+                AgentJobAction(title: "Suggest Edits",    icon: "pencil",                       identifier: "suggest_edits"),
+                AgentJobAction(title: "Export Code",      icon: "arrow.down.doc",               identifier: "export_code"),
+            ]
+        case .websiteImprovement:
+            return [
+                AgentJobAction(title: "Open Website",    icon: "globe",    identifier: "open_browser"),
+                AgentJobAction(title: "View in Library", icon: "folder",   identifier: "open_project"),
+            ]
+        case .websiteHealth:
+            return [
+                AgentJobAction(title: "View Website",    icon: "globe",    identifier: "open_browser"),
+                AgentJobAction(title: "View in Library", icon: "folder",   identifier: "open_project"),
+            ]
+        case .websiteEdit:
+            return [
+                AgentJobAction(title: "Open Website",    icon: "globe",              identifier: "open_browser"),
+                AgentJobAction(title: "View in Library", icon: "folder",             identifier: "open_project"),
+            ]
+        case .publishWebsite:
+            return [
+                AgentJobAction(title: "Open Live Site", icon: "safari.fill",        identifier: "open_live_site"),
+                AgentJobAction(title: "Copy URL",        icon: "doc.on.clipboard",   identifier: "copy_url"),
+                AgentJobAction(title: "Republish",       icon: "arrow.clockwise",    identifier: "republish"),
             ]
         case .deepResearch:
             return [
@@ -258,6 +345,12 @@ struct AgentJob: Identifiable, Codable {
     var userProvidedInfo: String?
     var confirmationRequest: ConfirmationRequest?
     var approvalDecision: ApprovalDecision?
+    var buildMode: WebsiteBuildMode?
+    var referenceImagePaths: [String]
+    var variantOptions: [VariantOption]?
+    var editSourceEntryId: UUID?
+    var publishTarget: String?       // e.g. "vercel", "netlify", "github" — set for publishWebsite jobs
+    var errorCategory: MiraErrorCategory?
 
     init(type: AgentJobType, prompt: String) {
         self.id = UUID()
@@ -269,12 +362,18 @@ struct AgentJob: Identifiable, Codable {
         self.steps = []
         self.result = nil
         self.errorMessage = nil
+        self.errorCategory = nil
         self.createdAt = Date()
         self.startedAt = nil
         self.completedAt = nil
         self.estimatedDuration = 60
         self.confirmationRequest = nil
         self.approvalDecision = nil
+        self.buildMode = nil
+        self.referenceImagePaths = []
+        self.variantOptions = nil
+        self.editSourceEntryId = nil
+        self.publishTarget = nil
     }
 
     var timeElapsed: TimeInterval? {

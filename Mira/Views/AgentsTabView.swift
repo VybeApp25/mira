@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 private let surface  = Color(red: 0.11, green: 0.11, blue: 0.13)
 private let surface2 = Color(red: 0.14, green: 0.14, blue: 0.17)
@@ -23,6 +24,9 @@ struct AgentsTabView: View {
     @State private var detailJob: AgentJob? = nil
     @State private var answeringJob: AgentJob? = nil
     @State private var detectedType: AgentJobType = .custom
+    @State private var websiteMode: WebsiteBuildMode = .pro
+    @State private var referenceImagePaths: [String] = []
+    @State private var knownCompletedIds: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,46 +50,196 @@ struct AgentsTabView: View {
             )
             .frame(width: 560, height: 460)
         }
+        .onAppear {
+            knownCompletedIds = Set(jobStore.completedJobs.map(\.id))
+        }
     }
 
     // MARK: - Input bar
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
-            // Job type indicator
-            Image(systemName: detectedType.icon)
-                .font(.system(size: 11))
-                .foregroundColor(accent.opacity(0.7))
-                .frame(width: 16)
+        VStack(spacing: 0) {
+            // Main text row
+            HStack(spacing: 8) {
+                Image(systemName: detectedType.icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(accent.opacity(0.7))
+                    .frame(width: 16)
 
-            TextField("What should I build or research?", text: $input)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundColor(.white)
-                .onChange(of: input) { newValue in
-                    detectedType = AgentJobType.detect(from: newValue)
+                TextField("What should I build or research?", text: $input)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .onChange(of: input) { newValue in
+                        detectedType = AgentJobType.detect(from: newValue)
+                    }
+                    .onSubmit { submitJob() }
+                    .accessibilityLabel("Describe what to build or research")
+
+                if !input.isEmpty && detectedType != .websiteBuilder {
+                    Text(detectedType.rawValue)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(accent.opacity(0.6))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(accent.opacity(0.10))
+                        .clipShape(Capsule())
                 }
-                .onSubmit { submitJob() }
 
-            if !input.isEmpty {
-                Text(detectedType.rawValue)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(accent.opacity(0.6))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(accent.opacity(0.10))
-                    .clipShape(Capsule())
+                Button(action: submitJob) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(canSubmit ? accent : .white.opacity(0.15))
+                        .accessibilityHidden(true)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSubmit)
+                .accessibilityLabel("Submit task")
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
-            Button(action: submitJob) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(input.isEmpty ? .white.opacity(0.15) : accent)
+            // Expanded website builder controls
+            if detectedType == .websiteBuilder && !input.isEmpty {
+                websiteBuilderControls
             }
-            .buttonStyle(.plain)
-            .disabled(input.isEmpty || miraState.effectiveAPIKey.isEmpty)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+    }
+
+    private var canSubmit: Bool {
+        guard !input.isEmpty && !miraState.effectiveAPIKey.isEmpty else { return false }
+        if detectedType == .websiteBuilder && websiteMode.requiresReferences {
+            return !referenceImagePaths.isEmpty
+        }
+        return true
+    }
+
+    @ViewBuilder
+    private var websiteBuilderControls: some View {
+        VStack(spacing: 8) {
+            Divider().background(Color.white.opacity(0.06))
+
+            VStack(alignment: .leading, spacing: 8) {
+                // Mode selector
+                HStack(spacing: 0) {
+                    ForEach(WebsiteBuildMode.allCases, id: \.self) { mode in
+                        Button {
+                            websiteMode = mode
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: mode.icon)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(mode.rawValue)
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Text(mode.tagline)
+                                        .font(.system(size: 9))
+                                        .opacity(0.65)
+                                }
+                            }
+                            .foregroundColor(websiteMode == mode ? .black : .white.opacity(0.50))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .frame(maxWidth: .infinity)
+                            .background(websiteMode == mode ? accent : Color.white.opacity(0.05))
+                        }
+                        .buttonStyle(.plain)
+                        .clipShape(RoundedRectangle(cornerRadius: 0))
+                        .accessibilityLabel("\(mode.rawValue) mode, \(mode.tagline)")
+                        .accessibilityAddTraits(websiteMode == mode ? .isSelected : [])
+                        if mode != WebsiteBuildMode.allCases.last {
+                            Divider().frame(width: 1).background(Color.white.opacity(0.08))
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+                // References section (Pro/Studio)
+                if websiteMode != .fast {
+                    referencePickerRow
+                }
+
+                // Studio gate warning
+                if websiteMode == .studio && referenceImagePaths.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(amber)
+                        Text("Studio requires design references for premium output")
+                            .font(.system(size: 10))
+                            .foregroundColor(amber.opacity(0.85))
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
+        }
+    }
+
+    @ViewBuilder
+    private var referencePickerRow: some View {
+        HStack(spacing: 8) {
+            // Thumbnails of added images
+            if !referenceImagePaths.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(referenceImagePaths.prefix(5), id: \.self) { path in
+                            ZStack(alignment: .topTrailing) {
+                                if let img = NSImage(contentsOfFile: path) {
+                                    Image(nsImage: img)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 32, height: 32)
+                                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(Color.white.opacity(0.1))
+                                        .frame(width: 32, height: 32)
+                                }
+                                Button {
+                                    referenceImagePaths.removeAll { $0 == path }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .background(Color.black.opacity(0.5))
+                                        .clipShape(Circle())
+                                        .accessibilityHidden(true)
+                                }
+                                .buttonStyle(.plain)
+                                .offset(x: 4, y: -4)
+                                .accessibilityLabel("Remove reference image")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button(action: pickReferenceImages) {
+                HStack(spacing: 4) {
+                    Image(systemName: referenceImagePaths.isEmpty ? "photo.badge.plus" : "plus.circle")
+                        .font(.system(size: 10))
+                        .accessibilityHidden(true)
+                    Text(referenceImagePaths.isEmpty ? "Add References" : "Add More")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(accent.opacity(0.85))
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(accent.opacity(0.10))
+                .clipShape(Capsule())
+            }
+            .accessibilityLabel(referenceImagePaths.isEmpty ? "Add design references" : "Add more design references")
+            .buttonStyle(.plain)
+        }
+
+        if referenceImagePaths.isEmpty {
+            Text("Drop Framer templates, Dribbble shots, or screenshots to guide the design")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.28))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: - Job list
@@ -93,12 +247,13 @@ struct AgentsTabView: View {
     @ViewBuilder
     private var jobList: some View {
         let confirmation = jobStore.confirmationPendingJobs
+        let variants     = jobStore.variantSelectionJobs
         let blocked      = jobStore.blockedJobs
         let waiting      = jobStore.waitingForInputJobs
         let active       = jobStore.activeJobs
         let completed    = jobStore.completedJobs
 
-        if confirmation.isEmpty && blocked.isEmpty && waiting.isEmpty && active.isEmpty && completed.isEmpty {
+        if confirmation.isEmpty && variants.isEmpty && blocked.isEmpty && waiting.isEmpty && active.isEmpty && completed.isEmpty {
             emptyState
         } else {
             ScrollView(showsIndicators: false) {
@@ -121,6 +276,20 @@ struct AgentsTabView: View {
                             }
                         } header: {
                             sectionHeader("Awaiting Approval", count: confirmation.count, color: amber)
+                        }
+                    }
+
+                    // Variant Selection — Studio mode: user picks from 3 generated designs
+                    if !variants.isEmpty {
+                        Section {
+                            ForEach(variants) { job in
+                                VariantPickerCard(job: job, store: jobStore)
+                                    .id("variant-\(job.id)")
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 6)
+                            }
+                        } header: {
+                            sectionHeader("Choose a Design", count: variants.count, color: amber)
                         }
                     }
 
@@ -171,15 +340,19 @@ struct AgentsTabView: View {
                     }
 
                     if !completed.isEmpty {
+                        let newIds = Set(completed.map(\.id)).subtracting(knownCompletedIds)
                         Section {
                             ForEach(completed) { job in
-                                CompletedJobCard(job: job)
+                                CompletedJobCard(job: job, store: jobStore, isNew: newIds.contains(job.id))
                                     .padding(.horizontal, 12)
                                     .padding(.top, 6)
                                     .onTapGesture { detailJob = job }
                             }
                         } header: {
                             sectionHeader("Completed", count: completed.count, color: .white.opacity(0.3))
+                        }
+                        .onChange(of: completed.count) { _ in
+                            knownCompletedIds = Set(completed.map(\.id))
                         }
                     }
                 }
@@ -257,34 +430,51 @@ struct AgentsTabView: View {
     private func submitJob() {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !miraState.effectiveAPIKey.isEmpty else { return }
+        let isWebsite = detectedType == .websiteBuilder
+        let mode = isWebsite ? websiteMode : nil
+        let refs = isWebsite ? referenceImagePaths : []
         input = ""
         detectedType = .custom
-        jobStore.submitJob(prompt: prompt, apiKey: miraState.effectiveAPIKey)
+        referenceImagePaths = []
+        jobStore.submitJob(prompt: prompt, apiKey: miraState.effectiveAPIKey,
+                           buildMode: mode, referenceImagePaths: refs)
+    }
+
+    private func pickReferenceImages() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.png, .jpeg, .webP]
+        panel.title = "Select Design Reference Images"
+        panel.message = "Choose screenshots, Framer templates, Dribbble shots, or any design references"
+        if panel.runModal() == .OK {
+            let newPaths = panel.urls.map(\.path)
+            referenceImagePaths = Array(Set(referenceImagePaths + newPaths)).prefix(5).map { $0 }
+        }
     }
 }
 
-// MARK: - Running Job Card
+// MARK: - Running Job Card (Agent Rail 2.0)
 
 private struct RunningJobCard: View {
     let job: AgentJob
     @ObservedObject var store: AgentJobStore
     @State private var pulse = false
+    @State private var expandedStepIndex: Int? = nil
 
-    private var liveJob: AgentJob? { store.job(id: job.id) }
+    private var liveJob: AgentJob { store.job(id: job.id) ?? job }
 
     var body: some View {
-        let j = liveJob ?? job
-        VStack(alignment: .leading, spacing: 8) {
+        let j = liveJob
+        VStack(alignment: .leading, spacing: 0) {
+
+            // ── Header ──────────────────────────────────────────────
             HStack(spacing: 8) {
                 ZStack {
-                    Circle()
-                        .fill(green.opacity(0.15))
-                        .frame(width: 26, height: 26)
-                    Circle()
-                        .fill(green.opacity(0.25))
-                        .frame(width: 26, height: 26)
-                        .scaleEffect(pulse ? 1.4 : 1.0)
-                        .opacity(pulse ? 0 : 1)
+                    Circle().fill(green.opacity(0.12)).frame(width: 26, height: 26)
+                    Circle().fill(green.opacity(0.22)).frame(width: 26, height: 26)
+                        .scaleEffect(pulse ? 1.5 : 1.0).opacity(pulse ? 0 : 1)
                     Image(systemName: j.type.icon)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(green)
@@ -294,55 +484,74 @@ private struct RunningJobCard: View {
                         pulse = true
                     }
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(j.type.rawValue)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.90))
-                    Text(j.currentStep)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.40))
+                    Text(j.prompt)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.28))
+                        .lineLimit(1)
                 }
-
                 Spacer()
-
-                Text(timeLabel(j))
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(Int(j.progress * 100))%")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(green.opacity(0.80))
+                        .accessibilityLabel("Progress: \(Int(j.progress * 100)) percent")
+                    Text(timeLabel(j))
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.22))
+                }
             }
+            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
 
-            // Progress bar
+            // ── Thin progress bar ────────────────────────────────────
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.07))
-                        .frame(height: 3)
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(green)
-                        .frame(width: geo.size.width * j.progress, height: 3)
+                    Color.white.opacity(0.06).frame(height: 2)
+                    green.frame(width: geo.size.width * j.progress, height: 2)
                         .animation(.linear(duration: 0.4), value: j.progress)
                 }
             }
-            .frame(height: 3)
+            .frame(height: 2)
+            .accessibilityHidden(true)
 
-            HStack {
-                Text(j.prompt)
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
-                    .lineLimit(1)
-                Spacer()
-                Text("\(Int(j.progress * 100))%")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(green.opacity(0.7))
+            // ── Step timeline ────────────────────────────────────────
+            if !j.steps.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(j.steps.enumerated()), id: \.element.id) { idx, step in
+                        StepRow(
+                            step: step,
+                            isExpanded: expandedStepIndex == idx,
+                            onTap: {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    expandedStepIndex = expandedStepIndex == idx ? nil : idx
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.top, 6).padding(.bottom, 4)
             }
         }
-        .padding(12)
         .background(surface)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(green.opacity(0.15), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(green.opacity(0.15), lineWidth: 1))
+        .accessibilityLabel(runningA11yLabel(liveJob))
+    }
+
+    private func runningA11yLabel(_ j: AgentJob) -> String {
+        let stepDesc: String
+        if let running = j.steps.first(where: { $0.status == .running }),
+           let idx = j.steps.firstIndex(where: { $0.id == running.id }) {
+            stepDesc = "Step \(idx + 1) of \(j.steps.count): \(running.title)."
+        } else {
+            stepDesc = j.currentStep.isEmpty ? "" : "\(j.currentStep)."
+        }
+        return "\(j.type.rawValue), running. \(stepDesc) \(Int(j.progress * 100)) percent complete."
     }
 
     private func timeLabel(_ j: AgentJob) -> String {
@@ -358,10 +567,104 @@ private struct RunningJobCard: View {
     }
 }
 
+// MARK: - Step Row (Agent Rail 2.0)
+
+private struct StepRow: View {
+    let step: AgentJobStep
+    let isExpanded: Bool
+    let onTap: () -> Void
+
+    private var statusIcon: String {
+        switch step.status {
+        case .completed:                 return "checkmark"
+        case .running, .writing:         return "arrow.right"
+        case .failed:                    return "xmark"
+        case .waitingForInput,
+             .waitingForConfirmation,
+             .waitingForVariantSelection: return "pause.fill"
+        default:                         return "circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch step.status {
+        case .completed:                  return green
+        case .running, .writing:          return accent
+        case .failed:                     return red
+        case .waitingForInput,
+             .waitingForConfirmation,
+             .waitingForVariantSelection: return amber
+        default:                          return .white.opacity(0.18)
+        }
+    }
+
+    private var isPending: Bool {
+        step.status == .queued || step.status == .preparing
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onTap) {
+                HStack(alignment: .center, spacing: 8) {
+                    // Status icon column (fixed width for alignment)
+                    ZStack {
+                        Circle()
+                            .fill(statusColor.opacity(isPending ? 0.06 : 0.14))
+                            .frame(width: 16, height: 16)
+                        Image(systemName: statusIcon)
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(statusColor.opacity(isPending ? 0.35 : 1.0))
+                    }
+                    .frame(width: 16)
+
+                    // Step title
+                    Text(step.title)
+                        .font(.system(size: 11, weight: step.status == .running ? .medium : .regular))
+                        .foregroundColor(isPending ? .white.opacity(0.22) : .white.opacity(step.status == .completed ? 0.42 : 0.82))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    // Log indicator (if has log and is collapsed)
+                    if step.log != nil && !isExpanded {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.18))
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(step.log == nil)
+
+            // Expanded log
+            if isExpanded, let log = step.log {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(log.components(separatedBy: "\n").filter { !$0.isEmpty }, id: \.self) { line in
+                        Text(line)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.40))
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.leading, 36)
+                .padding(.trailing, 12)
+                .padding(.bottom, 5)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
 // MARK: - Completed Job Card
 
 private struct CompletedJobCard: View {
     let job: AgentJob
+    @ObservedObject var store: AgentJobStore
+    let isNew: Bool
+    @AccessibilityFocusState private var cardFocused: Bool
 
     private var statusColor: Color {
         switch job.status {
@@ -392,6 +695,7 @@ private struct CompletedJobCard: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(statusColor)
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(job.type.rawValue)
@@ -409,21 +713,60 @@ private struct CompletedJobCard: View {
                     Image(systemName: statusIcon)
                         .font(.system(size: 11))
                         .foregroundColor(statusColor)
+                        .accessibilityHidden(true)
                     Text(job.relativeTime)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.22))
                 }
             }
 
+            // Preview thumbnail for completed website builds
+            if job.status == .completed && job.type == .websiteBuilder,
+               let previewPath = job.result?.previewImagePath,
+               let img = NSImage(contentsOfFile: previewPath) {
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 110)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .accessibilityLabel("Website preview image")
+            }
+
+            // Critic scorecard for completed website builds
+            if job.status == .completed && job.type == .websiteBuilder,
+               let criticJSON = job.result?.metadata["criticReport"],
+               let data = criticJSON.data(using: .utf8),
+               let report = try? JSONDecoder().decode(CriticReport.self, from: data) {
+                CriticScorecardView(report: report)
+            }
+
             // Action bubbles (completed only)
             if job.status == .completed {
                 actionBubbles
+            }
+
+            // Star rating for completed website builds
+            if job.status == .completed && job.type == .websiteBuilder {
+                StarRatingView(job: job, store: store)
             }
         }
         .padding(12)
         .background(surface)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .contentShape(Rectangle())
+        .accessibilityHint(job.status == .completed ? "Tap to view details" : "")
+        .accessibilityFocused($cardFocused)
+        .onAppear {
+            guard isNew else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                cardFocused = true
+            }
+        }
     }
 
     @ViewBuilder
@@ -455,6 +798,7 @@ private struct ActionBubble: View {
             HStack(spacing: 4) {
                 Image(systemName: action.icon)
                     .font(.system(size: 10, weight: .medium))
+                    .accessibilityHidden(true)
                 Text(action.title)
                     .font(.system(size: 10, weight: .medium))
             }
@@ -464,6 +808,7 @@ private struct ActionBubble: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(action.title)
     }
 
     private func handleAction(_ identifier: String) {
@@ -481,8 +826,16 @@ private struct ActionBubble: View {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         case "open_project":
+            NotificationCenter.default.post(name: .miraTabSelected, object: IslandTab.projects)
+        case "open_project_finder":
             if let dir = job.result?.metadata["outputDirectory"] {
                 NSWorkspace.shared.open(URL(fileURLWithPath: dir))
+            }
+        case "improve_website":
+            let apiKey = UserDefaults.standard.string(forKey: "mira_api_key") ?? ""
+            guard !apiKey.isEmpty else { break }
+            if let entry = OutputStore.shared.entries.first(where: { $0.sourceJobId == job.id }) {
+                AgentJobStore.shared.submitImprovementJob(outputEntryId: entry.id, apiKey: apiKey)
             }
         case "suggest_edits":
             NotificationCenter.default.post(
@@ -502,12 +855,62 @@ private struct ActionBubble: View {
     }
 }
 
+// MARK: - Critic Scorecard View
+
+private struct CriticScorecardView: View {
+    let report: CriticReport
+
+    private func scoreColor(_ score: Int) -> Color {
+        if score >= 8 { return green }
+        if score >= 6 { return amber }
+        return red
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("Quality Audit")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.35))
+                Spacer()
+                Text("\(report.overallScore)/10")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundColor(scoreColor(report.overallScore))
+            }
+            HStack(spacing: 4) {
+                ForEach([
+                    ("Visual",   report.visualQuality),
+                    ("Convert",  report.conversionPotential),
+                    ("Mobile",   report.mobileExperience),
+                    ("Access",   report.accessibility),
+                    ("Brand",    report.brandConsistency),
+                ], id: \.0) { label, score in
+                    VStack(spacing: 2) {
+                        Text("\(score)")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(scoreColor(score))
+                        Text(label)
+                            .font(.system(size: 8))
+                            .foregroundColor(.white.opacity(0.28))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+                    .background(scoreColor(score).opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
 // MARK: - Agent Detail View
 
 struct AgentDetailView: View {
     let jobId: UUID
     @ObservedObject var store: AgentJobStore
     @Environment(\.dismiss) private var dismiss
+    @AccessibilityFocusState private var titleFocused: Bool
 
     private var job: AgentJob? { store.job(id: jobId) }
 
@@ -535,6 +938,11 @@ struct AgentDetailView: View {
                     }
                 }
             }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    titleFocused = true
+                }
+            }
         }
     }
 
@@ -553,6 +961,7 @@ struct AgentDetailView: View {
                 Text(job.type.rawValue)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
+                    .accessibilityFocused($titleFocused)
                 Text(job.prompt)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
@@ -584,8 +993,9 @@ struct AgentDetailView: View {
                  .reading, .writing:                return accent
             case .failed:                           return red
             case .cancelled:                        return .white.opacity(0.3)
-            case .queued, .waitingForInput:         return orange
-            case .waitingForConfirmation:           return amber
+            case .queued, .waitingForInput:              return orange
+            case .waitingForConfirmation,
+                 .waitingForVariantSelection:        return amber
             case .blockedPermission, .blockedTool:  return red
             }
         }()
@@ -863,6 +1273,7 @@ struct AnswerQuestionsSheet: View {
     let apiKey: String
     @Environment(\.dismiss) private var dismiss
     @State private var answers = ""
+    @AccessibilityFocusState private var editorFocused: Bool
 
     private let orangeColor = Color(red: 1.0, green: 0.60, blue: 0.20)
 
@@ -882,6 +1293,7 @@ struct AnswerQuestionsSheet: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Answer to continue")
+                            .accessibilityAddTraits(.isHeader)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                         Text(job.type.rawValue)
@@ -943,6 +1355,7 @@ struct AnswerQuestionsSheet: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.white.opacity(0.10), lineWidth: 1)
                                 )
+                                .accessibilityFocused($editorFocused)
                             if answers.isEmpty {
                                 Text("Type your answers here — address each question above…")
                                     .font(.system(size: 11))
@@ -995,6 +1408,11 @@ struct AnswerQuestionsSheet: View {
                 .padding(20)
             }
         }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                editorFocused = true
+            }
+        }
     }
 }
 
@@ -1006,6 +1424,7 @@ private struct WaitingForConfirmationCard: View {
     let onDeny: () -> Void
 
     @State private var pulse = false
+    @AccessibilityFocusState private var approveFocused: Bool
 
     var body: some View {
         let req = job.confirmationRequest
@@ -1030,6 +1449,7 @@ private struct WaitingForConfirmationCard: View {
                         pulse = true
                     }
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(req?.title ?? job.type.rawValue)
@@ -1062,9 +1482,11 @@ private struct WaitingForConfirmationCard: View {
                     Image(systemName: req.riskLevel.icon)
                         .font(.system(size: 10))
                         .foregroundColor(riskColor(req.riskLevel))
+                        .accessibilityHidden(true)
                     Text(req.riskLevel.displayName)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(riskColor(req.riskLevel))
+                        .accessibilityLabel("\(req.riskLevel.displayName) risk")
                 }
 
                 Spacer()
@@ -1078,11 +1500,14 @@ private struct WaitingForConfirmationCard: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(req?.denyLabel ?? "Deny")
+                .accessibilityHint("Cancels this action")
 
                 Button(action: onApprove) {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .bold))
+                            .accessibilityHidden(true)
                         Text(req?.approveLabel ?? "Approve")
                             .font(.system(size: 11, weight: .semibold))
                     }
@@ -1092,6 +1517,9 @@ private struct WaitingForConfirmationCard: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(req?.approveLabel ?? "Approve")
+                .accessibilityHint("Confirms and continues the action")
+                .accessibilityFocused($approveFocused)
             }
         }
         .padding(12)
@@ -1101,6 +1529,11 @@ private struct WaitingForConfirmationCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(amber.opacity(0.25), lineWidth: 1)
         )
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                approveFocused = true
+            }
+        }
     }
 
     private func riskColor(_ level: RiskLevel) -> Color {
@@ -1129,6 +1562,7 @@ private struct BlockedJobCard: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(red)
                 }
+
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(job.type.rawValue)
@@ -1169,5 +1603,142 @@ private struct BlockedJobCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(red.opacity(0.18), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Variant Picker Card
+
+private struct VariantPickerCard: View {
+    let job: AgentJob
+    @ObservedObject var store: AgentJobStore
+
+    private var variants: [VariantOption] { job.variantOptions ?? [] }
+    private var previews: [NSImage?] { store.variantPreviews(for: job.id) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 11))
+                    .foregroundColor(amber)
+                Text("Choose a design")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.90))
+                Spacer()
+                Text("\(variants.count) variants ready")
+                    .font(.system(size: 10))
+                    .foregroundColor(amber.opacity(0.70))
+            }
+
+            Text(job.prompt.prefix(70) + (job.prompt.count > 70 ? "…" : ""))
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.32))
+                .lineLimit(1)
+
+            if variants.isEmpty {
+                HStack { Spacer(); ProgressView().scaleEffect(0.7); Spacer() }
+                    .padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(variants.enumerated()), id: \.offset) { idx, variant in
+                            VariantThumbnail(
+                                name: variant.name,
+                                preview: idx < previews.count ? previews[idx] : nil
+                            ) {
+                                store.selectVariant(id: job.id, variantIndex: idx)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 1)
+                }
+            }
+
+            Button { store.cancelJob(id: job.id) } label: {
+                Text("Cancel")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(amber.opacity(0.25), lineWidth: 1))
+    }
+}
+
+private struct VariantThumbnail: View {
+    let name: String
+    let preview: NSImage?
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: 6) {
+                Group {
+                    if let img = preview {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        ZStack {
+                            Color.white.opacity(0.05)
+                            ProgressView().scaleEffect(0.6)
+                        }
+                    }
+                }
+                .frame(width: 170, height: 107)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.12), lineWidth: 1))
+
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.65))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Star Rating View
+
+private struct StarRatingView: View {
+    let job: AgentJob
+    @ObservedObject var store: AgentJobStore
+    @State private var rating: Int = 0
+    @State private var savedLabel: String? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Rate:")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.28))
+
+            HStack(spacing: 3) {
+                ForEach(1...5, id: \.self) { star in
+                    Image(systemName: star <= rating ? "star.fill" : "star")
+                        .font(.system(size: 13))
+                        .foregroundColor(star <= rating ? amber : .white.opacity(0.18))
+                        .onTapGesture {
+                            guard rating != star else { return }
+                            rating = star
+                            QualityStore.shared.record(job: job, rating: star)
+                            if star == 5 {
+                                store.approveAsExample(jobId: job.id)
+                                withAnimation { savedLabel = "Saved as example" }
+                            }
+                        }
+                }
+            }
+
+            if let label = savedLabel {
+                Text(label)
+                    .font(.system(size: 9))
+                    .foregroundColor(green.opacity(0.85))
+                    .transition(.opacity)
+            }
+        }
+        .onAppear { rating = QualityStore.shared.rating(for: job.id) }
     }
 }

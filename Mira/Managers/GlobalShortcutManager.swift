@@ -10,6 +10,7 @@ extension Notification.Name {
     static let miraShortcutsChanged      = Notification.Name("miraShortcutsChanged")
     static let miraScreenCompanionChanged = Notification.Name("miraScreenCompanionChanged")
     static let miraChipPromptSelected    = Notification.Name("miraChipPromptSelected")  // Fix 3
+    static let miraTabSelected           = Notification.Name("miraTabSelected")          // cross-tab navigation
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)

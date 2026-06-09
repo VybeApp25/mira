@@ -7,24 +7,257 @@ private let cardBG = Color(red: 0.11, green: 0.11, blue: 0.14)
 private let cardR: CGFloat = 16
 private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
 
-// MARK: - Home tab — three side-by-side cards
+// MARK: - Home tab — three side-by-side cards + workspace review strip
 
 struct HomeTabView: View {
     @ObservedObject var miraState: MiraState
+    @ObservedObject private var reviewStore = ReviewStore.shared
 
     @StateObject private var nowPlaying = NowPlayingService()
     @StateObject private var weather    = WeatherService()
 
+    @State private var showingReview = false
+    @State private var generatingReview = false
+
     var body: some View {
-        HStack(spacing: 8) {
-            NowPlayingCard(service: nowPlaying)
-            WeatherCard(service: weather)
-            CalendarCard()
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                NowPlayingCard(service: nowPlaying)
+                WeatherCard(service: weather)
+                CalendarCard()
+            }
+            WorkspaceInsightsStrip(
+                review: reviewStore.latest,
+                generating: generatingReview,
+                onTap: { if reviewStore.latest != nil { showingReview = true } },
+                onGenerate: {
+                    guard !generatingReview else { return }
+                    generatingReview = true
+                    Task {
+                        await BackgroundScheduler.shared.generateWorkspaceReview()
+                        generatingReview = false
+                    }
+                }
+            )
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
         .onAppear  { nowPlaying.start(); weather.fetch() }
         .onDisappear { nowPlaying.stop() }
+        .sheet(isPresented: $showingReview) {
+            if let review = reviewStore.latest {
+                WorkspaceReviewSheet(review: review, onRegenerate: {
+                    showingReview = false
+                    generatingReview = true
+                    Task {
+                        await BackgroundScheduler.shared.generateWorkspaceReview()
+                        generatingReview = false
+                    }
+                })
+            }
+        }
+    }
+}
+
+// MARK: - Insights Strip
+
+private struct WorkspaceInsightsStrip: View {
+    let review: WorkspaceReview?
+    let generating: Bool
+    let onTap: () -> Void
+    let onGenerate: () -> Void
+
+    var body: some View {
+        Button(action: review != nil ? onTap : onGenerate) {
+            HStack(spacing: 8) {
+                Image(systemName: generating ? "arrow.triangle.2.circlepath" : "sparkles")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(accent.opacity(0.8))
+                    .rotationEffect(generating ? .degrees(360) : .zero)
+                    .animation(generating ? .linear(duration: 1.2).repeatForever(autoreverses: false) : .default,
+                               value: generating)
+
+                if generating {
+                    Text("Generating workspace review…")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.45))
+                } else if let review = review {
+                    if let insight = review.insights.first {
+                        Text(insight)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Text(review.relativeTime)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.28))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white.opacity(0.22))
+                } else {
+                    Text("Generate workspace review")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.38))
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.045))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Review Sheet
+
+private struct WorkspaceReviewSheet: View {
+    let review: WorkspaceReview
+    let onRegenerate: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Workspace Review")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("\(review.periodLabel) · \(review.relativeTime)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.38))
+                }
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white.opacity(0.30))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            Divider().opacity(0.12)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Stats row
+                    statsRow
+
+                    // Insights
+                    if !review.insights.isEmpty {
+                        reviewSection(title: "Patterns", icon: "chart.bar.fill", items: review.insights)
+                    }
+
+                    // Recommendations
+                    if !review.recommendations.isEmpty {
+                        reviewSection(title: "Recommendations", icon: "arrow.up.right.circle.fill",
+                                      items: review.recommendations, iconColor: Color(red: 0.3, green: 0.85, blue: 0.55))
+                    }
+
+                    // Suggested profile
+                    if !review.suggestedProfile.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Suggested Profile", systemImage: "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.45))
+                            HStack(spacing: 6) {
+                                ForEach(review.suggestedProfile, id: \.self) { trait in
+                                    Text(trait)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.75))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            Capsule()
+                                                .fill(accent.opacity(0.18))
+                                        )
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(18)
+            }
+
+            Divider().opacity(0.12)
+
+            // Footer
+            HStack {
+                Spacer()
+                Button("Regenerate") {
+                    onRegenerate()
+                }
+                .font(.system(size: 12))
+                .foregroundColor(accent)
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+        }
+        .frame(width: 460, height: 480)
+        .background(Color(red: 0.09, green: 0.09, blue: 0.12))
+    }
+
+    private var statsRow: some View {
+        HStack(spacing: 0) {
+            statTile(value: "\(review.websitesCreated)", label: "Created")
+            statTile(value: "\(review.websitesPublished)", label: "Published")
+            statTile(value: "\(review.totalVersions)", label: "Versions")
+            if let score = review.overallScoreLabel {
+                statTile(value: score, label: "Avg Score")
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.045))
+        )
+    }
+
+    private func statTile(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.38))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    private func reviewSection(title: String, icon: String, items: [String],
+                                iconColor: Color = accent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.45))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(items, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 6) {
+                        Circle()
+                            .fill(iconColor.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 5)
+                        Text(item)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.72))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
     }
 }
 

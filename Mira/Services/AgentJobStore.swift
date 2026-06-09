@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import UserNotifications
 
 // MARK: - Store
@@ -11,6 +12,10 @@ final class AgentJobStore: ObservableObject {
 
     // In-memory only. Holds suspended continuations awaiting user approve/deny.
     private var pendingConfirmations: [UUID: CheckedContinuation<Bool, Never>] = [:]
+
+    // In-memory only. Variant selection state for Studio mode.
+    private var variantContinuations: [UUID: CheckedContinuation<String, Never>] = [:]
+    private var variantPreviewCache: [UUID: [NSImage?]] = [:]
 
     private let fileURL: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -26,11 +31,13 @@ final class AgentJobStore: ObservableObject {
     // MARK: - Submit
 
     @discardableResult
-    func submitJob(prompt: String, apiKey: String) -> AgentJob {
+    func submitJob(prompt: String, apiKey: String, buildMode: WebsiteBuildMode? = nil, referenceImagePaths: [String] = []) -> AgentJob {
         let type = AgentJobType.detect(from: prompt)
         var job = AgentJob(type: type, prompt: prompt)
-        job.steps = Self.buildSteps(for: type)
-        job.estimatedDuration = Self.estimatedDuration(for: type)
+        job.buildMode = buildMode
+        job.referenceImagePaths = referenceImagePaths
+        job.steps = Self.buildSteps(for: type, mode: buildMode)
+        job.estimatedDuration = buildMode?.estimatedDuration ?? Self.estimatedDuration(for: type)
         jobs.insert(job, at: 0)
         save()
 
@@ -40,7 +47,8 @@ final class AgentJobStore: ObservableObject {
             await store.markRunning(id: jobId)
             switch type {
             case .websiteBuilder:
-                await WebsiteBuilderAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
+                await WebsiteBuilderAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store,
+                                               buildMode: buildMode ?? .pro, referenceImagePaths: referenceImagePaths)
             case .deepResearch:
                 await ResearchAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
             case .contentGeneration:
@@ -53,10 +61,106 @@ final class AgentJobStore: ObservableObject {
         return job
     }
 
+    @discardableResult
+    func submitPublishJob(outputEntryId: UUID, target: PublishingAgent.PublishTarget, apiKey: String) -> AgentJob {
+        var job = AgentJob(type: .publishWebsite, prompt: "Deploy to \(target.displayName)")
+        job.editSourceEntryId = outputEntryId
+        job.publishTarget = target.rawValue
+        job.steps = Self.buildSteps(for: .publishWebsite)
+        job.estimatedDuration = 60
+        jobs.insert(job, at: 0)
+        save()
+        TelemetryService.shared.track(.publishStarted(jobId: job.id, provider: target.rawValue))
+
+        let jobId = job.id
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let store = self else { return }
+            await store.markRunning(id: jobId)
+            await PublishingAgent.run(
+                jobId: jobId,
+                outputEntryId: outputEntryId,
+                target: target,
+                apiKey: apiKey,
+                store: store
+            )
+        }
+        return job
+    }
+
+    @discardableResult
+    func submitEditJob(outputEntryId: UUID, editRequest: String, apiKey: String) -> AgentJob {
+        var job = AgentJob(type: .websiteEdit, prompt: editRequest)
+        job.editSourceEntryId = outputEntryId
+        job.steps = Self.buildSteps(for: .websiteEdit)
+        job.estimatedDuration = 75
+        jobs.insert(job, at: 0)
+        save()
+
+        let jobId = job.id
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let store = self else { return }
+            await store.markRunning(id: jobId)
+            await WebsiteEditorAgent.run(
+                jobId: jobId,
+                outputEntryId: outputEntryId,
+                editRequest: editRequest,
+                apiKey: apiKey,
+                store: store
+            )
+        }
+        return job
+    }
+
+    @discardableResult
+    func submitImprovementJob(outputEntryId: UUID, apiKey: String) -> AgentJob {
+        var job = AgentJob(type: .websiteImprovement, prompt: "Improving website quality based on AI audit")
+        job.editSourceEntryId = outputEntryId
+        job.steps = Self.buildSteps(for: .websiteImprovement)
+        job.estimatedDuration = 120
+        jobs.insert(job, at: 0)
+        save()
+        TelemetryService.shared.track(.improvementRequested(jobId: job.id, sourceEntryId: outputEntryId))
+
+        let jobId = job.id
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let store = self else { return }
+            await store.markRunning(id: jobId)
+            await WebsiteImprovementAgent.run(
+                jobId: jobId,
+                outputEntryId: outputEntryId,
+                apiKey: apiKey,
+                store: store
+            )
+        }
+        return job
+    }
+
+    @discardableResult
+    func submitHealthJob(outputEntryId: UUID, apiKey: String) -> AgentJob {
+        var job = AgentJob(type: .websiteHealth, prompt: "Analyzing website health")
+        job.editSourceEntryId = outputEntryId
+        job.steps = Self.buildSteps(for: .websiteHealth)
+        job.estimatedDuration = 45
+        jobs.insert(job, at: 0)
+        save()
+
+        let jobId = job.id
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let store = self else { return }
+            await store.markRunning(id: jobId)
+            await WebsiteHealthAgent.run(jobId: jobId, outputEntryId: outputEntryId, apiKey: apiKey, store: store)
+        }
+        return job
+    }
+
     // MARK: - Queries
 
     var confirmationPendingJobs: [AgentJob] {
         jobs.filter { $0.status == .waitingForConfirmation }
+    }
+
+    var variantSelectionJobs: [AgentJob] {
+        jobs.filter { $0.status == .waitingForVariantSelection }
     }
 
     var blockedJobs: [AgentJob] {
@@ -88,10 +192,14 @@ final class AgentJobStore: ObservableObject {
     // MARK: - Cancel
 
     func cancelJob(id: UUID) {
-        // If the agent is suspended awaiting confirmation, deny it to resume the task cleanly.
         if pendingConfirmations[id] != nil {
             denyConfirmation(id: id, reason: "Cancelled by user")
             return
+        }
+        if variantContinuations[id] != nil {
+            variantContinuations[id]?.resume(returning: "")
+            variantContinuations.removeValue(forKey: id)
+            variantPreviewCache.removeValue(forKey: id)
         }
         update(id) { job in
             job.status = .cancelled
@@ -137,6 +245,58 @@ final class AgentJobStore: ObservableObject {
         }
         pendingConfirmations[id]?.resume(returning: false)
         pendingConfirmations[id] = nil
+    }
+
+    // MARK: - Variant Selection Gate (Studio mode)
+
+    /// Called by the agent after generating variants.
+    /// Suspends the pipeline until the user selects a variant.
+    /// Returns the HTML of the chosen variant, or "" if cancelled.
+    func requestVariantSelection(id: UUID, variants: [(name: String, html: String, preview: NSImage?)]) async -> String {
+        update(id) { job in
+            job.variantOptions = variants.map { VariantOption(name: $0.name, html: $0.html) }
+            job.status = .waitingForVariantSelection
+            job.currentStep = "Awaiting selection"
+        }
+        variantPreviewCache[id] = variants.map(\.preview)
+        return await withCheckedContinuation { continuation in
+            variantContinuations[id] = continuation
+        }
+    }
+
+    /// UI calls this when the user taps a variant card.
+    func selectVariant(id: UUID, variantIndex: Int) {
+        guard let continuation = variantContinuations[id],
+              let options = jobs.first(where: { $0.id == id })?.variantOptions,
+              variantIndex < options.count else {
+            variantContinuations[id]?.resume(returning: "")
+            variantContinuations.removeValue(forKey: id)
+            return
+        }
+        let html = options[variantIndex].html
+        variantContinuations.removeValue(forKey: id)
+        variantPreviewCache.removeValue(forKey: id)
+        update(id) { job in
+            job.status = .running
+            job.currentStep = "Resuming"
+        }
+        continuation.resume(returning: html)
+    }
+
+    /// Returns preview images for the variant selection UI.
+    func variantPreviews(for id: UUID) -> [NSImage?] {
+        variantPreviewCache[id] ?? []
+    }
+
+    // MARK: - Example Library
+
+    /// Saves the completed build's HTML as the canonical example for its genre.
+    func approveAsExample(jobId: UUID) {
+        guard let job = jobs.first(where: { $0.id == jobId }),
+              let outputPath = job.result?.outputPath,
+              let html = try? String(contentsOfFile: outputPath, encoding: .utf8),
+              let genre = job.result?.metadata["genre"] else { return }
+        WebsiteBuilderAgent.saveGenreExample(html: html, genre: genre)
     }
 
     // MARK: - Blocked States
@@ -199,11 +359,14 @@ final class AgentJobStore: ObservableObject {
         }
         guard let job = job(id: id) else { return }
         let prompt = job.prompt
+        let mode = job.buildMode
+        let refs = job.referenceImagePaths
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let store = self else { return }
             switch job.type {
             case .websiteBuilder:
-                await WebsiteBuilderAgent.run(jobId: id, prompt: prompt, apiKey: apiKey, store: store, userProvidedInfo: answers)
+                await WebsiteBuilderAgent.run(jobId: id, prompt: prompt, apiKey: apiKey, store: store,
+                                               buildMode: mode ?? .pro, referenceImagePaths: refs, userProvidedInfo: answers)
             default:
                 await GenericAgent.run(jobId: id, prompt: "\(prompt)\n\nAdditional context: \(answers)", apiKey: apiKey, store: store)
             }
@@ -216,6 +379,15 @@ final class AgentJobStore: ObservableObject {
         update(id) { job in
             job.status = .running
             job.startedAt = Date()
+        }
+        if let job = job(id: id) {
+            let title = job.result?.metadata["siteName"]
+                ?? String(job.prompt.prefix(40))
+            CursorCompanionManager.shared.send(
+                .agentStarted(title: title, totalSteps: job.steps.count)
+            )
+            TelemetryService.shared.track(.agentStarted(jobId: job.id, jobType: job.type.rawValue))
+            AccessibilityService.shared.announce("\(job.type.rawValue) started")
         }
     }
 
@@ -230,6 +402,15 @@ final class AgentJobStore: ObservableObject {
                 job.steps[i].status = .completed
                 job.steps[i].completedAt = Date()
             }
+        }
+        if let job = job(id: id) {
+            let current = (stepIndex ?? 0) + 1
+            CursorCompanionManager.shared.send(.agentProgress(
+                step:     stepTitle,
+                current:  current,
+                total:    job.steps.count,
+                progress: progress
+            ))
         }
     }
 
@@ -253,19 +434,89 @@ final class AgentJobStore: ObservableObject {
                 if job.steps[i].completedAt == nil { job.steps[i].completedAt = Date() }
             }
         }
-        if let job = job(id: id) { postNotification(for: job) }
+        if let job = job(id: id) {
+            postNotification(for: job)
+            OutputStore.shared.register(from: job)
+
+            let name    = result.metadata["siteName"] ?? String(job.prompt.prefix(30))
+            let title   = "\(name) ready"
+            let actions = buildCompletionActions(for: job)
+            CursorCompanionManager.shared.send(.agentCompleted(title: title, actions: actions))
+
+            // Telemetry — differentiate by job type
+            let duration = job.completedAt?.timeIntervalSince(job.startedAt ?? job.createdAt) ?? 0
+            switch job.type {
+            case .publishWebsite:
+                let provider = job.publishTarget ?? "unknown"
+                TelemetryService.shared.track(.publishSucceeded(jobId: job.id, provider: provider))
+                let siteName = result.metadata["siteName"] ?? "your website"
+                AccessibilityService.shared.announce("Published \(siteName) successfully")
+            case .websiteImprovement:
+                let delta = result.metadata["deltaAvg"].flatMap(Double.init)
+                TelemetryService.shared.track(.improvementApproved(jobId: job.id, scoreDelta: delta))
+                let versionName = result.summary
+                AccessibilityService.shared.announce(versionName)
+            default:
+                let name = result.metadata["siteName"] ?? String(job.prompt.prefix(30))
+                AccessibilityService.shared.announce("\(job.type.rawValue) complete: \(name)")
+            }
+            TelemetryService.shared.track(.agentCompleted(
+                jobId: job.id, jobType: job.type.rawValue, durationSeconds: duration
+            ))
+        }
     }
 
     func failJob(id: UUID, error: String) {
+        let source     = job(id: id).map { $0.type.rawValue } ?? "AgentJobStore"
+        let resolution = ErrorService.shared.handle(error, source: source, jobId: id)
+
         update(id) { job in
-            job.status = .failed
-            job.errorMessage = error
-            job.completedAt = Date()
-            job.currentStep = "Failed"
+            job.status        = .failed
+            job.errorMessage  = resolution.userMessage
+            job.errorCategory = resolution.category
+            job.completedAt   = Date()
+            job.currentStep   = "Failed"
+        }
+        CursorCompanionManager.shared.send(.agentFailed(
+            message: resolution.userMessage,
+            actions: resolution.companionActions
+        ))
+        AccessibilityService.shared.announce("Task failed: \(resolution.userMessage)")
+
+        if let job = job(id: id) {
+            switch job.type {
+            case .publishWebsite:
+                TelemetryService.shared.track(.publishFailed(
+                    jobId: job.id,
+                    provider: job.publishTarget ?? "unknown",
+                    reason: resolution.userMessage
+                ))
+            default: break
+            }
+            TelemetryService.shared.track(.agentFailed(
+                jobId: job.id, jobType: job.type.rawValue, reason: resolution.userMessage
+            ))
         }
     }
 
     // MARK: - Private Helpers
+
+    private func buildCompletionActions(for job: AgentJob) -> [CompanionActionSpec] {
+        switch job.type {
+        case .publishWebsite:
+            var actions: [CompanionActionSpec] = []
+            if let url = job.result?.metadata["deployedUrl"] ?? job.result?.metadata["publishedUrl"],
+               !url.isEmpty {
+                actions.append(.openSite())
+            }
+            actions.append(.viewLibrary())
+            return actions
+        case .websiteBuilder, .websiteEdit, .websiteImprovement:
+            return [.viewLibrary(), .openIsland()]
+        default:
+            return [.openIsland()]
+        }
+    }
 
     private func update(_ id: UUID, mutation: (inout AgentJob) -> Void) {
         guard let idx = jobs.firstIndex(where: { $0.id == id }) else { return }
@@ -285,17 +536,99 @@ final class AgentJobStore: ObservableObject {
 
     // MARK: - Static Helpers
 
-    static func buildSteps(for type: AgentJobType) -> [AgentJobStep] {
+    static func buildSteps(for type: AgentJobType, mode: WebsiteBuildMode? = nil) -> [AgentJobStep] {
         switch type {
         case .websiteBuilder:
-            return [
-                AgentJobStep(title: "Analyzing requirements"),
-                AgentJobStep(title: "Generating structure"),
-                AgentJobStep(title: "Creating design"),
-                AgentJobStep(title: "Writing code"),
-                AgentJobStep(title: "Validating output"),
+            let m = mode ?? .pro
+            if m == .multiAgent {
+                return [
+                    AgentJobStep(title: "Researching industry"),
+                    AgentJobStep(title: "Building brand strategy"),
+                    AgentJobStep(title: "Writing copy"),
+                    AgentJobStep(title: "Creative direction"),
+                    AgentJobStep(title: "Applying preferences"),
+                    AgentJobStep(title: "Enriching brief"),
+                    AgentJobStep(title: "Analyzing design references"),
+                    AgentJobStep(title: "Creating design direction"),
+                    AgentJobStep(title: "Building website"),
+                    AgentJobStep(title: "Refining website"),
+                    AgentJobStep(title: "Visual critique"),
+                    AgentJobStep(title: "Quality audit"),
+                    AgentJobStep(title: "Validating"),
+                    AgentJobStep(title: "Awaiting approval"),
+                    AgentJobStep(title: "Saving project"),
+                ]
+            }
+            var steps: [AgentJobStep] = [
+                AgentJobStep(title: "Collecting requirements"),
+                AgentJobStep(title: "Enriching brief"),
+            ]
+            if m.runReferenceAnalysis {
+                steps.append(AgentJobStep(title: "Analyzing design references"))
+            } else {
+                steps.append(AgentJobStep(title: "Loading design references"))
+            }
+            steps.append(AgentJobStep(title: "Creating design direction"))
+
+            if m == .studio {
+                steps += [
+                    AgentJobStep(title: "Generating variants"),
+                    AgentJobStep(title: "Awaiting selection"),
+                ]
+            } else {
+                steps.append(AgentJobStep(title: "Building website"))
+                if m == .pro {
+                    steps.append(AgentJobStep(title: "Refining website"))
+                }
+            }
+
+            if m != .fast {
+                steps += [
+                    AgentJobStep(title: "Visual critique"),
+                    AgentJobStep(title: "Quality audit"),
+                ]
+            }
+
+            steps += [
+                AgentJobStep(title: "Validating"),
                 AgentJobStep(title: "Awaiting approval"),
                 AgentJobStep(title: "Saving project"),
+            ]
+            return steps
+        case .websiteImprovement:
+            return [
+                AgentJobStep(title: "Loading website"),
+                AgentJobStep(title: "Generating improvements"),
+                AgentJobStep(title: "Rendering preview"),
+                AgentJobStep(title: "Awaiting approval"),
+                AgentJobStep(title: "Saving version"),
+            ]
+        case .websiteHealth:
+            return [
+                AgentJobStep(title: "Loading website"),
+                AgentJobStep(title: "SEO analysis"),
+                AgentJobStep(title: "Accessibility check"),
+                AgentJobStep(title: "Mobile & UX check"),
+                AgentJobStep(title: "AI recommendations"),
+                AgentJobStep(title: "Saving report"),
+            ]
+        case .websiteEdit:
+            return [
+                AgentJobStep(title: "Loading website"),
+                AgentJobStep(title: "Applying edit"),
+                AgentJobStep(title: "Rendering preview"),
+                AgentJobStep(title: "Awaiting approval"),
+                AgentJobStep(title: "Saving version"),
+            ]
+        case .publishWebsite:
+            return [
+                AgentJobStep(title: "Validating website"),
+                AgentJobStep(title: "Checking connection"),
+                AgentJobStep(title: "Awaiting approval"),
+                AgentJobStep(title: "Packaging files"),
+                AgentJobStep(title: "Deploying"),
+                AgentJobStep(title: "Confirming deployment"),
+                AgentJobStep(title: "Saving deployment"),
             ]
         case .deepResearch:
             return [
@@ -325,7 +658,7 @@ final class AgentJobStore: ObservableObject {
 
     static func estimatedDuration(for type: AgentJobType) -> TimeInterval {
         switch type {
-        case .websiteBuilder:    return 45
+        case .websiteBuilder:    return 180   // default Pro mode; overridden by buildMode.estimatedDuration
         case .deepResearch:      return 90
         case .contentGeneration: return 30
         case .appBuilder:        return 120
@@ -348,12 +681,14 @@ final class AgentJobStore: ObservableObject {
             var recovered = job
             recovered.completedAt = Date()
             if job.status == .waitingForConfirmation {
-                // Pending approval was never resolved — treat as cancelled.
                 recovered.status = .cancelled
                 recovered.errorMessage = "Pending approval was not completed — app was closed."
                 recovered.approvalDecision = ApprovalDecision(
                     approved: false, timestamp: Date(), userReason: "App closed"
                 )
+            } else if job.status == .waitingForVariantSelection {
+                recovered.status = .cancelled
+                recovered.errorMessage = "Variant selection was not completed — app was closed."
             } else {
                 recovered.status = .failed
                 recovered.errorMessage = "Job interrupted — app was closed. Tap to retry."
