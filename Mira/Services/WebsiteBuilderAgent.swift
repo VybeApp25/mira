@@ -1029,7 +1029,10 @@ enum WebsiteBuilderAgent {
         return "saas"
     }
 
-    // MARK: - Stage 4: Single-Shot Generation
+    // MARK: - Stage 4: Two-Phase Generation
+    // Phase 1 generates CSS+head, Phase 2 generates the full body.
+    // Splitting prevents CSS from consuming the entire token budget and
+    // leaving the body section ungenerated (the root cause of blank pages).
 
     private static func generateWebsite(
         prompt: String,
@@ -1042,10 +1045,11 @@ enum WebsiteBuilderAgent {
         let refContext = referenceAnalysis.map { "REFERENCE ANALYSIS:\n\($0.injectionText)\n\n" } ?? ""
         let example = exampleContext(for: designSpec.genre)
 
-        let masterPrompt = """
-        You are the world's best web designer and developer. Output a complete, stunning, production-quality website in one shot.
+        // ── Phase 1: CSS + document head ─────────────────────────────────────
+        let cssPrompt = """
+        You are the world's best web designer. Generate ONLY the CSS and document head for this website.
 
-        REQUEST: \(prompt.prefix(8000))
+        REQUEST: \(prompt.prefix(3000))
 
         \(example)DESIGN SPEC:
         Genre: \(designSpec.genre) · Style: \(designSpec.style)
@@ -1056,39 +1060,105 @@ enum WebsiteBuilderAgent {
 
         \(refContext)\(blueprint)
 
-        ============================================================
-        NON-NEGOTIABLE RULES
-        ============================================================
+        RULES:
+        - @import 2 Google Fonts at top of <style>
+        - :root must define --bg --bg2 --bg3 --text --text2 --text3 --accent --accent2 --border --radius --radius-sm --radius-lg
+        - All component styles use var() — no hardcoded hex in rules
+        - Include nav, hero, sections, cards, buttons, testimonials, footer, responsive @media(max-width:768px), and scroll JS
+        - Buttons: transition:all 0.2s + :hover{opacity:.85} · Cards: :hover{transform:translateY(-2px)}
 
-        FONTS: @import 2 Google Fonts at top of <style> — bold display font + clean body font (never system-ui alone)
-        SIZES: Hero h1: clamp(40px,6vw,80px) weight 800 tracking -2px · Section h2: clamp(28px,4vw,52px) weight 800
-
-        CSS VARIABLES: :root must define --bg --bg2 --bg3 --text --text2 --text3 --accent --accent2 --border --radius --radius-sm --radius-lg
-        All component colors use var() — never hardcoded hex in component rules
-        Buttons: transition:all 0.2s ease + :hover{opacity:.85} · Cards: :hover{transform:translateY(-2px)} transition:0.2s
-
-        CONTENT: Use EXPANDED BRIEF names/prices/quotes exactly if present — otherwise invent specific realistic content
-        Banned: "Lorem ipsum", "Your title here", "Coming soon", "placeholder"
-
-        SECTIONS: Every section needs real visual elements — cards, grids, mockups, stats — never text-only
-        Sections alternate --bg / --bg2 backgrounds · Features:3+ cards with icon · Pricing:3 tiers (middle="Most Popular")
-        Testimonials: avatar circle + quote + name/role/company · Stats: 48px+ numbers in a row
-
-        RESPONSIVE: @media(max-width:768px) at CSS end — single column, hide hero visual (display:none)
-        SCROLL: html{scroll-behavior:smooth} + nav box-shadow on scroll via inline <script>
-
-        ============================================================
-        OUTPUT: <!DOCTYPE html> on line 1 · complete file · no markdown fences · no explanation
-        ============================================================
+        OUTPUT FORMAT — output EXACTLY this structure, nothing else:
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>[Site Name]</title>
+        [Google Fonts links]
+        <style>
+        [Complete CSS]
+        </style>
+        </head>
+        STOP HERE. Do not write <body> or any HTML content.
         """
 
-        let html = try await claude.ask(
-            prompt: masterPrompt,
-            system: "You are the world's best web designer and developer. Output a single complete HTML file starting with <!DOCTYPE html>. No markdown fences, no explanation.",
+        let cssRaw = try await claude.ask(
+            prompt: cssPrompt,
+            system: "Output only the HTML head section with complete CSS. Stop before <body>. No markdown.",
             modelOverride: "claude-sonnet-4-6",
-            maxTokensOverride: 16000
+            maxTokensOverride: 8000
         )
-        return stripMarkdownFences(html)
+        var headSection = stripMarkdownFences(cssRaw)
+
+        // Ensure head section is properly closed
+        if !headSection.contains("</style>") {
+            headSection += "\n</style>"
+        }
+        if !headSection.contains("</head>") {
+            headSection += "\n</head>"
+        }
+        // Strip any accidental <body> that leaked through
+        if let bodyIdx = headSection.range(of: "<body") {
+            headSection = String(headSection[..<bodyIdx.lowerBound])
+            if !headSection.contains("</head>") { headSection += "\n</head>" }
+        }
+
+        // ── Phase 2: Full HTML body ───────────────────────────────────────────
+        // Extract just the CSS variable names so the body generator knows what's available
+        let cssVarHint = headSection.components(separatedBy: "\n")
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
+            .prefix(20)
+            .joined(separator: "\n")
+
+        let bodyPrompt = """
+        You are the world's best web designer. Generate the complete HTML body for this website.
+        The head/CSS has already been generated. Write ONLY the <body> content.
+
+        REQUEST: \(prompt.prefix(3000))
+
+        DESIGN CONTEXT:
+        Genre: \(designSpec.genre) · Style: \(designSpec.style)
+        Colors: \(designSpec.colorPalette)
+
+        CSS VARIABLES AVAILABLE (use these class names and variables):
+        \(cssVarHint)
+
+        \(blueprint)
+
+        CONTENT RULES:
+        - Invent specific, realistic content — real brand names, real copy, real numbers
+        - Banned: "Lorem ipsum", "Your title here", "Coming soon", "placeholder"
+        - Every section needs real visual elements — cards, grids, stats — never text-only
+        - Features: 3+ cards with icon emoji · Pricing: 3 tiers (middle = "Most Popular")
+        - Testimonials: avatar initial circle + quote + name/role/company
+        - Stats row: 3+ metrics with large numbers (48px+)
+        - Include nav with logo + links + CTA button
+        - Include footer with links, copyright, socials
+
+        OUTPUT: Start with <body> and end with </body>\n</html>
+        No markdown fences. No explanation. Just the HTML body.
+        """
+
+        let bodyRaw = try await claude.ask(
+            prompt: bodyPrompt,
+            system: "Output only the HTML body content starting with <body> and ending with </body></html>. No markdown, no CSS, no explanation.",
+            modelOverride: "claude-sonnet-4-6",
+            maxTokensOverride: 8000
+        )
+        var bodySection = stripMarkdownFences(bodyRaw)
+
+        // Ensure body is properly wrapped
+        if !bodySection.lowercased().contains("<body") {
+            bodySection = "<body>\n" + bodySection
+        }
+        if !bodySection.lowercased().contains("</html>") {
+            if !bodySection.lowercased().contains("</body>") {
+                bodySection += "\n</body>"
+            }
+            bodySection += "\n</html>"
+        }
+
+        return headSection + "\n" + bodySection
     }
 
     // MARK: - Genre Blueprints
