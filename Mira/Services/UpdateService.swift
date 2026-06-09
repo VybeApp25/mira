@@ -11,14 +11,20 @@ final class UpdateService: ObservableObject {
     @Published var lastChecked: Date? = UserDefaults.standard.object(forKey: "mira_last_update_check") as? Date
 
     private init() {
+        // startingUpdater: false prevents Sparkle from auto-running on init.
+        // With placeholder SUPublicEDKey / SUFeedURL, startingUpdater:true shows
+        // a blocking NSAlert that freezes the UI (looks like a crash).
+        // The updater starts explicitly when the user presses Check for Updates.
         controller = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: false,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
     }
 
     func checkForUpdates() {
+        // Start the updater lazily on first explicit check
+        try? controller.updater.start()
         controller.checkForUpdates(nil)
         lastChecked = Date()
         UserDefaults.standard.set(lastChecked, forKey: "mira_last_update_check")
