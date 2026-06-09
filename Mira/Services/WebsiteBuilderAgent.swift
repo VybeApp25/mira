@@ -1086,7 +1086,7 @@ enum WebsiteBuilderAgent {
             prompt: masterPrompt,
             system: "You are the world's best web designer and developer. Output a single complete HTML file starting with <!DOCTYPE html>. No markdown fences, no explanation.",
             modelOverride: "claude-sonnet-4-6",
-            maxTokensOverride: 8000
+            maxTokensOverride: 16000
         )
         return stripMarkdownFences(html)
     }
@@ -1218,7 +1218,7 @@ enum WebsiteBuilderAgent {
             screenshot: screenshot,
             system: "You are a world-class web designer reviewing your work. Identify visual problems and output the complete corrected HTML.",
             modelOverride: "claude-sonnet-4-6",
-            maxTokensOverride: 8000
+            maxTokensOverride: 16000
         )
         let cleaned = stripMarkdownFences(raw)
         return cleaned.lowercased().contains("<!doctype html") ? cleaned : html
@@ -1314,7 +1314,7 @@ enum WebsiteBuilderAgent {
             prompt: repairPrompt,
             system: "Output only the complete corrected HTML file starting with <!DOCTYPE html>.",
             modelOverride: "claude-sonnet-4-6",
-            maxTokensOverride: 8000
+            maxTokensOverride: 16000
         )
         let cleaned = stripMarkdownFences(repaired)
         return (cleaned.lowercased().contains("<!doctype html") || cleaned.lowercased().contains("<html")) ? cleaned : html
@@ -1333,12 +1333,33 @@ enum WebsiteBuilderAgent {
         if !result.lowercased().contains("<!doctype") {
             return ValidationResult(isValid: false, html: result, error: "Missing DOCTYPE — generation may have been truncated. Please retry.")
         }
+
+        // Repair truncated CSS: unclosed braces leave the entire stylesheet broken,
+        // causing the page to render blank even though HTML structure is intact.
+        if result.contains("<style>") {
+            let styleStart = result.range(of: "<style>")!.upperBound
+            let styleEnd = result.range(of: "</style>")?.lowerBound ?? result.endIndex
+            let cssBlock = String(result[styleStart..<styleEnd])
+            let openCount = cssBlock.filter { $0 == "{" }.count
+            let closeCount = cssBlock.filter { $0 == "}" }.count
+            if openCount > closeCount {
+                let closing = String(repeating: "}\n", count: openCount - closeCount)
+                if result.contains("</style>") {
+                    result = result.replacingOccurrences(of: "</style>", with: "\(closing)</style>", range: result.range(of: "</style>"))
+                } else {
+                    // Style block was never closed — close it before </head> or at insertion point
+                    let insertPoint = result.range(of: "</head>")?.lowerBound
+                        ?? result.range(of: "<body")?.lowerBound
+                        ?? result.endIndex
+                    result.insert(contentsOf: "\(closing)</style>\n", at: insertPoint)
+                }
+            }
+        }
+
         if !result.lowercased().contains("</html>") {
             result += "\n</body>\n</html>"
         }
-        if result.contains("<style>") && !result.contains("</style>") {
-            result = result.replacingOccurrences(of: "</head>", with: "</style>\n</head>")
-        }
+
         guard result.lowercased().contains("<html") else {
             return ValidationResult(isValid: false, html: result, error: "Output is not valid HTML.")
         }
@@ -1697,7 +1718,7 @@ enum WebsiteImprovementAgent {
                 prompt: improvePrompt,
                 system: "You are a world-class web designer. Output only the complete improved HTML starting with <!DOCTYPE html>.",
                 modelOverride: "claude-sonnet-4-6",
-                maxTokensOverride: 8000
+                maxTokensOverride: 16000
             )
             let cleaned = stripMarkdownFences(raw)
             guard cleaned.lowercased().contains("<!doctype html") else {
@@ -1902,7 +1923,7 @@ enum WebsiteEditorAgent {
                 prompt: editPrompt,
                 system: "You are a precise web developer making targeted edits. Output only the complete modified HTML. Never redesign — only modify what was requested.",
                 modelOverride: "claude-sonnet-4-6",
-                maxTokensOverride: 8000
+                maxTokensOverride: 16000
             )
             editedHTML = stripMarkdownFences(raw)
             let newLines = editedHTML.components(separatedBy: "\n").count

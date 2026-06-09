@@ -73,8 +73,8 @@ class ClaudeService {
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
-        // Allow ~3 tokens/second for large Sonnet generations, minimum 60 s.
-        req.timeoutInterval = max(60, Double(maxTokens) / 3)
+        // ~40 tokens/sec is a conservative estimate for Sonnet; minimum 120 s.
+        req.timeoutInterval = max(120, Double(maxTokens) / 40)
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
