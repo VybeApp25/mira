@@ -447,14 +447,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ]
 
         if includeFullConfig {
-            // gpt-realtime-2 rejects: voice, turn_detection — uses its own defaults for both.
-            session["modalities"]            = ["text", "audio"]
-            session["input_audio_format"]    = "pcm16"
-            session["output_audio_format"]   = "pcm16"
-
-            // Transcription — enables conversation.item.input_audio_transcription.completed
-            session["input_audio_transcription"] = ["model": "whisper-1"] as [String: Any]
-
+            // gpt-realtime-2 only accepts: type, instructions, modalities, tools, tool_choice.
+            // voice, turn_detection, input_audio_format, output_audio_format, and
+            // input_audio_transcription are all handled internally by the model.
+            session["modalities"]  = ["text", "audio"]
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
         }
