@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		00A95EDCC39057E3E0D58A2F /* FailureMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C46953D1361F747CFB25E28 /* FailureMemory.swift */; };
+		AA11BB22CC33DD44EE55FF66 /* AgentHUDWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF67 /* AgentHUDWindowManager.swift */; };
+		BB22CC33DD44EE55FF66AA11 /* FloatingAgentChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF66AA12 /* FloatingAgentChipView.swift */; };
+		CC33DD44EE55FF66AA11BB22 /* AgentHUDColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC33DD44EE55FF66AA11BB23 /* AgentHUDColumnView.swift */; };
 		01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */; };
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
 		0E0BED64D0DB2633F7312C86 /* OutputDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD96AD74487529E2CEF249FB /* OutputDetailView.swift */; };
@@ -142,6 +145,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AA11BB22CC33DD44EE55FF67 /* AgentHUDWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDWindowManager.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF66AA12 /* FloatingAgentChipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingAgentChipView.swift; sourceTree = "<group>"; };
+		CC33DD44EE55FF66AA11BB23 /* AgentHUDColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDColumnView.swift; sourceTree = "<group>"; };
 		04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDController.swift; sourceTree = "<group>"; };
 		04F1B30EBD78983473632ED6 /* ProjectModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectModels.swift; sourceTree = "<group>"; };
 		07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionManager.swift; sourceTree = "<group>"; };
@@ -322,6 +328,7 @@
 		68EE4FC6D878A7268E7A1363 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				AA11BB22CC33DD44EE55FF67 /* AgentHUDWindowManager.swift */,
 				8261E0EB0C3813433E9281F9 /* AnimationController.swift */,
 				A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */,
 				3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */,
@@ -476,8 +483,10 @@
 		FD3D2137623027F8C561CFBC /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				CC33DD44EE55FF66AA11BB23 /* AgentHUDColumnView.swift */,
 				83B706458B64024088E8769D /* ActionChipsView.swift */,
 				E814E13E9DB836D50FA2620E /* AgentHUDView.swift */,
+				BB22CC33DD44EE55FF66AA12 /* FloatingAgentChipView.swift */,
 				AD46E148F8E843EAB047D650 /* StreamingMarkdownView.swift */,
 				062E0285B5CD4AF6BF413D6F /* ResponseCardView.swift */,
 				42036566FF695AD6554E8E01 /* AgentOutputsView.swift */,
@@ -593,6 +602,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA11BB22CC33DD44EE55FF66 /* AgentHUDWindowManager.swift in Sources */,
+				BB22CC33DD44EE55FF66AA11 /* FloatingAgentChipView.swift in Sources */,
+				CC33DD44EE55FF66AA11BB22 /* AgentHUDColumnView.swift in Sources */,
 				246CD9DE07245F8D216E9905 /* AccessibilityService.swift in Sources */,
 				6288E1B1D1F4E9E4141C7CF0 /* AccountService.swift in Sources */,
 				D6BC0011333BD8D5DC98B090 /* ActionChipService.swift in Sources */,

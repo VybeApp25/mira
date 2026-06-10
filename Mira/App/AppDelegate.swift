@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         manager.setup()
         notchManager = manager
         MiraCursorManager.shared.activate()
+        AgentHUDWindowManager.shared.start()
 
         statusBarController = StatusBarController(miraState: manager.miraState)
 
@@ -36,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         AgentProcessManager.shared.stop()
         MiraCursorManager.shared.deactivate()
+        AgentHUDWindowManager.shared.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

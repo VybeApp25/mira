@@ -189,6 +189,18 @@ final class AgentJobStore: ObservableObject {
         jobs.first { $0.id == id }
     }
 
+    // MARK: - HUD visibility (dismiss from right-side stack without deleting)
+
+    @Published private(set) var hudHidden: Set<UUID> = []
+
+    func hideFromHUD(id: UUID) {
+        hudHidden.insert(id)
+    }
+
+    func showInHUD(id: UUID) {
+        hudHidden.remove(id)
+    }
+
     // MARK: - Cancel
 
     func cancelJob(id: UUID) {
