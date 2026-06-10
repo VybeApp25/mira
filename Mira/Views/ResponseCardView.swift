@@ -1,21 +1,130 @@
 import SwiftUI
 
 // MARK: - ResponseCardView
-// Mirrors HeyClicky's ResponseCardView: cardHeader + galleryStrip + expandedBody + closeButton.
-// Slides up below the island when Claude Code produces file artifacts.
+//
+// Three visual states:
+//   isMinimized = true  → chip strip docked to the right edge of screen
+//   isMinimized = false, expanded = false → gallery strip (default card)
+//   isMinimized = false, expanded = true  → code-content expanded card
+//
+// Mirrors HeyClicky's ResponseCardView minimize-to-chip pattern.
 
 struct ResponseCardView: View {
-    let artifacts:  [ClaudeCodeArtifact]
-    let onClose:    () -> Void
+    let artifacts:   [ClaudeCodeArtifact]
+    let isMinimized: Bool
+    let onClose:     () -> Void
+    let onMinimize:  () -> Void
+    let onRestore:   () -> Void
 
-    @State private var selectedIndex: Int = 0
-    @State private var expanded: Bool = false
+    @State private var selectedIndex: Int  = 0
+    @State private var expanded: Bool      = false
 
     private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
     private let surface = Color(red: 0.11, green: 0.11, blue: 0.15)
     private let border  = Color.white.opacity(0.09)
 
     var body: some View {
+        if isMinimized {
+            chipStrip
+        } else {
+            fullCard
+        }
+    }
+
+    // MARK: - Chip strip (minimized)
+
+    private var chipStrip: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(artifacts.enumerated()), id: \.element.id) { idx, art in
+                chipRow(art: art, isLast: idx == artifacts.count - 1)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(border, lineWidth: 0.5)
+                )
+        )
+        .shadow(color: .black.opacity(0.50), radius: 18, x: 0, y: 6)
+        .transition(.asymmetric(
+            insertion:  .move(edge: .trailing).combined(with: .opacity),
+            removal:    .move(edge: .trailing).combined(with: .opacity)
+        ))
+    }
+
+    private func chipRow(art: ClaudeCodeArtifact, isLast: Bool) -> some View {
+        HStack(spacing: 10) {
+            // App/file icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(accent.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Image(systemName: art.icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(accent)
+            }
+
+            // Title + line count
+            VStack(alignment: .leading, spacing: 2) {
+                Text(art.displayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.90))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                let lineCount = art.content.components(separatedBy: "\n").count
+                Text("\(lineCount) lines")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.38))
+            }
+
+            Spacer(minLength: 0)
+
+            // Done badge
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(red: 0.18, green: 0.78, blue: 0.45))
+                    .frame(width: 6, height: 6)
+                Text("Done")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(red: 0.18, green: 0.78, blue: 0.45))
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color(red: 0.18, green: 0.78, blue: 0.45).opacity(0.12))
+            .clipShape(Capsule())
+
+            // Expand icon
+            Button(action: {
+                selectedIndex = artifacts.firstIndex(where: { $0.id == art.id }) ?? 0
+                onRestore()
+            }) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.40))
+                    .frame(width: 22, height: 22)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(height: 52)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Divider()
+                    .background(border)
+                    .padding(.leading, 54)
+            }
+        }
+    }
+
+    // MARK: - Full card
+
+    private var fullCard: some View {
         VStack(spacing: 0) {
             cardHeader
             Divider().background(border)
@@ -35,6 +144,10 @@ struct ResponseCardView: View {
         )
         .shadow(color: .black.opacity(0.45), radius: 20, x: 0, y: 8)
         .animation(.spring(response: 0.30, dampingFraction: 0.80), value: expanded)
+        .transition(.asymmetric(
+            insertion:  .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
+            removal:    .opacity.combined(with: .scale(scale: 0.96, anchor: .top))
+        ))
     }
 
     // MARK: - Header
@@ -66,6 +179,18 @@ struct ResponseCardView: View {
             }
             .buttonStyle(.plain)
 
+            // Minimize to chip
+            Button(action: onMinimize) {
+                Image(systemName: "minus")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.35))
+                    .frame(width: 22, height: 22)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Minimize to chip")
+
             // Close
             Button(action: onClose) {
                 Image(systemName: "xmark")
@@ -81,7 +206,7 @@ struct ResponseCardView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Gallery strip (mirrors HeyClicky ResponseCardGalleryStrip)
+    // MARK: - Gallery strip
 
     private var galleryStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -104,11 +229,11 @@ struct ResponseCardView: View {
         .frame(height: 110)
     }
 
-    // MARK: - Expanded body (full file content)
+    // MARK: - Expanded body
 
     private var cardExpandedBody: some View {
         VStack(spacing: 0) {
-            // Tab row for file switching
+            // Tab row for multi-file switching
             if artifacts.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
@@ -135,7 +260,6 @@ struct ResponseCardView: View {
                 Divider().background(border)
             }
 
-            // Code content
             if artifacts.indices.contains(selectedIndex) {
                 let art = artifacts[selectedIndex]
                 ScrollView([.vertical, .horizontal], showsIndicators: false) {
@@ -151,7 +275,7 @@ struct ResponseCardView: View {
     }
 }
 
-// MARK: - ArtifactThumbnail (mirrors HeyClicky's ArtifactPreviewCard / ResponseCardGalleryThumbnail)
+// MARK: - ArtifactThumbnail
 
 private struct ArtifactThumbnail: View {
     let artifact:   ClaudeCodeArtifact
@@ -163,7 +287,6 @@ private struct ArtifactThumbnail: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
-                // File icon + language badge
                 HStack(spacing: 0) {
                     Image(systemName: artifact.icon)
                         .font(.system(size: 16))
@@ -179,8 +302,7 @@ private struct ArtifactThumbnail: View {
                     }
                 }
 
-                // Code preview snippet
-                Text(codePreview)
+                Text(String(artifact.content.prefix(120)))
                     .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(.white.opacity(0.28))
                     .lineLimit(3)
@@ -188,7 +310,6 @@ private struct ArtifactThumbnail: View {
 
                 Spacer(minLength: 0)
 
-                // Filename
                 Text(artifact.displayName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(isSelected ? .white.opacity(0.90) : .white.opacity(0.50))
@@ -200,16 +321,13 @@ private struct ArtifactThumbnail: View {
             .background(Color.white.opacity(isSelected ? 0.10 : 0.04))
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? accent.opacity(0.45) : Color.white.opacity(0.07), lineWidth: isSelected ? 1 : 0.5)
+                    .stroke(isSelected ? accent.opacity(0.45) : Color.white.opacity(0.07),
+                            lineWidth: isSelected ? 1 : 0.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .scaleEffect(isSelected ? 1.02 : 1.0)
         .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isSelected)
-    }
-
-    private var codePreview: String {
-        String(artifact.content.prefix(120))
     }
 }

@@ -9,8 +9,9 @@ final class ResponseCardService: ObservableObject {
     static let shared = ResponseCardService()
     private init() {}
 
-    @Published private(set) var artifacts: [ClaudeCodeArtifact] = []
-    @Published private(set) var isVisible: Bool = false
+    @Published private(set) var artifacts:    [ClaudeCodeArtifact] = []
+    @Published private(set) var isVisible:    Bool = false
+    @Published private(set) var isMinimized:  Bool = false
 
     private var panel: NSPanel?
 
@@ -18,28 +19,27 @@ final class ResponseCardService: ObservableObject {
 
     func show(artifacts: [ClaudeCodeArtifact]) {
         guard !artifacts.isEmpty else { return }
-        self.artifacts = artifacts
-        isVisible = true
+        self.artifacts  = artifacts
+        isVisible       = true
+        isMinimized     = false
         setupPanelIfNeeded()
-        guard let p = panel else { return }
+        guard let p = panel, let screen = NSScreen.main else { return }
         p.alphaValue = 0
+        p.setFrame(cardFrame(screen: screen), display: false)
         p.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.28
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             p.animator().alphaValue = 1.0
         }
-        // Slide up
-        if let screen = NSScreen.main {
-            let target = targetFrame(screen: screen)
-            var start  = target
-            start.origin.y -= 24
-            p.setFrame(start, display: false)
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.30
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                p.animator().setFrame(target, display: true)
-            }
+        // Slide up from below
+        var start = cardFrame(screen: screen)
+        start.origin.y -= 24
+        p.setFrame(start, display: false)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.30
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            p.animator().setFrame(cardFrame(screen: screen), display: true)
         }
     }
 
@@ -51,8 +51,29 @@ final class ResponseCardService: ObservableObject {
             p.animator().alphaValue = 0
         } completionHandler: { [weak self] in
             p.orderOut(nil)
-            self?.isVisible = false
-            self?.artifacts = []
+            self?.isVisible   = false
+            self?.isMinimized = false
+            self?.artifacts   = []
+        }
+    }
+
+    func minimize() {
+        guard let p = panel, let screen = NSScreen.main, !isMinimized else { return }
+        isMinimized = true
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.32
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            p.animator().setFrame(self.chipFrame(screen: screen), display: true)
+        }
+    }
+
+    func restore() {
+        guard let p = panel, let screen = NSScreen.main, isMinimized else { return }
+        isMinimized = false
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.32
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            p.animator().setFrame(self.cardFrame(screen: screen), display: true)
         }
     }
 
@@ -64,36 +85,59 @@ final class ResponseCardService: ObservableObject {
     // MARK: - Panel
 
     private func setupPanelIfNeeded() {
-        guard panel == nil, let screen = NSScreen.main else { return }
-        let frame = targetFrame(screen: screen)
-        let p = NSPanel(
-            contentRect: frame,
-            styleMask:   [.borderless, .nonactivatingPanel],
-            backing:     .buffered,
-            defer:       false
-        )
-        p.level              = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 6)
-        p.backgroundColor    = .clear
-        p.isOpaque           = false
-        p.hasShadow          = true
-        p.alphaValue         = 0
-        p.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        if panel == nil {
+            guard let screen = NSScreen.main else { return }
+            // Start at card size; minimized path will resize later.
+            let frame = cardFrame(screen: screen)
+            let p = NSPanel(
+                contentRect: frame,
+                styleMask:   [.borderless, .nonactivatingPanel],
+                backing:     .buffered,
+                defer:       false
+            )
+            p.level              = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 6)
+            p.backgroundColor    = .clear
+            p.isOpaque           = false
+            p.hasShadow          = true
+            p.alphaValue         = 0
+            p.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
 
-        let host = NSHostingView(rootView: ResponseCardRootView(service: self))
-        host.frame = CGRect(origin: .zero, size: frame.size)
-        p.contentView = host
-        panel = p
+            let host = NSHostingView(rootView: ResponseCardRootView(service: self))
+            host.autoresizingMask = [.width, .height]
+            host.frame = CGRect(origin: .zero, size: frame.size)
+            p.contentView = host
+            panel = p
+        } else {
+            // Re-entering show() while panel exists: snap back to card frame.
+            guard let p = panel, let screen = NSScreen.main else { return }
+            p.setFrame(cardFrame(screen: screen), display: false)
+        }
     }
 
-    private func targetFrame(screen: NSScreen) -> CGRect {
-        // Sits just below the notch island (which is 252pt tall from top)
-        // Horizontally centered, 520pt wide, 180pt tall
-        let w: CGFloat = 520
-        let h: CGFloat = 180
-        let topGap: CGFloat = 268  // island bottom + 16pt gap
+    // MARK: - Frames
+
+    /// Full card panel: centered below the notch island.
+    private func cardFrame(screen: NSScreen) -> CGRect {
+        let w: CGFloat  = 520
+        let h: CGFloat  = 180
+        let topGap: CGFloat = 268   // island bottom + 16pt gap
         return CGRect(
             x: screen.frame.midX - w / 2,
             y: screen.frame.maxY - topGap - h,
+            width: w,
+            height: h
+        )
+    }
+
+    /// Chip strip: compact rows docked to the right edge, vertically centered.
+    private func chipFrame(screen: NSScreen) -> CGRect {
+        let w: CGFloat    = 270
+        let rowH: CGFloat = 52
+        let vPad: CGFloat = 8
+        let h = vPad + CGFloat(max(1, artifacts.count)) * rowH + vPad
+        return CGRect(
+            x: screen.frame.maxX - w - 12,
+            y: screen.frame.midY - h / 2,
             width: w,
             height: h
         )
@@ -107,8 +151,11 @@ struct ResponseCardRootView: View {
 
     var body: some View {
         ResponseCardView(
-            artifacts: service.artifacts,
-            onClose: { service.hide() }
+            artifacts:    service.artifacts,
+            isMinimized:  service.isMinimized,
+            onClose:      { service.hide() },
+            onMinimize:   { service.minimize() },
+            onRestore:    { service.restore() }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
