@@ -75,12 +75,10 @@ final class NotchManager {
             capture:        capture,
             tooltip:        tooltipController
         )
-        // Always-on Realtime session — keeps a persistent WebSocket open so the user
-        // can speak at any time without pressing a button (mirrors HeyClicky's always-on).
-        // WakeWord is paused: the Realtime session owns the mic while always-on is active.
-        RealtimeVoiceService.shared.connectAlwaysOn()
-        // WakeWord only runs when always-on is off; start it as a fallback for PTT-only mode.
-        // wakeWord.start()  — omitted: Realtime session owns mic in always-on mode.
+        // Pure PTT mode — no persistent session. The WebSocket opens on key-down and
+        // closes after the response finishes speaking (mirrors HeyClicky's PTT behavior).
+        // WakeWord runs as the ambient fallback when no PTT session is active.
+        wakeWord.start()
         shortcutManager.start()
         BackgroundScheduler.shared.start()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer

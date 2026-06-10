@@ -343,11 +343,16 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                     Task { @MainActor [weak self] in
                         guard let self, case .speaking = self.state else { return }
                         NSLog("[MiraRealtime] player drained")
-                        // Suppress VAD for 800ms after playback ends — prevents speaker
-                        // audio from echoing back through mic and triggering a new turn.
-                        self.suppressMicUntil = Date().addingTimeInterval(0.8)
-                        self.state   = .recording
-                        self.aiDraft = ""
+                        if self.isAlwaysOn {
+                            // Always-on: suppress VAD briefly then go back to listening.
+                            self.suppressMicUntil = Date().addingTimeInterval(0.8)
+                            self.state   = .recording
+                            self.aiDraft = ""
+                        } else {
+                            // PTT mode: close session — next interaction starts fresh on key-down.
+                            NSLog("[MiraRealtime] PTT response complete — closing session")
+                            self.stop()
+                        }
                     }
                 }
             }

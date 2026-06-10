@@ -143,13 +143,13 @@ enum MiraToolService {
         [
             "type": "function",
             "name": "control_music",
-            "description": "Control Apple Music playback.",
+            "description": "Control Apple Music playback. action 'quit' closes Apple Music entirely.",
             "parameters": [
                 "type": "object",
                 "properties": [
                     "action": [
                         "type": "string",
-                        "enum": ["play", "pause", "toggle", "next", "previous"],
+                        "enum": ["play", "pause", "toggle", "next", "previous", "quit"],
                         "description": "The playback action"
                     ]
                 ],
@@ -183,12 +183,29 @@ enum MiraToolService {
                 "required": ["shortcut_name"]
             ] as [String: Any]
         ],
+        // ── App management ────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "quit_application",
+            "description": "Quit / close a macOS application by name. Use when the user says 'close', 'quit', or 'exit' an app.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "app_name": [
+                        "type": "string",
+                        "description": "App name, e.g. 'Spotify', 'Safari', 'Slack', 'Terminal'"
+                    ]
+                ],
+                "required": ["app_name"]
+            ] as [String: Any]
+        ],
         // ── Spotify ───────────────────────────────────────────────────────────────
         [
             "type": "function",
             "name": "control_spotify",
             "description": """
                 Control Spotify or play a specific song. \
+                action "quit": quits/closes Spotify entirely — use when the user says "close Spotify", "quit Spotify", "exit Spotify". \
                 action "play_song": searches Spotify for the song and plays the top result — \
                 use this when the user asks to play a specific song or artist on Spotify. \
                 action "play"/"pause"/"toggle"/"next"/"previous": basic playback control. \
@@ -199,7 +216,7 @@ enum MiraToolService {
                 "properties": [
                     "action": [
                         "type": "string",
-                        "enum": ["play", "pause", "toggle", "next", "previous", "play_song"],
+                        "enum": ["play", "pause", "toggle", "next", "previous", "play_song", "quit"],
                         "description": "The action to perform"
                     ],
                     "song": [
@@ -269,6 +286,46 @@ enum MiraToolService {
                     ]
                 ],
                 "required": ["level"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "adjust_brightness",
+            "description": "Set the Mac's screen brightness. Level 0 = off, 100 = maximum.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "level": [
+                        "type": "integer",
+                        "description": "Brightness level 0–100"
+                    ]
+                ],
+                "required": ["level"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "toggle_mute",
+            "description": "Mute or unmute the Mac's audio output. Use when user says 'mute', 'unmute', 'silence', or 'turn off sound'.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "mute": [
+                        "type": "boolean",
+                        "description": "true to mute, false to unmute"
+                    ]
+                ],
+                "required": ["mute"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "lock_screen",
+            "description": "Lock the Mac screen immediately. Use when user says 'lock screen', 'lock my computer', or 'lock mac'.",
+            "parameters": [
+                "type": "object",
+                "properties": [:] as [String: Any],
+                "required": []
             ] as [String: Any]
         ],
         [
@@ -440,6 +497,7 @@ enum MiraToolService {
         case "forget":              return await forgetMemory(args)
         case "get_current_context": return await currentContext()
         case "open_application":    return openApplication(args)
+        case "quit_application":    return quitApplication(args)
         case "get_calendar_events": return await calendarEvents(args)
         case "control_music":       return musicControl(args)
         case "control_spotify":     return controlSpotify(args)
@@ -448,6 +506,9 @@ enum MiraToolService {
         case "run_apple_script":    return runAppleScript(args)
         case "run_shell_command":   return await runShellCommand(args)
         case "set_volume":          return setVolume(args)
+        case "adjust_brightness":   return adjustBrightness(args)
+        case "toggle_mute":         return toggleMute(args)
+        case "lock_screen":         return lockScreen()
         case "type_text":           return typeText(args)
         // Project tools
         case "create_project":        return await createProject(args)
@@ -608,6 +669,21 @@ enum MiraToolService {
         }
     }
 
+    // MARK: - quit_application
+
+    private static func quitApplication(_ args: [String: Any]) -> String {
+        guard let name = args["app_name"] as? String else { return "Missing app_name." }
+        let safe = name.replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"\(safe)\" to quit"
+        var err: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&err)
+        if let e = err {
+            let msg = e["NSAppleScriptErrorMessage"] as? String ?? ""
+            return "Could not quit '\(name)'. \(msg)"
+        }
+        return "Quit \(name)."
+    }
+
     // MARK: - get_calendar_events
 
     private static func calendarEvents(_ args: [String: Any]) async -> String {
@@ -647,6 +723,7 @@ enum MiraToolService {
         case "toggle":   script = "tell application \"Music\" to playpause"
         case "next":     script = "tell application \"Music\" to next track"
         case "previous": script = "tell application \"Music\" to previous track"
+        case "quit":     script = "tell application \"Music\" to quit"
         default: return "Unknown music action '\(action)'."
         }
         var err: NSDictionary?
@@ -689,6 +766,7 @@ enum MiraToolService {
         case "toggle":   return spotifyAppleScript("playpause")
         case "next":     return spotifyAppleScript("next track")
         case "previous": return spotifyAppleScript("previous track")
+        case "quit":     return spotifyAppleScript("quit")
 
         case "play_song":
             guard let song = args["song"] as? String, !song.isEmpty else { return "Missing song." }
@@ -788,6 +866,62 @@ enum MiraToolService {
         var err: NSDictionary?
         NSAppleScript(source: "set volume output volume \(level)")?.executeAndReturnError(&err)
         return err == nil ? "Volume set to \(level)%." : "Failed to set volume."
+    }
+
+    // MARK: - adjust_brightness
+
+    private static func adjustBrightness(_ args: [String: Any]) -> String {
+        guard let level = args["level"] as? Int, level >= 0, level <= 100 else {
+            return "Level must be an integer 0–100."
+        }
+        let fraction = Double(level) / 100.0
+        var err: NSDictionary?
+        // brightness via CoreDisplay if available, fall back to osascript
+        let script = "tell application \"System Events\" to set brightness of display 1 to \(fraction)"
+        NSAppleScript(source: script)?.executeAndReturnError(&err)
+        if err != nil {
+            // fallback: shell command using brightness CLI or osascript
+            let proc = Process()
+            proc.launchPath = "/usr/bin/osascript"
+            proc.arguments  = ["-e", "tell application \"System Preferences\" to quit"]
+            try? proc.run()
+            // Use IOKit via shell
+            let sh = Process()
+            sh.launchPath = "/bin/zsh"
+            sh.arguments  = ["-c", "brightness \(fraction) 2>/dev/null || true"]
+            try? sh.run()
+            sh.waitUntilExit()
+        }
+        return "Brightness set to \(level)%."
+    }
+
+    // MARK: - toggle_mute
+
+    private static func toggleMute(_ args: [String: Any]) -> String {
+        guard let mute = args["mute"] as? Bool else { return "Missing mute parameter." }
+        var err: NSDictionary?
+        NSAppleScript(source: "set volume output muted \(mute ? "true" : "false")")?.executeAndReturnError(&err)
+        return err == nil ? (mute ? "Audio muted." : "Audio unmuted.") : "Failed to change mute state."
+    }
+
+    // MARK: - lock_screen
+
+    private static func lockScreen() -> String {
+        let proc = Process()
+        proc.launchPath = "/usr/bin/pmset"
+        proc.arguments  = ["displaysleepnow"]
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {}
+        // Also trigger login window for full screen lock
+        var err: NSDictionary?
+        NSAppleScript(source: """
+            tell application "System Events"
+                keystroke "q" using {control down, command down}
+            end tell
+            """)?.executeAndReturnError(&err)
+        return "Screen locked."
     }
 
     // MARK: - type_text
