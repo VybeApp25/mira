@@ -1,22 +1,113 @@
 import SwiftUI
 
-// MARK: - Status color palette (HeyClicky: agentRunningColor / agentDone / agentFailed / agentComplete)
+// MARK: - FrostedGlass ViewModifier
+// Port of the interactive-frosted-glass-card React component (MIT) to SwiftUI.
+// Shared across FloatingAgentChipView, ResponseCardView, and any future cards.
+// Defined here (compiled into the target) so all Views can use .frostedGlass().
+
+private struct GlassCardSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+}
+
+struct FrostedGlass: ViewModifier {
+    var cornerRadius: CGFloat = 16
+    var tiltDegrees:  CGFloat = 10
+    var glareOpacity: CGFloat = 0.18
+
+    @State private var hovered:  Bool    = false
+    @State private var hoverLoc: CGPoint = .zero
+    @State private var cardSize: CGSize  = .zero
+
+    private var tiltX: Double {
+        guard hovered, cardSize.height > 0 else { return 0 }
+        return Double((hoverLoc.y / cardSize.height - 0.5) * -tiltDegrees)
+    }
+    private var tiltY: Double {
+        guard hovered, cardSize.width > 0 else { return 0 }
+        return Double((hoverLoc.x / cardSize.width  - 0.5) *  tiltDegrees)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: GlassCardSizeKey.self, value: geo.size)
+                }
+            )
+            .onPreferenceChange(GlassCardSizeKey.self) { size in
+                if size != .zero { cardSize = size }
+            }
+            .background(glassLayers)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.42), radius: 22, x: 0, y: 10)
+            .rotation3DEffect(.degrees(tiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.4)
+            .rotation3DEffect(.degrees(tiltY), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+            .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.65), value: tiltX)
+            .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.65), value: tiltY)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let loc):
+                    if !hovered { hovered = true }
+                    hoverLoc = loc
+                case .ended:
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { hovered = false }
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var glassLayers: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color(red: 0.06, green: 0.06, blue: 0.13).opacity(0.62))
+            if hovered {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(RadialGradient(
+                        colors: [Color.white.opacity(glareOpacity), .clear],
+                        center: UnitPoint(
+                            x: cardSize.width  > 0 ? Double(hoverLoc.x / cardSize.width)  : 0.5,
+                            y: cardSize.height > 0 ? Double(hoverLoc.y / cardSize.height) : 0.5
+                        ),
+                        startRadius: 0,
+                        endRadius:   max(cardSize.width, cardSize.height) * 0.75
+                    ))
+                    .animation(.linear(duration: 0), value: hoverLoc)
+            }
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(LinearGradient(
+                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ), lineWidth: 1)
+        }
+    }
+}
+
+extension View {
+    func frostedGlass(cornerRadius: CGFloat = 16, tiltDegrees: CGFloat = 10) -> some View {
+        modifier(FrostedGlass(cornerRadius: cornerRadius, tiltDegrees: tiltDegrees))
+    }
+}
+
+// MARK: - Status color palette
 
 extension AgentJobStatus {
     var hudColor: Color {
         switch self {
         case .queued, .preparing, .reading, .running, .writing:
-            return Color(red: 0.18, green: 0.56, blue: 1.00)   // blue — running
+            return Color(red: 0.18, green: 0.56, blue: 1.00)
         case .waitingForInput, .waitingForConfirmation, .waitingForVariantSelection:
-            return Color(red: 1.00, green: 0.75, blue: 0.20)   // amber — waiting
+            return Color(red: 1.00, green: 0.75, blue: 0.20)
         case .blockedPermission, .blockedTool:
-            return Color(red: 1.00, green: 0.55, blue: 0.15)   // orange — blocked
+            return Color(red: 1.00, green: 0.55, blue: 0.15)
         case .completed:
-            return Color(red: 0.20, green: 0.84, blue: 0.29)   // green — done
+            return Color(red: 0.20, green: 0.84, blue: 0.29)
         case .failed:
-            return Color(red: 1.00, green: 0.35, blue: 0.35)   // red — failed
+            return Color(red: 1.00, green: 0.35, blue: 0.35)
         case .cancelled:
-            return Color.white.opacity(0.35)                    // gray — cancelled
+            return Color.white.opacity(0.35)
         }
     }
 
@@ -40,62 +131,125 @@ extension AgentJobStatus {
 }
 
 // MARK: - FloatingAgentChipView
-// Mirrors HeyClicky's FloatingAgentChip: collapsed pill with glyphTile,
-// primaryLiveContent, statusIndicatorDot, and expandable detail strip.
-
-// MARK: - FloatingAgentChipView is internal (not private) so AgentHUDColumnView can see it
+//
+// Three states:
+//   minimized = true  → micro-chip pill (190pt wide, 38pt tall)
+//   minimized = false, expanded = false → compact card with frosted glass
+//   minimized = false, expanded = true  → full card with steps + actions
 
 struct FloatingAgentChipView: View {
     let job: AgentJob
     @ObservedObject private var store: AgentJobStore
-    @State private var expanded = false
-    @State private var hovered  = false
+    @State private var expanded  = false
+    @State private var minimized = false
 
     init(job: AgentJob) {
-        self.job   = job
+        self.job    = job
         self._store = ObservedObject(wrappedValue: AgentJobStore.shared)
     }
 
     private var accent: Color { job.status.hudColor }
-    private var bg = Color(red: 0.09, green: 0.09, blue: 0.12)
 
     var body: some View {
-        VStack(spacing: 0) {
-            chipHeader
-            if expanded { chipExpandedStrip }
-        }
-        .background(chipBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(chipBorder)
-        .shadow(color: .black.opacity(0.30), radius: 12, x: 0, y: 4)
-        // AgentHUDPillChrome animated border while running
-        .modifier(job.status.isActive ? AnyViewModifier(AgentHUDPillChrome()) : AnyViewModifier(EmptyModifier()))
-        // Report bounds to AgentHUDPanel for hit-testing
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: AgentHUDInteractiveRectKey.self,
-                    value: geo.frame(in: .global)
-                )
+        Group {
+            if minimized {
+                microChipView
+            } else {
+                fullChipView
             }
-        )
-        .onHover { hovered = $0 }
-        .onTapGesture { withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { expanded.toggle() } }
-        .frame(width: 280)
+        }
         .transition(.asymmetric(
             insertion: .move(edge: .trailing).combined(with: .opacity),
             removal:   .move(edge: .trailing).combined(with: .opacity)
         ))
     }
 
-    // MARK: - Collapsed header (glyphTile + primaryLiveContent + statusIndicatorDot)
+    // MARK: - Micro chip (minimized state)
+
+    private var microChipView: some View {
+        HStack(spacing: 8) {
+            // Glyph tile
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(accent.opacity(0.18))
+                    .frame(width: 26, height: 26)
+                if job.status.isActive {
+                    BlueCursorSpinnerPublic(color: accent).frame(width: 13, height: 13)
+                } else {
+                    Image(systemName: job.type.icon)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(accent)
+                }
+            }
+
+            Text(shortTitle)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.88))
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            // Status dot
+            Circle().fill(accent).frame(width: 5, height: 5)
+
+            // Expand / restore button
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { minimized = false }
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(.white.opacity(0.45))
+                    .frame(width: 20, height: 20)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(width: 190)
+        .frostedGlass(cornerRadius: 13, tiltDegrees: 6)
+        // Report bounds for hit-testing
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: AgentHUDInteractiveRectKey.self,
+                                       value: geo.frame(in: .global))
+            }
+        )
+    }
+
+    // MARK: - Full chip (normal + expanded)
+
+    private var fullChipView: some View {
+        VStack(spacing: 0) {
+            chipHeader
+            if expanded { chipExpandedStrip }
+        }
+        // Frosted glass replaces the solid dark background
+        .frostedGlass(cornerRadius: 16, tiltDegrees: 8)
+        // Animated chrome border while running
+        .modifier(job.status.isActive
+            ? AnyViewModifier(AgentHUDPillChrome())
+            : AnyViewModifier(EmptyModifier()))
+        // Report bounds for hit-testing
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: AgentHUDInteractiveRectKey.self,
+                                       value: geo.frame(in: .global))
+            }
+        )
+        .onTapGesture {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { expanded.toggle() }
+        }
+        .frame(width: 280)
+    }
+
+    // MARK: - Compact header row
 
     private var chipHeader: some View {
         HStack(spacing: 10) {
-            // glyphTile
             glyphTile
 
-            // primaryLiveContent
             VStack(alignment: .leading, spacing: 2) {
                 Text(jobTitle)
                     .font(.system(size: 12, weight: .semibold))
@@ -103,7 +257,6 @@ struct FloatingAgentChipView: View {
                     .lineLimit(1)
 
                 if job.status.isActive {
-                    // liveTrackLine / current step
                     Text(job.currentStep)
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.45))
@@ -122,21 +275,32 @@ struct FloatingAgentChipView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // statusIndicatorDot + statusChip
             statusChipView
+
+            // Minimize to micro-chip
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { minimized = true }
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white.opacity(0.38))
+                    .frame(width: 20, height: 20)
+                    .background(Color.white.opacity(0.07))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
 
-    // MARK: - Expanded strip (steps + actions + dismiss)
+    // MARK: - Expanded detail strip
 
     private var chipExpandedStrip: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .background(Color.white.opacity(0.07))
+            Divider().background(Color.white.opacity(0.07))
 
-            // Running progress bar
+            // Progress bar for active jobs
             if job.status.isActive && job.progress > 0 {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -159,7 +323,7 @@ struct FloatingAgentChipView: View {
                             Text(step.title)
                                 .font(.system(size: 11))
                                 .foregroundColor(step.status.isTerminal
-                                    ? .white.opacity(0.40)
+                                    ? .white.opacity(0.38)
                                     : .white.opacity(0.80))
                                 .lineLimit(1)
                         }
@@ -169,7 +333,7 @@ struct FloatingAgentChipView: View {
                 .padding(.vertical, 10)
             }
 
-            // Action buttons row (followUpRow equivalent)
+            // Action buttons (terminal jobs only)
             if job.status.isTerminal {
                 Divider().background(Color.white.opacity(0.07))
 
@@ -180,8 +344,6 @@ struct FloatingAgentChipView: View {
                                 handleAction(action.identifier)
                             }
                         }
-
-                        // Dismiss button
                         followUpButton(title: "Dismiss", icon: "xmark") {
                             withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                                 AgentJobStore.shared.hideFromHUD(id: job.id)
@@ -204,9 +366,7 @@ struct FloatingAgentChipView: View {
                 .frame(width: 34, height: 34)
 
             if job.status.isActive {
-                // Spinner overlay for active jobs
-                BlueCursorSpinnerPublic(color: accent)
-                    .frame(width: 18, height: 18)
+                BlueCursorSpinnerPublic(color: accent).frame(width: 18, height: 18)
             } else {
                 Image(systemName: job.type.icon)
                     .font(.system(size: 14, weight: .medium))
@@ -215,14 +375,12 @@ struct FloatingAgentChipView: View {
         }
     }
 
-    // statusChip(label:accent:solid:) equivalent
     private var statusChipView: some View {
         HStack(spacing: 4) {
             Circle()
                 .fill(accent)
                 .frame(width: 5, height: 5)
                 .opacity(job.status.isActive ? 1 : 0.6)
-                .scaleEffect(job.status.isActive ? 1.0 : 1.0)
 
             Text(job.status.hudLabel)
                 .font(.system(size: 10, weight: .semibold))
@@ -236,20 +394,6 @@ struct FloatingAgentChipView: View {
         )
     }
 
-    private var chipBackground: some View {
-        ZStack {
-            bg
-            if hovered {
-                Color.white.opacity(0.03)
-            }
-        }
-    }
-
-    private var chipBorder: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-    }
-
     private func stepDot(status: AgentJobStatus) -> some View {
         Circle()
             .fill(status.hudColor)
@@ -260,18 +404,13 @@ struct FloatingAgentChipView: View {
     private func followUpButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .medium))
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                Image(systemName: icon).font(.system(size: 10, weight: .medium))
+                Text(title).font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(.white.opacity(0.70))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-            )
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.08)))
         }
         .buttonStyle(.plain)
     }
@@ -283,13 +422,16 @@ struct FloatingAgentChipView: View {
         return words.isEmpty ? job.type.rawValue : words
     }
 
+    private var shortTitle: String {
+        let words = job.prompt.split(separator: " ").prefix(3).joined(separator: " ")
+        return words.isEmpty ? job.type.rawValue : words
+    }
+
     private func handleAction(_ identifier: String) {
         switch identifier {
         case "open_browser", "open_live_site":
             if let url = job.result?.metadata["deployedUrl"] ?? job.result?.metadata["previewUrl"],
-               let u = URL(string: url) {
-                NSWorkspace.shared.open(u)
-            }
+               let u = URL(string: url) { NSWorkspace.shared.open(u) }
         case "copy_url":
             if let url = job.result?.metadata["deployedUrl"] {
                 NSPasteboard.general.clearContents()
@@ -314,21 +456,15 @@ struct FloatingAgentChipView: View {
 
 private struct AnyViewModifier: ViewModifier {
     private let _body: (AnyView) -> AnyView
-
-    init<M: ViewModifier>(_ modifier: M) {
-        _body = { AnyView($0.modifier(modifier)) }
-    }
-
-    func body(content: Content) -> some View {
-        _body(AnyView(content))
-    }
+    init<M: ViewModifier>(_ modifier: M) { _body = { AnyView($0.modifier(modifier)) } }
+    func body(content: Content) -> some View { _body(AnyView(content)) }
 }
 
 private struct EmptyModifier: ViewModifier {
     func body(content: Content) -> some View { content }
 }
 
-// MARK: - Spinner (public alias of BlueCursorView internal)
+// MARK: - Spinner
 
 struct BlueCursorSpinnerPublic: View {
     let color: Color

@@ -39,15 +39,7 @@ struct ResponseCardView: View {
                 chipRow(art: art, isLast: idx == artifacts.count - 1)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(border, lineWidth: 0.5)
-                )
-        )
-        .shadow(color: .black.opacity(0.50), radius: 18, x: 0, y: 6)
+        .frostedGlass(cornerRadius: 14, tiltDegrees: 6)
         .transition(.asymmetric(
             insertion:  .move(edge: .trailing).combined(with: .opacity),
             removal:    .move(edge: .trailing).combined(with: .opacity)
@@ -134,15 +126,7 @@ struct ResponseCardView: View {
                 galleryStrip
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(border, lineWidth: 0.5)
-                )
-        )
-        .shadow(color: .black.opacity(0.45), radius: 20, x: 0, y: 8)
+        .frostedGlass(cornerRadius: 16, tiltDegrees: 7)
         .animation(.spring(response: 0.30, dampingFraction: 0.80), value: expanded)
         .transition(.asymmetric(
             insertion:  .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
