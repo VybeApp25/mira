@@ -442,6 +442,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
 
         var session: [String: Any] = [
+            "type":         "realtime",
             "instructions": instructions,
         ]
 
