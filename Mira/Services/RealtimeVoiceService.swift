@@ -447,9 +447,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ]
 
         if includeFullConfig {
-            // Modalities, voice, and audio format — required for speech-to-speech
+            // gpt-realtime-2 does not accept session.voice — it uses its own default.
             session["modalities"]            = ["text", "audio"]
-            session["voice"]                 = MiraVoice.saved.rawValue
             session["input_audio_format"]    = "pcm16"
             session["output_audio_format"]   = "pcm16"
 
