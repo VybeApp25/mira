@@ -447,24 +447,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ]
 
         if includeFullConfig {
-            // gpt-realtime-2 does not accept session.voice — it uses its own default.
+            // gpt-realtime-2 rejects: voice, turn_detection — uses its own defaults for both.
             session["modalities"]            = ["text", "audio"]
             session["input_audio_format"]    = "pcm16"
             session["output_audio_format"]   = "pcm16"
 
-            // Whisper transcription — enables conversation.item.input_audio_transcription.completed
+            // Transcription — enables conversation.item.input_audio_transcription.completed
             session["input_audio_transcription"] = ["model": "whisper-1"] as [String: Any]
-
-            // Server VAD — the key that makes always-on work without any button press.
-            // create_response: true means the server auto-commits and generates a response
-            // whenever it detects the user has stopped speaking.
-            session["turn_detection"] = [
-                "type":               "server_vad",
-                "threshold":          0.5,
-                "prefix_padding_ms":  300,
-                "silence_duration_ms": 700,
-                "create_response":    true,
-            ] as [String: Any]
 
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
