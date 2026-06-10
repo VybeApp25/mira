@@ -447,10 +447,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ]
 
         if includeFullConfig {
-            // gpt-realtime-2 only accepts: type, instructions, modalities, tools, tool_choice.
-            // voice, turn_detection, input_audio_format, output_audio_format, and
-            // input_audio_transcription are all handled internally by the model.
-            session["modalities"]  = ["text", "audio"]
+            // gpt-realtime-2 rejects modalities, voice, turn_detection, all audio format fields.
+            // Only tools and tool_choice are configurable beyond type + instructions.
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
         }
