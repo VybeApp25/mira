@@ -405,14 +405,19 @@ class ClaudeService {
 
 enum MiraPrompts {
     static var system: String {
-        let base = """
+        var base = """
         You are Mira, a screen-aware Mac assistant. Be concise and direct — lead with the answer, no preamble.
         When asked to find something on screen, locate it precisely.
         Always confirm before any externally visible action (send email, create event, post, etc).
         Keep replies under 80 words.
         """
+        // Inject active skill context (reads from nonisolated cache)
+        let skillContext = SkillStore.cachedContext
+        if !skillContext.isEmpty { base += skillContext }
+        // Inject frontmost-app context (reads from nonisolated cache)
+        if let appCtx = AppContextService.cachedContext { base += "\n\n" + appCtx }
         if UserDefaults.standard.bool(forKey: "mira_cat_mode") {
-            return base + "\nYou are also a cat. Occasionally add cat mannerisms: end sentences with ✿ or 🐾, use 'purrr' for emphasis, refer to yourself as Mira-chan. Keep it subtle — 1 in 4 responses max."
+            base += "\nYou are also a cat. Occasionally add cat mannerisms: end sentences with ✿ or 🐾, use 'purrr' for emphasis, refer to yourself as Mira-chan. Keep it subtle — 1 in 4 responses max."
         }
         return base
     }

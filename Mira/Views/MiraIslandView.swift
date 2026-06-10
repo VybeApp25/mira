@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case chat, home, agents, briefing, projects, reliability, threads, crons }
+enum IslandTab: Equatable { case chat, home, agents, briefing, projects, reliability, threads, crons, computerUse, skills }
 
 // MARK: - Main island view
 
@@ -332,6 +332,7 @@ struct MiraIslandView: View {
                         .frame(height: 0.5)
                 }
                 continuationBanner
+                SidecarSuggestionBanner()
                 tabContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -542,6 +543,8 @@ struct MiraIslandView: View {
             navTab(icon: "bubble.left.and.bubble.right.fill", label: "Threads", tab: .threads)
             navTab(icon: "chart.bar.fill",      label: "Stats",    tab: .reliability)
             navTab(icon: "clock.fill",          label: "Crons",    tab: .crons)
+            navTab(icon: "desktopcomputer",    label: "Control",  tab: .computerUse)
+            navTab(icon: "sparkles",           label: "Skills",   tab: .skills)
 
             Spacer()
 
@@ -682,6 +685,10 @@ struct MiraIslandView: View {
             ReliabilityDashboardView()
         case .crons:
             CronsTabView()
+        case .computerUse:
+            ComputerUseTabView(miraState: miraState)
+        case .skills:
+            SkillsTabView()
         case .threads:
             ThreadsTabView(onResume: { prompt in
                 selectedTab = .chat

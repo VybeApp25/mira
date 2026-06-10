@@ -17,8 +17,11 @@ enum MiraVoice: String, CaseIterable, Identifiable {
     case alloy   = "alloy"
     case ash     = "ash"
     case ballad  = "ballad"
+    case cedar   = "cedar"
     case coral   = "coral"
     case echo    = "echo"
+    case marin   = "marin"
+    case sage    = "sage"
     case shimmer = "shimmer"
     case verse   = "verse"
 
@@ -29,12 +32,17 @@ enum MiraVoice: String, CaseIterable, Identifiable {
         case .alloy:   return "Alloy — Neutral"
         case .ash:     return "Ash — Calm"
         case .ballad:  return "Ballad — Warm"
+        case .cedar:   return "Cedar — Grounded"
         case .coral:   return "Coral — Bright"
         case .echo:    return "Echo — Crisp"
+        case .marin:   return "Marin — Clear"
+        case .sage:    return "Sage — Measured"
         case .shimmer: return "Shimmer — Soft"
         case .verse:   return "Verse — Expressive"
         }
     }
+
+    var previewResource: String { "realtime-voice-preview-\(rawValue)" }
 
     static var saved: MiraVoice {
         get { MiraVoice(rawValue: UserDefaults.standard.string(forKey: "mira_voice") ?? "alloy") ?? .alloy }

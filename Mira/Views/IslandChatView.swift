@@ -41,6 +41,8 @@ struct IslandChatView: View {
     // Use the app-lifetime singleton — mirrors HeyClicky's always-on architecture.
     // @ObservedObject (not @StateObject) because the session outlives this view.
     @ObservedObject private var realtime = RealtimeVoiceService.shared
+    @ObservedObject private var tts = MisoTTSService.shared
+    @State private var speakingMessageID: UUID? = nil
     private var isVoiceActive: Bool {
         switch realtime.state {
         case .idle: return false
@@ -264,9 +266,32 @@ struct IslandChatView: View {
             // Agent job card — live status inline in chat
             InlineChatJobCard(jobId: jobId)
         } else {
-            // Mira: rendered markdown
-            StreamingMarkdownView(text: msg.text, fontSize: 13)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Mira: rendered markdown + optional ElevenLabs speak button
+            HStack(alignment: .top, spacing: 6) {
+                StreamingMarkdownView(text: msg.text, fontSize: 13)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if tts.isConfigured && !msg.text.isEmpty {
+                    Button {
+                        if speakingMessageID == msg.id {
+                            tts.stop()
+                            speakingMessageID = nil
+                        } else {
+                            speakingMessageID = msg.id
+                            tts.speak(msg.text)
+                        }
+                    } label: {
+                        Image(systemName: speakingMessageID == msg.id ? "stop.circle.fill" : "speaker.wave.2")
+                            .font(.system(size: 10))
+                            .foregroundColor(speakingMessageID == msg.id ? miraTeale : .white.opacity(0.20))
+                            .frame(width: 20, height: 20)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .onChange(of: tts.isSpeaking) { _, speaking in
+                if !speaking { speakingMessageID = nil }
+            }
         }
     }
 

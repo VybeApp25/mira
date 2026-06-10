@@ -24,6 +24,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         PostHogService.shared.capture("app_launched")
+        _ = AppContextService.shared       // start frontmost-app observer
+        _ = SidecarSuggestionService.shared // start dwell tracker
 
         let manager = NotchManager()
         manager.setup()

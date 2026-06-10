@@ -32,6 +32,9 @@ struct SettingsView: View {
     @State private var selectedMicUID: String = UserDefaults.standard.string(forKey: "mira_mic_uid") ?? ""
     @State private var micLevel:       Float  = 0.0
     @State private var micMonitor:     MicLevelMonitor? = nil
+    @State private var misoKeyInput:     String = ""
+    @State private var misoKeySaved:     Bool   = false
+    @State private var selectedMisoVoice: MisoVoice = MisoVoice.saved
 
     enum RecordingTarget { case voice, text }
 
@@ -61,6 +64,8 @@ struct SettingsView: View {
                         Divider().background(Color.white.opacity(0.08))
                         voiceSection
                         Divider().background(Color.white.opacity(0.08))
+                        elevenLabsSection
+                        Divider().background(Color.white.opacity(0.08))
                         microphoneSection
                         Divider().background(Color.white.opacity(0.08))
                         appearanceSection
@@ -81,6 +86,8 @@ struct SettingsView: View {
         .onAppear {
             keyInput = state.userAPIKey
             hoverCategories = HoverPreferences.shared.categories
+            misoKeyInput = UserDefaults.standard.string(forKey: "mira_miso_key") ?? ""
+            selectedMisoVoice = MisoVoice.saved
         }
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
         .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
@@ -587,6 +594,103 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Miso TTS section
+
+    @ViewBuilder
+    private var elevenLabsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Miso TTS", systemImage: "waveform.badge.mic")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            let hasKey = !misoKeyInput.isEmpty || MisoTTSService.shared.isConfigured
+
+            if hasKey && misoKeyInput.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green).font(.system(size: 14))
+                    Text("API key active")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button("Clear") {
+                        UserDefaults.standard.removeObject(forKey: "mira_miso_key")
+                        misoKeyInput = ""
+                        misoKeySaved = false
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.20)))
+                .cornerRadius(8)
+            } else {
+                SecureField("API key...", text: $misoKeyInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(10)
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.10)))
+
+                Button {
+                    guard !misoKeyInput.isEmpty else { return }
+                    UserDefaults.standard.set(misoKeyInput, forKey: "mira_miso_key")
+                    misoKeySaved = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { misoKeySaved = false }
+                } label: {
+                    Text(misoKeySaved ? "Saved ✓" : "Save Key")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .foregroundColor(.white)
+                        .background(accent)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Text("misolabs.ai — enter your API key when available")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+
+            if MisoTTSService.shared.isConfigured || !misoKeyInput.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(MisoVoice.allCases) { v in
+                        Button {
+                            MisoVoice.saved = v
+                            selectedMisoVoice = v
+                        } label: {
+                            HStack {
+                                Text(v.label)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.85))
+                                Spacer()
+                                if selectedMisoVoice == v {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(accent)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(selectedMisoVoice == v ? accent.opacity(0.10) : Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Text("Miso TTS · miso-tts-8b · Tap speaker on any Mira message to read aloud")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+        }
+    }
+
     private func playVoicePreview(_ voice: MiraVoice) {
         if previewingVoice == voice {
             previewPlayer?.stop()
@@ -595,21 +699,17 @@ struct SettingsView: View {
             return
         }
         previewPlayer?.stop()
-        // Try loading a bundled preview file named "<voice-id>-preview.mp3"
-        let name = voice.rawValue + "-preview"
-        if let url = Bundle.main.url(forResource: name, withExtension: "mp3"),
-           let player = try? AVAudioPlayer(contentsOf: url) {
-            player.prepareToPlay()
-            previewPlayer = player
-            previewingVoice = voice
-            player.play()
-            // Auto-clear when done
-            DispatchQueue.main.asyncAfter(deadline: .now() + player.duration + 0.1) {
-                if previewingVoice == voice { previewingVoice = nil }
-            }
-        } else {
-            // Fall back to agent-launch chime as a placeholder
+        guard let url = Bundle.main.url(forResource: voice.previewResource, withExtension: "mp3"),
+              let player = try? AVAudioPlayer(contentsOf: url) else {
             AudioCueService.shared.playAgentLaunch()
+            return
+        }
+        player.prepareToPlay()
+        previewPlayer = player
+        previewingVoice = voice
+        player.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + player.duration + 0.1) {
+            if self.previewingVoice == voice { self.previewingVoice = nil }
         }
     }
 
