@@ -38,7 +38,9 @@ struct IslandChatView: View {
     @State private var streamingMsgId:        UUID?              = nil
     @State private var isCodeMode:            Bool               = false   // Claude Code bridge
 
-    @StateObject private var realtime = RealtimeVoiceService()
+    // Use the app-lifetime singleton — mirrors HeyClicky's always-on architecture.
+    // @ObservedObject (not @StateObject) because the session outlives this view.
+    @ObservedObject private var realtime = RealtimeVoiceService.shared
     private var isVoiceActive: Bool {
         switch realtime.state {
         case .idle: return false
@@ -81,7 +83,9 @@ struct IslandChatView: View {
             loadHistory()
         }
         .onDisappear {
-            realtime.stop()
+            // Keep always-on session alive when island closes — HeyClicky never stops
+            // the session just because the notch UI is hidden.
+            if !realtime.isAlwaysOnActive { realtime.stop() }
             miraState.realtimeState = .idle
         }
         // Pause wake word while realtime session is live; NotchManager restarts it on collapse.
@@ -479,6 +483,9 @@ struct IslandChatView: View {
     }
 
     private func startVoice() {
+        // Always-on: session already running — nothing to do.
+        guard !realtime.isAlwaysOnActive else { return }
+        // Fallback for non-always-on launch
         guard case .idle = realtime.state else { return }
         realtime.connect(openAIKey: AppSecrets.openAIKey)
     }

@@ -36,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         AgentProcessManager.shared.stop()
+        RealtimeVoiceService.shared.disconnectAlwaysOn()
         MiraCursorManager.shared.deactivate()
         AgentHUDWindowManager.shared.stop()
     }

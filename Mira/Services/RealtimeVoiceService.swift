@@ -1,12 +1,17 @@
 // RealtimeVoiceService.swift
-// OpenAI Realtime API (gpt-4o-realtime-preview) — true speech-to-speech over WebSocket.
-// Pipeline: AVAudioEngine mic → PCM16 → WebSocket → PCM16 → AVAudioPlayerNode
-// Barge-in handled by server-side VAD; cancel response + drain player on speech_started.
+// Mirrors HeyClicky's RealtimeVoiceController + RealtimeVoiceClient architecture.
+//
+// Two modes:
+//   • Always-on  — connectAlwaysOn() on app launch; server_vad auto-commits turns.
+//   • Push-to-talk — beginPushToTalk() / endPushToTalk() with 400ms tail commit.
+//
+// Pipeline: AVAudioEngine mic → PCM16 @ 24 kHz → base64 → WebSocket
+//           WebSocket → PCM16 → Float32 → AVAudioPlayerNode → speakers
 
 import Foundation
 @preconcurrency import AVFoundation
 
-// MARK: - Voice options (OpenAI Realtime API voices)
+// MARK: - Voice options
 
 enum MiraVoice: String, CaseIterable, Identifiable {
     case alloy   = "alloy"
@@ -42,42 +47,45 @@ enum MiraVoice: String, CaseIterable, Identifiable {
 enum RealtimeState: Equatable {
     case idle
     case connecting
-    case recording      // connected + VAD active, waiting for user speech
-    case transcribing   // reused for brief connecting UI label
+    case recording      // session live, VAD active — user can speak at any time
+    case transcribing   // unused slot kept for UI label compat
     case thinking       // response generating, before first audio chunk
     case speaking       // AI audio streaming / playing
     case error(String)
 }
 
-// MARK: - Realtime voice service
+// MARK: - RealtimeVoiceService
 
 @MainActor
 final class RealtimeVoiceService: NSObject, ObservableObject {
 
-    @Published var state:      RealtimeState = .idle
-    @Published var userDraft:  String        = ""
-    @Published var aiDraft:    String        = ""
-    @Published var toolStatus: String        = ""   // e.g. "Opening Safari…"
+    // App-lifetime singleton — mirrors HeyClicky's RealtimeVoiceController.shared
+    static let shared = RealtimeVoiceService()
+
+    @Published var state:                RealtimeState = .idle
+    @Published var userDraft:            String        = ""
+    @Published var aiDraft:              String        = ""
+    @Published var toolStatus:           String        = ""
+    @Published private(set) var isAlwaysOnActive: Bool = false
 
     var onUserMessage: ((String) -> Void)?
     var onAIMessage:   ((String) -> Void)?
 
     // MARK: Private — WebSocket
 
-    private var webSocket: URLSessionWebSocketTask?
+    private var webSocket:  URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
     // MARK: Private — Audio capture (mic → API)
 
     private var captureEngine   = AVAudioEngine()
     private var inputConverter: AVAudioConverter?
-    private let captureRate:    Double = 24_000   // Realtime API expects PCM16 @ 24 kHz
+    private let captureRate:    Double = 24_000
 
     // MARK: Private — Audio playback (API → speakers)
 
     private var playEngine = AVAudioEngine()
     private var playerNode = AVAudioPlayerNode()
-    // Float32 @ 24 kHz — AVAudioEngine resamples to hardware rate automatically
     private let playFmt    = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1)!
 
     // MARK: Private — Tool call assembly
@@ -86,46 +94,131 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private var pendingToolName: String = ""
     private var pendingToolArgs: String = ""
 
-    // MARK: Private — Transcript assembly
+    // MARK: Private — Transcript
 
     private var aiTranscript: String = ""
 
     // MARK: Private — Session
 
-    private var openAIKey        = ""
-    private var shouldReconnect  = false
-    private var retryCount       = 0
-    private var reconnectTask:   Task<Void, Never>?
+    private var openAIKey       = ""
+    private var shouldReconnect = false
+    private var retryCount      = 0
+    private var reconnectTask:  Task<Void, Never>?
+
+    // MARK: Private — Always-on
+
+    private var isAlwaysOn = false
+    // Suppresses VAD for a settle period after the response audio finishes.
+    // Prevents speaker audio echoing back through the mic from triggering a new turn.
+    private var suppressMicUntil: Date = .distantPast
+
+    // MARK: Private — PTT (mirrors HeyClicky's pushToTalkTailCommitTask)
+
+    private var pttActive:   Bool                = false
+    private var pttTailTask: Task<Void, Never>?
 
     // MARK: - Public API
 
-    func connect(openAIKey: String) {
-        self.openAIKey    = openAIKey
-        shouldReconnect   = true
-        retryCount        = 0
-        state             = .connecting
+    /// Start always-on listening — call once on app launch from NotchManager/AppDelegate.
+    /// Mirrors HeyClicky's beginAlwaysOnListening().
+    func connectAlwaysOn() {
+        guard !isAlwaysOn else { return }
+        isAlwaysOn       = true
+        isAlwaysOnActive = true
+        openAIKey        = AppSecrets.openAIKey
+        shouldReconnect  = true
+        retryCount       = 0
+        state            = .connecting
+        NSLog("[MiraRealtime] always-on start")
         openSocket()
     }
 
-    func stop() {
-        shouldReconnect = false
+    /// Tear down always-on session — call on app quit.
+    func disconnectAlwaysOn() {
+        guard isAlwaysOn else { return }
+        isAlwaysOn       = false
+        isAlwaysOnActive = false
+        stop()
+    }
+
+    /// Legacy connect — still called by any stale code paths.
+    func connect(openAIKey: String) {
+        guard case .idle = state else { return }
+        self.openAIKey  = openAIKey
+        shouldReconnect = true
         retryCount      = 0
-        reconnectTask?.cancel()
-        reconnectTask   = nil
+        state           = .connecting
+        openSocket()
+    }
+
+    /// Full stop — tears down session and resets state.
+    func stop() {
+        shouldReconnect  = false
+        retryCount       = 0
+        pttActive        = false
+        reconnectTask?.cancel(); reconnectTask = nil
+        pttTailTask?.cancel();   pttTailTask   = nil
         teardown()
         state     = .idle
         userDraft = ""
         aiDraft   = ""
     }
 
+    // MARK: - Push-to-Talk (mirrors HeyClicky's beginPushToTalk / PTT end tail)
+
+    /// Called when PTT hotkey is pressed down.
+    func beginPushToTalk() {
+        // Cancel any pending tail from a previous PTT
+        pttTailTask?.cancel(); pttTailTask = nil
+        pttActive = true
+        NSLog("[MiraRealtime] PTT begin: active=%@ socket=%@",
+              pttActive ? "YES" : "NO",
+              webSocket != nil ? "live" : "nil")
+
+        if webSocket != nil {
+            // Reuse healthy always-on session (mic already streaming)
+            NSLog("[MiraRealtime] PTT begin: reusing healthy session")
+        } else {
+            // Open fresh session for PTT-only mode
+            openAIKey       = AppSecrets.openAIKey
+            shouldReconnect = true
+            retryCount      = 0
+            state           = .connecting
+            openSocket()
+        }
+    }
+
+    /// Called when PTT hotkey is released — 400ms tail then manual commit.
+    func endPushToTalk() {
+        guard pttActive else { return }
+        pttActive = false
+        NSLog("[MiraRealtime] PTT end: scheduling 400ms tail, then commit (healthy=%@)",
+              webSocket != nil ? "true" : "false")
+        pttTailTask = Task {
+            // 400ms tail — captures trailing syllables (matches HeyClicky's tail window)
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else {
+                NSLog("[MiraRealtime] PTT end tail cancelled")
+                return
+            }
+            await MainActor.run {
+                NSLog("[MiraRealtime] commitAudioAndRequestResponse")
+                self.emit(["type": "input_audio_buffer.commit"])
+                self.emit(["type": "response.create"])
+            }
+        }
+    }
+
     // MARK: - WebSocket lifecycle
 
     private func openSocket() {
-        guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=gpt-realtime-2") else { return }
+        // gpt-4o-realtime-preview: production GA model (matches HeyClicky's endpoint)
+        let model = "gpt-4o-realtime-preview"
+        guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
         req.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
-        // OpenAI-Beta header removed — required by GA API (beta removed May 2026)
 
+        NSLog("[MiraRealtime] WebSocket session opened model=%@", model)
         urlSession = URLSession(configuration: .default)
         webSocket  = urlSession?.webSocketTask(with: req)
         webSocket?.resume()
@@ -141,11 +234,9 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                     self.dispatch(msg)
                     self.pump()
                 case .failure(let err):
-                    NSLog("[MiraRealtime] WebSocket failure: %@", err.localizedDescription)
+                    NSLog("[MiraRealtime] receive failed: %@", err.localizedDescription)
                     guard self.shouldReconnect else { break }
-                    // Don't reconnect if server sent an explicit error — let the user read it
-                    if case .error = self.state { break }
-                    // Don't double-reconnect from teardown()'s own socket cancel
+                    if case .error    = self.state { break }
                     if case .connecting = self.state { break }
                     self.scheduleReconnect()
                 }
@@ -173,38 +264,47 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private func handle(type: String, event: [String: Any]) {
         switch type {
 
-        // ── Step 1: session exists on server — send config, set up playback ───
+        // ── Step 1: server created session — send full config + set up playback ──
         case "session.created":
             guard shouldReconnect else { teardown(); return }
             configureSession()
             setupPlayback()
-            // Stay in .connecting until session.updated confirms config was accepted
 
-        // ── Step 2: config accepted — now safe to start mic ───────────────────
+        // ── Step 2: config accepted — start mic, signal ready ────────────────────
         case "session.updated":
             guard shouldReconnect else { teardown(); return }
-            retryCount = 0          // config accepted → real retry budget resets
+            retryCount = 0
             if !captureEngine.isRunning { startCapture() }
+            if isAlwaysOn {
+                NSLog("[MiraRealtime] always-on listening active")
+            }
             state = .recording
 
-        // ── Barge-in + context refresh at the start of each user turn ─────────
+        // ── Server VAD: user speech detected ─────────────────────────────────────
         case "input_audio_buffer.speech_started":
+            NSLog("[MiraRealtime] always-on speech_start turn")
             if case .speaking = state {
+                // Barge-in: stop playback and cancel in-flight response
                 playerNode.stop()
                 playerNode.reset()
                 playerNode.play()
                 emit(["type": "response.cancel"])
+                NSLog("[MiraRealtime] interruptCurrentResponse")
             }
             userDraft = ""
             state     = .recording
             refreshContextInstructions()
 
-        // ── User transcript ────────────────────────────────────────────────────
+        // ── Server VAD: user stopped speaking — server will auto-commit ──────────
+        case "input_audio_buffer.speech_stopped":
+            NSLog("[MiraRealtime] always-on speech_stopped — server committing")
+
+        // ── User transcript (requires input_audio_transcription in session config) ─
         case "conversation.item.input_audio_transcription.completed":
             let text = event["transcript"] as? String ?? ""
             if !text.isEmpty { userDraft = text; onUserMessage?(text) }
 
-        // ── Response lifecycle ─────────────────────────────────────────────────
+        // ── Response lifecycle ────────────────────────────────────────────────────
         case "response.created":
             aiTranscript = ""
             aiDraft      = ""
@@ -215,19 +315,24 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                 enqueueAudio(delta)
                 if case .thinking = state {
                     state = .speaking
-                    // Clear any mic audio queued before speaking started — prevents
-                    // speaker echo that arrived during the thinking phase from firing VAD.
+                    // Clear mic audio accumulated during thinking — prevents
+                    // any buffered sound from triggering VAD on the next turn.
                     emit(["type": "input_audio_buffer.clear"])
                 }
             }
 
         case "response.output_audio.done":
+            // Schedule a sentinel buffer so we know exactly when playback drains
             if let sentinel = AVAudioPCMBuffer(pcmFormat: playFmt, frameCapacity: 1) {
                 sentinel.frameLength = 1
                 sentinel.floatChannelData?[0][0] = 0.0
                 playerNode.scheduleBuffer(sentinel) { [weak self] in
                     Task { @MainActor [weak self] in
                         guard let self, case .speaking = self.state else { return }
+                        NSLog("[MiraRealtime] player drained")
+                        // Suppress VAD for 800ms after playback ends — prevents speaker
+                        // audio from echoing back through mic and triggering a new turn.
+                        self.suppressMicUntil = Date().addingTimeInterval(0.8)
                         self.state   = .recording
                         self.aiDraft = ""
                     }
@@ -237,7 +342,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         case "response.output_audio_transcript.delta":
             let delta = event["delta"] as? String ?? ""
             aiTranscript += delta
-            // Strip point tag from live display — it should never appear as spoken text
             aiDraft = Self.stripPointTag(from: aiTranscript)
 
         case "response.output_audio_transcript.done":
@@ -245,7 +349,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             if !cleanText.isEmpty { onAIMessage?(cleanText) }
             if let pt { PointToService.shared.point(toNormalized: pt) }
 
-        // ── Tool call assembly ─────────────────────────────────────────────────
+        // ── Tool call assembly ────────────────────────────────────────────────────
         case "response.output_item.added":
             if let item = event["item"] as? [String: Any],
                item["type"] as? String == "function_call" {
@@ -266,19 +370,15 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             Task { await self.runTool(callId: id, name: name, argsJSON: args) }
             pendingCallId = ""; pendingToolName = ""; pendingToolArgs = ""
 
-        // ── Server error — log it, show it, let pump() failure decide retry ────
         case "error":
             let errObj = event["error"] as? [String: Any]
             let code   = errObj?["code"]    as? String ?? "?"
             let msg    = errObj?["message"] as? String ?? "Unknown error"
             NSLog("[MiraRealtime] server error — code=%@ msg=%@", code, msg)
             state = .error(msg)
-            // Do NOT call scheduleReconnect() here — server config errors should be
-            // shown to the user. The WebSocket close that follows will fire pump()
-            // failure → scheduleReconnect() for genuine network drops.
 
         default:
-            NSLog("[MiraRealtime] unhandled event: %@", type)
+            break
         }
     }
 
@@ -288,8 +388,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         emit(buildSessionUpdate(includeFullConfig: true))
     }
 
-    /// Sends a lightweight session.update to refresh instructions with the latest context snapshot.
-    /// Called at the start of each user turn so context is always current.
+    /// Refreshes instructions only — called at the start of each user turn
+    /// so context (screen, clipboard, focused app) is always current.
     private func refreshContextInstructions() {
         emit(buildSessionUpdate(includeFullConfig: false))
     }
@@ -298,14 +398,31 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let contextBlock = ContextService.shared.buildPromptBlock()
         let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
 
-        // GA API (May 2026) only accepts: type, instructions, tools, tool_choice.
-        // voice/modalities/turn_detection/audio_format fields were all removed.
         var session: [String: Any] = [
-            "type":         "realtime",
             "instructions": instructions,
         ]
 
         if includeFullConfig {
+            // Modalities, voice, and audio format — required for speech-to-speech
+            session["modalities"]            = ["text", "audio"]
+            session["voice"]                 = MiraVoice.saved.rawValue
+            session["input_audio_format"]    = "pcm16"
+            session["output_audio_format"]   = "pcm16"
+
+            // Whisper transcription — enables conversation.item.input_audio_transcription.completed
+            session["input_audio_transcription"] = ["model": "whisper-1"] as [String: Any]
+
+            // Server VAD — the key that makes always-on work without any button press.
+            // create_response: true means the server auto-commits and generates a response
+            // whenever it detects the user has stopped speaking.
+            session["turn_detection"] = [
+                "type":               "server_vad",
+                "threshold":          0.5,
+                "prefix_padding_ms":  300,
+                "silence_duration_ms": 700,
+                "create_response":    true,
+            ] as [String: Any]
+
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
         }
@@ -320,18 +437,22 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let node      = captureEngine.inputNode
         let hwFmt     = node.outputFormat(forBus: 0)
 
-        // Converter: hardware format → Float32 @ 24 kHz mono
         let tgtFmt = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                    sampleRate:  captureRate,
-                                    channels:    1,
-                                    interleaved: false)!
+                                   sampleRate:  captureRate,
+                                   channels:    1,
+                                   interleaved: false)!
         inputConverter = AVAudioConverter(from: hwFmt, to: tgtFmt)
 
         node.installTap(onBus: 0, bufferSize: 4800, format: hwFmt) { [weak self] buf, _ in
             self?.encodeAndSend(buf)
         }
         captureEngine.prepare()
-        try? captureEngine.start()
+        do {
+            try captureEngine.start()
+            NSLog("[MiraRealtime] mic capture session running")
+        } catch {
+            NSLog("[MiraRealtime] mic capture start failed: %@", error.localizedDescription)
+        }
     }
 
     private func encodeAndSend(_ buffer: AVAudioPCMBuffer) {
@@ -341,7 +462,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         )
         guard outFrames > 0,
               let out = AVAudioPCMBuffer(pcmFormat: conv.outputFormat,
-                                         frameCapacity: outFrames) else { return }
+                                        frameCapacity: outFrames) else { return }
         var err: NSError?
         conv.convert(to: out, error: &err) { _, status in
             status.pointee = .haveData
@@ -349,8 +470,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
         guard err == nil, let floats = out.floatChannelData?[0] else { return }
 
-        let count  = Int(out.frameLength)
-        var int16  = [Int16](repeating: 0, count: count)
+        let count = Int(out.frameLength)
+        var int16 = [Int16](repeating: 0, count: count)
         for i in 0..<count {
             int16[i] = Int16(max(-32_768, min(32_767, Int32(floats[i] * 32_767))))
         }
@@ -358,9 +479,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            // Suppress mic while Mira is speaking — prevents speaker output from
-            // echoing back through the mic and triggering the server's VAD.
+            // Suppress mic while Mira is speaking (prevents speaker echo → VAD false positive)
             if case .speaking = self.state { return }
+            // Post-response settle window — 800ms after playback drains
+            guard Date() > self.suppressMicUntil else { return }
             self.emit(["type": "input_audio_buffer.append", "audio": base64])
         }
     }
@@ -371,7 +493,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         playEngine = AVAudioEngine()
         playerNode = AVAudioPlayerNode()
         playEngine.attach(playerNode)
-        // Connect at 24 kHz — AVAudioEngine resamples to hardware rate transparently
         playEngine.connect(playerNode, to: playEngine.mainMixerNode, format: playFmt)
         try? playEngine.start()
         playerNode.play()
@@ -379,10 +500,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func enqueueAudio(_ base64: String) {
         guard let data = Data(base64Encoded: base64) else { return }
-        let frames = data.count / 2   // 2 bytes per Int16 sample
+        let frames = data.count / 2
         guard frames > 0,
               let buf = AVAudioPCMBuffer(pcmFormat: playFmt,
-                                         frameCapacity: AVAudioFrameCount(frames)) else { return }
+                                        frameCapacity: AVAudioFrameCount(frames)) else { return }
         buf.frameLength = AVAudioFrameCount(frames)
         data.withUnsafeBytes { raw in
             let src = raw.bindMemory(to: Int16.self)
@@ -400,7 +521,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let ms     = Int(Date().timeIntervalSince(start) * 1000)
         await MainActor.run {
             ToolTraceStore.shared.record(toolName: name, argsJSON: argsJSON,
-                                         result: output, durationMs: ms)
+                                        result: output, durationMs: ms)
         }
         toolStatus = ""
         emit([
@@ -428,8 +549,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         case "open_application":
             let app = args["app_name"] as? String ?? "app"
             return "Opening \(app)…"
-        case "get_calendar_events":
-            return "Checking your calendar…"
+        case "get_calendar_events":  return "Checking your calendar…"
         case "control_music":
             let action = (args["action"] as? String ?? "controlling").capitalized
             return "\(action) music…"
@@ -445,22 +565,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         case "run_shortcut":
             let s = args["shortcut_name"] as? String ?? "shortcut"
             return "Running \"\(s)\"…"
-        case "run_apple_script":
-            return "Running script…"
+        case "run_apple_script":    return "Running script…"
         case "run_shell_command":
             let cmd = (args["command"] as? String ?? "").prefix(40)
             return "Running: \(cmd)…"
         case "set_volume":
             let lvl = args["level"] as? Int ?? 0
             return "Setting volume to \(lvl)%…"
-        case "type_text":
-            return "Typing…"
-        default:
-            return "Working on it…"
+        case "type_text":           return "Typing…"
+        default:                    return "Working on it…"
         }
     }
-
-    // updateVoice() removed — GA API no longer accepts voice as a session parameter.
 
     // MARK: - Reconnection (exponential backoff, max 5 attempts)
 
@@ -499,13 +614,11 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     // MARK: - Point-tag parsing
-    // The AI can append <point x=N y=N> to direct the user's eye to a screen element.
-    // x/y are normalized 0–1 fractions from top-left.
+    // The AI can embed <point x=N y=N> to direct attention to a screen element.
 
     private static let pointTagPattern =
         try! NSRegularExpression(pattern: #"<point\s+x=([\d.]+)\s+y=([\d.]+)>"#)
 
-    /// Extracts the point tag and returns (cleaned text, optional CGPoint).
     private static func extractPointTag(from text: String) -> (String, CGPoint?) {
         let range = NSRange(text.startIndex..., in: text)
         guard let match = pointTagPattern.firstMatch(in: text, range: range),
@@ -521,7 +634,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         return (cleaned, CGPoint(x: x, y: y))
     }
 
-    /// Strips any point tag for display purposes only.
     private static func stripPointTag(from text: String) -> String {
         let range = NSRange(text.startIndex..., in: text)
         return pointTagPattern
@@ -529,7 +641,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: - WebSocket emit helper
+    // MARK: - WebSocket emit
 
     private func emit(_ dict: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: dict),

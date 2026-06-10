@@ -75,7 +75,12 @@ final class NotchManager {
             capture:        capture,
             tooltip:        tooltipController
         )
-        wakeWord.start()
+        // Always-on Realtime session — keeps a persistent WebSocket open so the user
+        // can speak at any time without pressing a button (mirrors HeyClicky's always-on).
+        // WakeWord is paused: the Realtime session owns the mic while always-on is active.
+        RealtimeVoiceService.shared.connectAlwaysOn()
+        // WakeWord only runs when always-on is off; start it as a fallback for PTT-only mode.
+        // wakeWord.start()  — omitted: Realtime session owns mic in always-on mode.
         shortcutManager.start()
         BackgroundScheduler.shared.start()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer
@@ -100,6 +105,14 @@ final class NotchManager {
         }
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             self?.expandForShortcut()
+        }
+
+        // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor
+        NotificationCenter.default.addObserver(forName: .miraPushToTalkBegan, object: nil, queue: .main) { _ in
+            RealtimeVoiceService.shared.beginPushToTalk()
+        }
+        NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { _ in
+            RealtimeVoiceService.shared.endPushToTalk()
         }
     }
 

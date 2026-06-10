@@ -4,13 +4,16 @@ import Carbon
 // MARK: - Notification names
 
 extension Notification.Name {
-    static let miraActivateVoice         = Notification.Name("miraActivateVoice")
-    static let miraActivateText          = Notification.Name("miraActivateText")
-    static let miraVoiceChanged          = Notification.Name("miraVoiceChanged")
-    static let miraShortcutsChanged      = Notification.Name("miraShortcutsChanged")
+    static let miraActivateVoice          = Notification.Name("miraActivateVoice")
+    static let miraActivateText           = Notification.Name("miraActivateText")
+    static let miraVoiceChanged           = Notification.Name("miraVoiceChanged")
+    static let miraShortcutsChanged       = Notification.Name("miraShortcutsChanged")
     static let miraScreenCompanionChanged = Notification.Name("miraScreenCompanionChanged")
-    static let miraChipPromptSelected    = Notification.Name("miraChipPromptSelected")  // Fix 3
-    static let miraTabSelected           = Notification.Name("miraTabSelected")          // cross-tab navigation
+    static let miraChipPromptSelected     = Notification.Name("miraChipPromptSelected")
+    static let miraTabSelected            = Notification.Name("miraTabSelected")
+    // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
+    static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
+    static let miraPushToTalkEnded        = Notification.Name("miraPushToTalkEnded")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)
@@ -26,10 +29,22 @@ private func miraHotKeyHandler(
                       EventParamType(typeEventHotKeyID),
                       nil, MemoryLayout<EventHotKeyID>.size, nil,
                       &hkID)
+    let isRelease = GetEventKind(event) == UInt32(kEventHotKeyReleased)
     DispatchQueue.main.async {
         switch hkID.id {
-        case 1: NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
-        case 2: NotificationCenter.default.post(name: .miraActivateText,  object: nil)
+        case 1:
+            if isRelease {
+                // PTT key up — 400ms tail then commit
+                NotificationCenter.default.post(name: .miraPushToTalkEnded, object: nil)
+            } else {
+                // PTT key down — expand island + begin capture
+                NotificationCenter.default.post(name: .miraActivateVoice,   object: nil)
+                NotificationCenter.default.post(name: .miraPushToTalkBegan, object: nil)
+            }
+        case 2:
+            if !isRelease {
+                NotificationCenter.default.post(name: .miraActivateText, object: nil)
+            }
         default: break
         }
     }
@@ -63,10 +78,15 @@ final class GlobalShortcutManager {
 
     private func installHandler() {
         guard handlerRef == nil else { return }
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                  eventKind: UInt32(kEventHotKeyPressed))
+        // Register both pressed and released so PTT can detect key-up
+        var specs = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                          eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                          eventKind: UInt32(kEventHotKeyReleased)),
+        ]
         InstallEventHandler(GetApplicationEventTarget(),
-                            miraHotKeyHandler, 1, &spec, nil, &handlerRef)
+                            miraHotKeyHandler, specs.count, &specs, nil, &handlerRef)
     }
 
     private func register() {
