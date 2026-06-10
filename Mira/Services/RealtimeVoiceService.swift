@@ -68,6 +68,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     @Published var toolStatus:           String        = ""
     @Published private(set) var isAlwaysOnActive: Bool = false
 
+    // Audio power level visualization — 44-sample ring buffer, updated at ~70ms intervals.
+    // Ported from farzaa/clicky BuddyDictationManager (MIT).
+    @Published private(set) var audioPowerLevel:   CGFloat = 0
+    @Published private(set) var audioPowerHistory: [CGFloat] = Array(repeating: 0.02, count: 44)
+
+    private static let powerSampleInterval: TimeInterval = 0.07
+    private var lastPowerSampleDate = Date.distantPast
+
     var onUserMessage: ((String) -> Void)?
     var onAIMessage:   ((String) -> Void)?
 
@@ -301,7 +309,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         // ── User transcript (requires input_audio_transcription in session config) ─
         case "conversation.item.input_audio_transcription.completed":
             let text = event["transcript"] as? String ?? ""
-            if !text.isEmpty { userDraft = text; onUserMessage?(text) }
+            if !text.isEmpty {
+                userDraft = text
+                onUserMessage?(text)
+                // Fire Computer Use element detection in parallel with AI response.
+                // If a UI element is identified, PointToService animates to it.
+                triggerElementDetection(for: text)
+            }
 
         // ── Response lifecycle ────────────────────────────────────────────────────
         case "response.created":
@@ -378,6 +392,36 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         default:
             break
+        }
+    }
+
+    // MARK: - Element detection (Computer Use)
+
+    // Fires a background Computer Use API call when the user speaks. If a UI element
+    // is identified, PointToService animates a cursor to it — independent of the
+    // AI voice response. Ported from farzaa/clicky CompanionManager (MIT).
+    private func triggerElementDetection(for transcript: String) {
+        Task {
+            do {
+                let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
+                // Use the cursor screen, or the first screen as fallback.
+                guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return }
+
+                let appKitPt = await ElementLocationDetector.shared.detectElementLocation(
+                    screenshotData: primary.imageData,
+                    userQuestion:   transcript,
+                    displayFrame:   primary.displayFrame
+                )
+                guard let appKitPt else { return }
+
+                let normalized = ElementLocationDetector.shared.normalizedPoint(
+                    appKitPt,
+                    displayFrame: primary.displayFrame
+                )
+                PointToService.shared.point(toNormalized: normalized)
+            } catch {
+                // Non-critical — element detection failing doesn't affect voice response.
+            }
         }
     }
 
@@ -476,6 +520,12 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
         let base64 = Data(bytes: int16, count: count * 2).base64EncodedString()
 
+        // RMS audio power — ported from farzaa/clicky BuddyDictationManager (MIT).
+        var sumSq: Float = 0
+        for i in 0..<count { sumSq += floats[i] * floats[i] }
+        let rms = sqrt(sumSq / Float(max(1, count)))
+        let boosted = min(max(rms * 10.2, 0), 1)
+
         Task { @MainActor [weak self] in
             guard let self else { return }
             // Suppress mic while Mira is speaking (prevents speaker echo → VAD false positive)
@@ -483,6 +533,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             // Post-response settle window — 800ms after playback drains
             guard Date() > self.suppressMicUntil else { return }
             self.emit(["type": "input_audio_buffer.append", "audio": base64])
+
+            // Update power level with smoothing
+            self.audioPowerLevel = max(CGFloat(boosted), self.audioPowerLevel * 0.72)
+            let now = Date()
+            if now.timeIntervalSince(self.lastPowerSampleDate) >= Self.powerSampleInterval {
+                self.lastPowerSampleDate = now
+                var hist = self.audioPowerHistory
+                hist.append(max(CGFloat(boosted), 0.02))
+                if hist.count > 44 { hist.removeFirst(hist.count - 44) }
+                self.audioPowerHistory = hist
+            }
         }
     }
 

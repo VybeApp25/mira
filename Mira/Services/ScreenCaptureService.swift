@@ -1,6 +1,18 @@
 import ScreenCaptureKit
 import AppKit
 
+// MARK: - Multi-display capture
+
+/// A single captured display — mirrors Clicky's CompanionScreenCapture.
+struct MiraScreenCapture {
+    let imageData:            Data
+    let label:                String
+    let isCursorScreen:       Bool
+    let displayFrame:         CGRect   // AppKit coords (bottom-left origin)
+    let displayWidthInPoints: Int
+    let displayHeightInPoints: Int
+}
+
 // MARK: - Capability pipeline types
 
 /// Normalized OS-level denial signal, independent of the specific framework.
@@ -56,12 +68,29 @@ func evaluateCapabilityState(preflight: Bool, runtimeError: CapabilityError?) ->
 class ScreenCaptureService {
 
     // True after the first SCK -3801 so we stop queuing capture work until relaunch.
-    // Resets on restart since this is not persisted.
     private static var permissionDenied = false
 
-    // Captured once at launch so evaluateState() can classify identity-mismatch
-    // vs genuine-denial without re-querying at every capture site.
+    // Captured once at launch so evaluateState() can classify identity-mismatch.
     private static var preflightGranted = false
+
+    // Persists last-confirmed grant across sessions. CGPreflightScreenCaptureAccess()
+    // can return false-negatives on macOS Sequoia even when permission is granted;
+    // this key prevents unnecessarily blocking captures when that happens.
+    // Adapted from farzaa/clicky (MIT).
+    private static let hasPreviouslyGrantedKey = "com.mira.hasPreviouslyConfirmedScreenRecording"
+
+    static var hasPreviouslyConfirmedScreenRecording: Bool {
+        get { UserDefaults.standard.bool(forKey: hasPreviouslyGrantedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: hasPreviouslyGrantedKey) }
+    }
+
+    // Returns true when we should proceed without re-prompting. Falls back to
+    // the last known granted state to handle CGPreflightScreenCaptureAccess() false-negatives.
+    static var shouldTreatAsGranted: Bool {
+        let now = CGPreflightScreenCaptureAccess()
+        if now { hasPreviouslyConfirmedScreenRecording = true }
+        return now || hasPreviouslyConfirmedScreenRecording
+    }
 
     // MARK: - SCK error mapping
 
@@ -136,18 +165,95 @@ class ScreenCaptureService {
             case .available:
                 throw MiraError.api("Screen capture failed: \(error.localizedDescription)")
             case .identityMismatch:
-                // Permission IS granted (toggle is on) but to a different build identity.
-                // Do NOT call CGRequestScreenCaptureAccess() — that opens System Settings
-                // and looks like Mira is asking for permission again even though the toggle
-                // is already on. Just tell the user to remove and re-add this build.
                 Self.permissionDenied = true
                 throw MiraError.api("Screen Recording is on but was approved for a different version of Mira. In System Settings → Privacy & Security → Screen Recording, remove Mira and add it again, then relaunch.")
             case .denied:
                 Self.permissionDenied = true
-                // Genuinely not granted — open System Settings to the right pane.
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                 throw MiraError.api("Screen Recording permission required. Grant access in System Settings → Privacy & Security → Screen Recording, then relaunch Mira.")
             }
         }
+    }
+
+    // MARK: - Multi-display capture (ported from farzaa/clicky, MIT)
+
+    /// Captures all connected displays as JPEG, labeling each with cursor proximity.
+    /// The cursor screen is always first. Own-app windows are excluded so the AI
+    /// sees only the user's content.
+    static func captureAllDisplaysAsJPEG() async throws -> [MiraScreenCapture] {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard !content.displays.isEmpty else {
+            throw MiraError.api("No display available for capture")
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        let ownBundle = Bundle.main.bundleIdentifier
+        let ownWindows = content.windows.filter { $0.owningApplication?.bundleIdentifier == ownBundle }
+
+        // Build displayID → NSScreen map so we use AppKit coords (bottom-left origin)
+        // which match NSEvent.mouseLocation. SCDisplay.frame uses CG coords (top-left).
+        var screenByID: [CGDirectDisplayID: NSScreen] = [:]
+        for screen in NSScreen.screens {
+            if let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
+                screenByID[id] = screen
+            }
+        }
+
+        let sorted = content.displays.sorted { a, b in
+            let fa = screenByID[a.displayID]?.frame ?? a.frame
+            let fb = screenByID[b.displayID]?.frame ?? b.frame
+            let ac = fa.contains(mouseLocation)
+            let bc = fb.contains(mouseLocation)
+            if ac != bc { return ac }
+            return false
+        }
+
+        var results: [MiraScreenCapture] = []
+        let total = sorted.count
+
+        for (idx, display) in sorted.enumerated() {
+            let displayFrame = screenByID[display.displayID]?.frame
+                ?? CGRect(x: display.frame.minX, y: display.frame.minY,
+                          width: CGFloat(display.width), height: CGFloat(display.height))
+            let isCursor = displayFrame.contains(mouseLocation)
+
+            let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
+            let cfg    = SCStreamConfiguration()
+            let maxDim = 1280
+            let ratio  = CGFloat(display.width) / CGFloat(display.height)
+            if display.width >= display.height {
+                cfg.width  = maxDim
+                cfg.height = Int(CGFloat(maxDim) / ratio)
+            } else {
+                cfg.height = maxDim
+                cfg.width  = Int(CGFloat(maxDim) * ratio)
+            }
+
+            let cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+
+            guard let jpeg = NSBitmapImageRep(cgImage: cg)
+                .representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { continue }
+
+            let label: String
+            if total == 1 {
+                label = "user's screen (cursor is here)"
+            } else if isCursor {
+                label = "screen \(idx + 1) of \(total) — cursor is here (primary)"
+            } else {
+                label = "screen \(idx + 1) of \(total) — secondary screen"
+            }
+
+            results.append(MiraScreenCapture(
+                imageData:             jpeg,
+                label:                 label,
+                isCursorScreen:        isCursor,
+                displayFrame:          displayFrame,
+                displayWidthInPoints:  Int(displayFrame.width),
+                displayHeightInPoints: Int(displayFrame.height)
+            ))
+        }
+
+        guard !results.isEmpty else { throw MiraError.api("Failed to capture any screen") }
+        return results
     }
 }

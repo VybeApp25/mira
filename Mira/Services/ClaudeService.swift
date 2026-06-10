@@ -7,8 +7,29 @@ class ClaudeService {
     private let guidanceModel = "claude-sonnet-4-6"
     private let baseURL = URL(string: "https://api.anthropic.com/v1/messages")!
 
+    // Shared flag so multiple ClaudeService instances only warm once per process.
+    private static var tlsWarmedUp = false
+    private static let tlsLock = NSLock()
+
     init(apiKey: String) {
         self.apiKey = apiKey
+        Self.warmUpTLSIfNeeded(url: baseURL)
+    }
+
+    // Fires a no-op HEAD request to cache the TLS session ticket, so the first real
+    // API call (which may carry a large image) doesn't pay the full TLS handshake cost.
+    // Ported from farzaa/clicky ClaudeAPI (MIT).
+    private static func warmUpTLSIfNeeded(url: URL) {
+        tlsLock.lock()
+        let shouldWarm = !tlsWarmedUp
+        if shouldWarm { tlsWarmedUp = true }
+        tlsLock.unlock()
+        guard shouldWarm else { return }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "HEAD"
+        req.timeoutInterval = 10
+        URLSession.shared.dataTask(with: req) { _, _, _ in }.resume()
     }
 
     // MARK: - Request / Response types
