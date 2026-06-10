@@ -212,8 +212,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - WebSocket lifecycle
 
     private func openSocket() {
-        // gpt-4o-realtime-preview: production GA model (matches HeyClicky's endpoint)
-        let model = "gpt-4o-realtime-preview"
+        let model = "gpt-realtime-2"
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
         req.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
