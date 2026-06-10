@@ -13,7 +13,7 @@ private struct GlassCardSizeKey: PreferenceKey {
 struct FrostedGlass: ViewModifier {
     var cornerRadius: CGFloat = 16
     var tiltDegrees:  CGFloat = 10
-    var glareOpacity: CGFloat = 0.18
+    var glareOpacity: CGFloat = 0.28
 
     @State private var hovered:  Bool    = false
     @State private var hoverLoc: CGPoint = .zero
@@ -62,7 +62,7 @@ struct FrostedGlass: ViewModifier {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(red: 0.06, green: 0.06, blue: 0.13).opacity(0.62))
+                .fill(Color(red: 0.06, green: 0.06, blue: 0.13).opacity(0.28))
             if hovered {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(RadialGradient(
