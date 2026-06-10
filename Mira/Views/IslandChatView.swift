@@ -43,6 +43,7 @@ struct IslandChatView: View {
     @ObservedObject private var realtime = RealtimeVoiceService.shared
     @ObservedObject private var tts = MisoTTSService.shared
     @State private var speakingMessageID: UUID? = nil
+    @ObservedObject private var dictate = AssemblyAIStreamingService.shared
     private var isVoiceActive: Bool {
         switch realtime.state {
         case .idle: return false
@@ -79,6 +80,12 @@ struct IslandChatView: View {
             if let action = pendingAction { confirmCard(action) }
             if let err    = errorText     { errorBanner(err)    }
             if isVoiceActive { voiceStatusBar } else { inputBar }
+        }
+        .onChange(of: dictate.partial) { _, partial in
+            if dictate.isStreaming { input = partial }
+        }
+        .onChange(of: dictate.isStreaming) { _, streaming in
+            if !streaming { input = dictate.fullTranscript }
         }
         .onAppear {
             wireRealtime()
@@ -380,6 +387,13 @@ struct IslandChatView: View {
                 a11yLabel: realtime.state == .idle ? "Start voice session" : "End voice session"
             ) { toggleRealtime() }
 
+            // AssemblyAI dictate — streams mic to AssemblyAI; populates text field live
+            inputIconButton(
+                icon: dictate.isStreaming ? "mic.circle.fill" : "mic.circle",
+                tint: dictate.isStreaming ? .orange : nil,
+                a11yLabel: dictate.isStreaming ? "Stop dictating" : "Dictate with AssemblyAI"
+            ) { toggleDictate() }
+
             // Claude Code toggle — routes submission through ClaudeCodeBridge
             if ClaudeCodeBridge.shared.isAvailable {
                 inputIconButton(
@@ -430,6 +444,17 @@ struct IslandChatView: View {
     }
 
     private var canSend: Bool { !input.trimmingCharacters(in: .whitespaces).isEmpty && !isLoading }
+
+    // MARK: - AssemblyAI dictation
+
+    private func toggleDictate() {
+        if dictate.isStreaming {
+            dictate.stopStreaming()
+            // fullTranscript is already reflected via onChange below
+        } else {
+            try? dictate.startStreaming()
+        }
+    }
 
     // MARK: - Voice status bar (shown instead of input bar when realtime is active)
 

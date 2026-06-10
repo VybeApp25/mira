@@ -28,6 +28,7 @@
 		246CD9DE07245F8D216E9905 /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */; };
 		24F66A36C54D673F2CD4D6CF /* PointFollowUpService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */; };
 		250780C8440697BF5B6D976E /* skill-down.wav in Resources */ = {isa = PBXBuildFile; fileRef = BCF4DFA486AA4A00D7530DEF /* skill-down.wav */; };
+		26F353AEAA6B96BA0C721AA9 /* AssemblyAIStreamingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */; };
 		277DAE431BD25B27F7A1CF08 /* server.js in Resources */ = {isa = PBXBuildFile; fileRef = 2401A65BD01B1E1859DD4B36 /* server.js */; };
 		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		2984C9424D7B8E9A636ADAE5 /* AgentOutputsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42036566FF695AD6554E8E01 /* AgentOutputsView.swift */; };
@@ -281,6 +282,7 @@
 		83B706458B64024088E8769D /* ActionChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipsView.swift; sourceTree = "<group>"; };
 		847AFAFC451130DC3C6A6545 /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
 		86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicLevelMonitor.swift; sourceTree = "<group>"; };
+		8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIStreamingService.swift; sourceTree = "<group>"; };
 		8BE4187651AAE648F8751542 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWeightStore.swift; sourceTree = "<group>"; };
 		8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointFollowUpService.swift; sourceTree = "<group>"; };
@@ -484,6 +486,7 @@
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */,
 				9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */,
+				8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */,
 				2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */,
 				ED0ACABB44793DCD72302E5A /* AudioCueService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
@@ -759,6 +762,7 @@
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				77D6454BBE135552947BC1F8 /* AssemblyAIService.swift in Sources */,
+				26F353AEAA6B96BA0C721AA9 /* AssemblyAIStreamingService.swift in Sources */,
 				0F2017378D1394AAD7234E25 /* AttentionDirective.swift in Sources */,
 				533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */,
 				A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */,
