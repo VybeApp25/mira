@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon
+import AVFoundation
 
 struct SettingsView: View {
     @ObservedObject var state: MiraState
@@ -21,6 +22,16 @@ struct SettingsView: View {
     @State private var hoverCategories: [String: CategoryStats] = [:]
     @ObservedObject private var hoverHistory = HoverHistoryStore.shared
     @State private var showHoverHistory = false
+    @ObservedObject private var accentSvc  = AccentColorService.shared
+    @State private var previewPlayer: AVAudioPlayer? = nil
+    @State private var previewingVoice: MiraVoice? = nil
+    @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
+    @AppStorage("mira_cat_mode")           private var catMode           = false
+    @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
+    @State private var micDevices:     [AVCaptureDevice] = []
+    @State private var selectedMicUID: String = UserDefaults.standard.string(forKey: "mira_mic_uid") ?? ""
+    @State private var micLevel:       Float  = 0.0
+    @State private var micMonitor:     MicLevelMonitor? = nil
 
     enum RecordingTarget { case voice, text }
 
@@ -38,13 +49,21 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         keySection
                         Divider().background(Color.white.opacity(0.08))
+                        accentColorSection
+                        Divider().background(Color.white.opacity(0.08))
                         connectedAppsButton
                         Divider().background(Color.white.opacity(0.08))
                         shortcutsSection
                         Divider().background(Color.white.opacity(0.08))
                         screenCompanionSection
                         Divider().background(Color.white.opacity(0.08))
+                        pointFollowUpSection
+                        Divider().background(Color.white.opacity(0.08))
                         voiceSection
+                        Divider().background(Color.white.opacity(0.08))
+                        microphoneSection
+                        Divider().background(Color.white.opacity(0.08))
+                        appearanceSection
                         Divider().background(Color.white.opacity(0.08))
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
@@ -521,34 +540,164 @@ struct SettingsView: View {
 
             VStack(spacing: 4) {
                 ForEach(MiraVoice.allCases) { v in
-                    Button {
-                        MiraVoice.saved = v
-                        selectedVoice = v
-                        NotificationCenter.default.post(name: .miraVoiceChanged, object: nil)
-                    } label: {
-                        HStack {
-                            Text(v.label)
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.85))
-                            Spacer()
-                            if selectedVoice == v {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(accent)
+                    HStack(spacing: 8) {
+                        Button {
+                            MiraVoice.saved = v
+                            selectedVoice = v
+                            NotificationCenter.default.post(name: .miraVoiceChanged, object: nil)
+                        } label: {
+                            HStack {
+                                Text(v.label)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.85))
+                                Spacer()
+                                if selectedVoice == v {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(accent)
+                                }
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(selectedVoice == v ? accent.opacity(0.10) : Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(selectedVoice == v ? accent.opacity(0.10) : Color.white.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+
+                        // Preview button — plays bundled voice sample if available
+                        Button {
+                            playVoicePreview(v)
+                        } label: {
+                            Image(systemName: previewingVoice == v ? "stop.fill" : "play.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(previewingVoice == v ? accent : .white.opacity(0.30))
+                                .frame(width: 26, height: 26)
+                                .background(Color.white.opacity(0.05))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
             Text("OpenAI Realtime API · gpt-4o-realtime-preview")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.25))
+        }
+    }
+
+    private func playVoicePreview(_ voice: MiraVoice) {
+        if previewingVoice == voice {
+            previewPlayer?.stop()
+            previewPlayer = nil
+            previewingVoice = nil
+            return
+        }
+        previewPlayer?.stop()
+        // Try loading a bundled preview file named "<voice-id>-preview.mp3"
+        let name = voice.rawValue + "-preview"
+        if let url = Bundle.main.url(forResource: name, withExtension: "mp3"),
+           let player = try? AVAudioPlayer(contentsOf: url) {
+            player.prepareToPlay()
+            previewPlayer = player
+            previewingVoice = voice
+            player.play()
+            // Auto-clear when done
+            DispatchQueue.main.asyncAfter(deadline: .now() + player.duration + 0.1) {
+                if previewingVoice == voice { previewingVoice = nil }
+            }
+        } else {
+            // Fall back to agent-launch chime as a placeholder
+            AudioCueService.shared.playAgentLaunch()
+        }
+    }
+
+    // MARK: - Accent color section
+
+    @ViewBuilder
+    private var accentColorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Accent Color", systemImage: "paintpalette.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                ForEach(AccentColorService.options) { option in
+                    let selected = accentSvc.selectedIndex == option.id
+                    Button {
+                        accentSvc.select(option.id)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Circle()
+                                .fill(option.color)
+                                .frame(width: 26, height: 26)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(selected ? 0.75 : 0), lineWidth: 2)
+                                )
+                                .scaleEffect(selected ? 1.12 : 1.0)
+                                .animation(.spring(response: 0.22, dampingFraction: 0.72), value: selected)
+                            Text(option.name)
+                                .font(.system(size: 9, weight: selected ? .semibold : .regular))
+                                .foregroundColor(selected ? .white.opacity(0.80) : .white.opacity(0.30))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    // MARK: - Point Follow-Up section
+
+    @ViewBuilder
+    private var pointFollowUpSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Point & Ask", systemImage: "cursorarrow.click.2")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Click to explain")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Click anything on screen — Mira explains what you clicked.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $pointFollowUpEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
+                    .onChange(of: pointFollowUpEnabled) { _, enabled in
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("miraPointFollowUpToggled"),
+                            object: enabled
+                        )
+                        if enabled { PointFollowUpService.shared.start() }
+                        else       { PointFollowUpService.shared.stop()  }
+                    }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if pointFollowUpEnabled {
+                Text("Requires Accessibility permission. Click events are processed on-device.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -811,6 +960,135 @@ struct SettingsView: View {
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.22))
         }
+    }
+
+    // MARK: - Microphone section
+
+    private var microphoneSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Microphone", systemImage: "mic.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            if micDevices.isEmpty {
+                Text("No input devices found")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.28))
+            } else {
+                Picker("", selection: $selectedMicUID) {
+                    ForEach(micDevices, id: \.uniqueID) { dev in
+                        Text(dev.localizedName).tag(dev.uniqueID)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(.white)
+                .onChange(of: selectedMicUID) { uid in
+                    UserDefaults.standard.set(uid, forKey: "mira_mic_uid")
+                }
+            }
+
+            // Live volume meter
+            HStack(spacing: 8) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.07))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(levelColor(micLevel))
+                            .frame(width: geo.size.width * CGFloat(min(micLevel, 1.0)))
+                            .animation(.linear(duration: 0.05), value: micLevel)
+                    }
+                }
+                .frame(height: 6)
+
+                Button(micMonitor == nil ? "Test Mic" : "Stop") {
+                    if micMonitor == nil {
+                        let monitor = MicLevelMonitor(deviceUID: selectedMicUID.isEmpty ? nil : selectedMicUID) { level in
+                            micLevel = level
+                        }
+                        micMonitor = monitor
+                    } else {
+                        micMonitor?.stop()
+                        micMonitor = nil
+                        micLevel   = 0
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundColor(micMonitor == nil ? accent : .red.opacity(0.8))
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear {
+            micDevices = AVCaptureDevice.DiscoverySession(
+                deviceTypes: [.microphone],
+                mediaType: .audio,
+                position: .unspecified
+            ).devices
+        }
+        .onDisappear {
+            micMonitor?.stop()
+            micMonitor = nil
+            micLevel   = 0
+        }
+    }
+
+    private func levelColor(_ level: Float) -> Color {
+        level < 0.6 ? Color(red: 0.20, green: 0.84, blue: 0.29)
+                    : Color(red: 1.0,  green: 0.60, blue: 0.20)
+    }
+
+    // MARK: - Appearance section (Cat Mode + Transparent panes)
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Appearance", systemImage: "paintbrush.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            // Transparent panes
+            toggleRow(
+                icon: "rectangle.fill",
+                title: "Transparent panes",
+                subtitle: "Frosted glass instead of solid background",
+                binding: $transparentPanes
+            )
+
+            // Cat Mode
+            toggleRow(
+                icon: "pawprint.fill",
+                title: "Cat mode 🐱",
+                subtitle: "Mira responds with feline energy",
+                binding: $catMode
+            )
+        }
+    }
+
+    private func toggleRow(icon: String, title: String, subtitle: String, binding: Binding<Bool>) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.4))
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.85))
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+            }
+
+            Spacer()
+
+            Toggle("", isOn: binding)
+                .toggleStyle(.switch)
+                .scaleEffect(0.75)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     // MARK: - Helpers

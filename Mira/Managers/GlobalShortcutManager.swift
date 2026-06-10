@@ -14,6 +14,10 @@ extension Notification.Name {
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
     static let miraPushToTalkEnded        = Notification.Name("miraPushToTalkEnded")
+    // Personalization
+    static let miraAccentColorChanged     = Notification.Name("miraAccentColorChanged")
+    static let miraPointFollowUp          = Notification.Name("miraPointFollowUp")
+    static let miraAgentFlightLaunched    = Notification.Name("miraAgentFlightLaunched")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)

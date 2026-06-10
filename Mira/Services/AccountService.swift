@@ -32,7 +32,19 @@ final class AccountService: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        loadSavedUser()
+        // Prefer Supabase session if available
+        if let s = SupabaseService.shared.session {
+            let user = MiraUser(
+                id: s.userId,
+                email: s.email,
+                displayName: s.displayName,
+                avatarURL: nil,
+                createdAt: Date()
+            )
+            authState = .signedIn(user)
+        } else {
+            loadSavedUser()
+        }
     }
 
     var currentUser: MiraUser? {
@@ -54,37 +66,50 @@ final class AccountService: NSObject, ObservableObject {
         controller.performRequests()
     }
 
-    // MARK: - Email/Password placeholder (wire to Supabase when backend is ready)
+    // MARK: - Email/Password via Supabase
 
     func signIn(email: String, password: String) async throws {
         authState = .loading
-        // TODO: wire to Supabase Auth or your backend
-        // For now, create a local user so the entitlement system works
-        let user = MiraUser(
-            id: UUID().uuidString,
-            email: email,
-            displayName: email.components(separatedBy: "@").first,
-            avatarURL: nil,
-            createdAt: Date()
-        )
-        saveUser(user)
-        authState = .signedIn(user)
+        do {
+            let s = try await SupabaseService.shared.signIn(email: email, password: password)
+            let user = MiraUser(
+                id: s.userId,
+                email: s.email,
+                displayName: s.displayName ?? s.email?.components(separatedBy: "@").first,
+                avatarURL: nil,
+                createdAt: Date()
+            )
+            saveUser(user)
+            authState = .signedIn(user)
+            PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+        } catch {
+            authState = .signedOut
+            throw error
+        }
     }
 
     func signUp(email: String, password: String, name: String) async throws {
         authState = .loading
-        let user = MiraUser(
-            id: UUID().uuidString,
-            email: email,
-            displayName: name,
-            avatarURL: nil,
-            createdAt: Date()
-        )
-        saveUser(user)
-        authState = .signedIn(user)
+        do {
+            let s = try await SupabaseService.shared.signUp(email: email, password: password, name: name)
+            let user = MiraUser(
+                id: s.userId,
+                email: s.email,
+                displayName: s.displayName ?? name,
+                avatarURL: nil,
+                createdAt: Date()
+            )
+            saveUser(user)
+            authState = .signedIn(user)
+            PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+        } catch {
+            authState = .signedOut
+            throw error
+        }
     }
 
     func signOut() {
+        SupabaseService.shared.signOut()
         authState = .signedOut
         UserDefaults.standard.removeObject(forKey: userKey)
     }
@@ -114,16 +139,34 @@ extension AccountService: ASAuthorizationControllerDelegate {
         guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
         let name = [cred.fullName?.givenName, cred.fullName?.familyName]
             .compactMap { $0 }.joined(separator: " ")
-        let user = MiraUser(
-            id: cred.user,
-            email: cred.email,
-            displayName: name.isEmpty ? cred.email?.components(separatedBy: "@").first : name,
-            avatarURL: nil,
-            createdAt: Date()
-        )
+
         Task { @MainActor in
-            self.saveUser(user)
-            self.authState = .signedIn(user)
+            // Try Supabase sign-in with Apple identity token first
+            if let tokenData = cred.identityToken,
+               let idToken = String(data: tokenData, encoding: .utf8),
+               let s = try? await SupabaseService.shared.signInWithApple(idToken: idToken) {
+                let user = MiraUser(
+                    id: s.userId,
+                    email: s.email ?? cred.email,
+                    displayName: s.displayName ?? (name.isEmpty ? cred.email?.components(separatedBy: "@").first : name),
+                    avatarURL: nil,
+                    createdAt: Date()
+                )
+                self.saveUser(user)
+                self.authState = .signedIn(user)
+                PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+            } else {
+                // Fallback: local-only user (e.g. repeat Apple sign-in without fresh token)
+                let user = MiraUser(
+                    id: cred.user,
+                    email: cred.email,
+                    displayName: name.isEmpty ? cred.email?.components(separatedBy: "@").first : name,
+                    avatarURL: nil,
+                    createdAt: Date()
+                )
+                self.saveUser(user)
+                self.authState = .signedIn(user)
+            }
         }
     }
 

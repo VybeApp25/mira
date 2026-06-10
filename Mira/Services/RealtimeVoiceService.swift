@@ -211,6 +211,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             }
             await MainActor.run {
                 NSLog("[MiraRealtime] commitAudioAndRequestResponse")
+                AudioCueService.shared.playTextSend()
                 self.emit(["type": "input_audio_buffer.commit"])
                 self.emit(["type": "response.create"])
             }
@@ -328,6 +329,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                 enqueueAudio(delta)
                 if case .thinking = state {
                     state = .speaking
+                    AudioCueService.shared.playTextReceive()
                     // Clear mic audio accumulated during thinking — prevents
                     // any buffered sound from triggering VAD on the next turn.
                     emit(["type": "input_audio_buffer.clear"])

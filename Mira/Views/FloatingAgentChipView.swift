@@ -1,9 +1,89 @@
 import SwiftUI
+import AppKit
 
-// MARK: - FrostedGlass ViewModifier
-// Port of the interactive-frosted-glass-card React component (MIT) to SwiftUI.
-// Shared across FloatingAgentChipView, ResponseCardView, and any future cards.
-// Defined here (compiled into the target) so all Views can use .frostedGlass().
+// MARK: - NSVisualEffectView bridge
+// Mirrors HeyClicky's NonHitTestingVisualEffectView — same material path, zero hit surface
+// so SwiftUI gesture handlers above it receive all events.
+
+private final class NonHitTestingVisualEffectView: NSVisualEffectView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var acceptsFirstResponder: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
+}
+
+private struct VisualEffectBlur: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+    var cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> NonHitTestingVisualEffectView {
+        let v = NonHitTestingVisualEffectView()
+        v.material     = material
+        v.blendingMode = blendingMode
+        v.state        = .active
+        v.wantsLayer   = true
+        v.layer?.cornerRadius  = cornerRadius
+        v.layer?.masksToBounds = true
+        return v
+    }
+
+    func updateNSView(_ nsView: NonHitTestingVisualEffectView, context: Context) {
+        nsView.material      = material
+        nsView.blendingMode  = blendingMode
+        nsView.layer?.cornerRadius = cornerRadius
+    }
+}
+
+// MARK: - CornerGlowLayer
+// Animated ambient color blobs that peek through the glass — HeyClicky's signature.
+
+struct CornerGlowLayer: View {
+    var color: Color
+    var intensity: Double = 0.38
+    @State private var pulse = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ZStack {
+                // Bottom-leading blob (stronger)
+                RadialGradient(
+                    colors: [color.opacity(pulse ? intensity : intensity * 0.55), .clear],
+                    center: .init(x: 0.06, y: 0.94),
+                    startRadius: 0,
+                    endRadius: w * 0.58
+                )
+                // Top-trailing blob (softer)
+                RadialGradient(
+                    colors: [color.opacity(pulse ? intensity * 0.65 : intensity * 0.90), .clear],
+                    center: .init(x: 0.92, y: 0.08),
+                    startRadius: 0,
+                    endRadius: max(w, h) * 0.50
+                )
+                // Centre-trailing accent
+                RadialGradient(
+                    colors: [color.opacity(pulse ? intensity * 0.20 : intensity * 0.35), .clear],
+                    center: .init(x: 0.85, y: 0.55),
+                    startRadius: 0,
+                    endRadius: w * 0.32
+                )
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+    }
+}
+
+// MARK: - LiquidGlass ViewModifier
+// Matches HeyClicky's liquidGlassSurface(tint:fallbackFill:in:) look:
+//   • NSVisualEffectView .hudWindow material for true system-compositor glass
+//   • CornerGlowLayer ambient blobs behind the glass
+//   • Subtle tint + top-edge highlight
+//   • 3-D hover tilt + mouse-position glare
 
 private struct GlassCardSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
@@ -13,7 +93,9 @@ private struct GlassCardSizeKey: PreferenceKey {
 struct FrostedGlass: ViewModifier {
     var cornerRadius: CGFloat = 16
     var tiltDegrees:  CGFloat = 10
-    var glareOpacity: CGFloat = 0.28
+    var glareOpacity: CGFloat = 0.22
+    var tintColor:    Color   = Color(red: 0.05, green: 0.05, blue: 0.12)
+    var glowColor:    Color   = Color(red: 0.18, green: 0.56, blue: 1.00)
 
     @State private var hovered:  Bool    = false
     @State private var hoverLoc: CGPoint = .zero
@@ -40,7 +122,7 @@ struct FrostedGlass: ViewModifier {
             }
             .background(glassLayers)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.42), radius: 22, x: 0, y: 10)
+            .shadow(color: .black.opacity(0.50), radius: 28, x: 0, y: 12)
             .rotation3DEffect(.degrees(tiltX), axis: (x: 1, y: 0, z: 0), perspective: 0.4)
             .rotation3DEffect(.degrees(tiltY), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
             .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.65), value: tiltX)
@@ -59,10 +141,21 @@ struct FrostedGlass: ViewModifier {
     @ViewBuilder
     private var glassLayers: some View {
         ZStack {
+            // Layer 0: corner glow blobs (visible through glass)
+            CornerGlowLayer(color: glowColor, intensity: 0.32)
+
+            // Layer 1: true system blur (NSVisualEffectView)
+            VisualEffectBlur(
+                material:     .hudWindow,
+                blendingMode: .behindWindow,
+                cornerRadius: cornerRadius
+            )
+
+            // Layer 2: subtle dark tint
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(red: 0.06, green: 0.06, blue: 0.13).opacity(0.28))
+                .fill(tintColor.opacity(0.18))
+
+            // Layer 3: mouse-follow glare
             if hovered {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(RadialGradient(
@@ -72,15 +165,21 @@ struct FrostedGlass: ViewModifier {
                             y: cardSize.height > 0 ? Double(hoverLoc.y / cardSize.height) : 0.5
                         ),
                         startRadius: 0,
-                        endRadius:   max(cardSize.width, cardSize.height) * 0.75
+                        endRadius:   max(cardSize.width, cardSize.height) * 0.70
                     ))
                     .animation(.linear(duration: 0), value: hoverLoc)
             }
+
+            // Layer 4: top-edge highlight (HeyClicky's inner border light)
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(LinearGradient(
-                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ), lineWidth: 1)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.38), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint:   .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
         }
     }
 }
@@ -88,6 +187,11 @@ struct FrostedGlass: ViewModifier {
 extension View {
     func frostedGlass(cornerRadius: CGFloat = 16, tiltDegrees: CGFloat = 10) -> some View {
         modifier(FrostedGlass(cornerRadius: cornerRadius, tiltDegrees: tiltDegrees))
+    }
+
+    func liquidGlass(cornerRadius: CGFloat = 16, tiltDegrees: CGFloat = 10,
+                     glowColor: Color = Color(red: 0.18, green: 0.56, blue: 1.00)) -> some View {
+        modifier(FrostedGlass(cornerRadius: cornerRadius, tiltDegrees: tiltDegrees, glowColor: glowColor))
     }
 }
 
@@ -208,7 +312,7 @@ struct FloatingAgentChipView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .frame(width: 190)
-        .frostedGlass(cornerRadius: 13, tiltDegrees: 6)
+        .liquidGlass(cornerRadius: 13, tiltDegrees: 6, glowColor: accent)
         // Report bounds for hit-testing
         .background(
             GeometryReader { geo in
@@ -225,8 +329,8 @@ struct FloatingAgentChipView: View {
             chipHeader
             if expanded { chipExpandedStrip }
         }
-        // Frosted glass replaces the solid dark background
-        .frostedGlass(cornerRadius: 16, tiltDegrees: 8)
+        // Liquid glass with accent-colored corner glow
+        .liquidGlass(cornerRadius: 16, tiltDegrees: 8, glowColor: accent)
         // Animated chrome border while running
         .modifier(job.status.isActive
             ? AnyViewModifier(AgentHUDPillChrome())

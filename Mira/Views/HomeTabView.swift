@@ -26,6 +26,7 @@ struct HomeTabView: View {
                 WeatherCard(service: weather)
                 CalendarCard()
             }
+            UseCaseCarousel()
             WorkspaceInsightsStrip(
                 review: reviewStore.latest,
                 generating: generatingReview,
@@ -554,6 +555,88 @@ private struct CardShell<Content: View>: View {
             content()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Use case carousel
+
+private struct UseCase {
+    let icon: String
+    let title: String
+    let prompt: String
+    let color: Color
+}
+
+private let useCases: [UseCase] = [
+    UseCase(icon: "envelope.fill",       title: "Draft email",
+            prompt: "Help me write a professional email about ",
+            color: Color(red: 0.93, green: 0.26, blue: 0.21)),
+    UseCase(icon: "magnifyingglass",      title: "Search web",
+            prompt: "Search the web for: ",
+            color: Color(red: 0.29, green: 0.62, blue: 1.0)),
+    UseCase(icon: "text.bubble.fill",     title: "Summarize",
+            prompt: "Summarize what's on my screen right now",
+            color: Color(red: 0.44, green: 0.12, blue: 0.59)),
+    UseCase(icon: "calendar.badge.plus",  title: "Schedule",
+            prompt: "Create a calendar event for ",
+            color: Color(red: 0.17, green: 0.67, blue: 0.39)),
+    UseCase(icon: "doc.text.fill",        title: "Take notes",
+            prompt: "Save a note: ",
+            color: Color(red: 1.0,  green: 0.75, blue: 0.20)),
+    UseCase(icon: "ant.fill",             title: "Debug",
+            prompt: "Help me debug this issue: ",
+            color: Color(red: 0.95, green: 0.40, blue: 0.20)),
+    UseCase(icon: "wand.and.stars",       title: "Improve",
+            prompt: "Review and improve the selected text",
+            color: Color(red: 0.70, green: 0.40, blue: 1.0)),
+    UseCase(icon: "person.fill.questionmark", title: "Ask anything",
+            prompt: "",
+            color: Color(red: 0.50, green: 0.50, blue: 0.55)),
+]
+
+private struct UseCaseCarousel: View {
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(useCases, id: \.title) { uc in
+                    UseCaseChip(useCase: uc)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+        .frame(height: 34)
+    }
+}
+
+private struct UseCaseChip: View {
+    let useCase: UseCase
+    @State private var hovered = false
+
+    var body: some View {
+        Button {
+            NotificationCenter.default.post(
+                name: .miraChipPromptSelected,
+                object: nil,
+                userInfo: ["prompt": useCase.prompt]
+            )
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: useCase.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(useCase.color)
+                Text(useCase.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(hovered ? 0.10 : 0.06))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
     }
 }
 

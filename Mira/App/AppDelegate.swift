@@ -18,11 +18,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenCaptureService.requestAccessIfNeeded()
         AgentProcessManager.shared.start()
 
+        // ChimeWarmer — prime audio hardware pipeline for zero-latency first chime
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            AudioCueService.shared.warmHardware()
+        }
+
+        PostHogService.shared.capture("app_launched")
+
         let manager = NotchManager()
         manager.setup()
         notchManager = manager
         MiraCursorManager.shared.activate()
         AgentHUDWindowManager.shared.start()
+
+        // Start Point Follow-Up monitor if previously enabled
+        if UserDefaults.standard.bool(forKey: "mira_point_follow_up_enabled") {
+            PointFollowUpService.shared.start()
+        }
 
         statusBarController = StatusBarController(miraState: manager.miraState)
 

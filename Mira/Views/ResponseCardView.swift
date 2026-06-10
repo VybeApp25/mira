@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - ResponseCardView
 //
@@ -39,7 +40,7 @@ struct ResponseCardView: View {
                 chipRow(art: art, isLast: idx == artifacts.count - 1)
             }
         }
-        .frostedGlass(cornerRadius: 14, tiltDegrees: 6)
+        .liquidGlass(cornerRadius: 14, tiltDegrees: 6, glowColor: accent)
         .transition(.asymmetric(
             insertion:  .move(edge: .trailing).combined(with: .opacity),
             removal:    .move(edge: .trailing).combined(with: .opacity)
@@ -126,7 +127,7 @@ struct ResponseCardView: View {
                 galleryStrip
             }
         }
-        .frostedGlass(cornerRadius: 16, tiltDegrees: 7)
+        .liquidGlass(cornerRadius: 16, tiltDegrees: 7, glowColor: accent)
         .animation(.spring(response: 0.30, dampingFraction: 0.80), value: expanded)
         .transition(.asymmetric(
             insertion:  .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),

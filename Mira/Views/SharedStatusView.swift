@@ -142,8 +142,7 @@ struct SharedStatusView: View {
         let maxH: CGFloat = isCompact ? 12  : 16
         let minH: CGFloat = 3
         let blue = Color(red: 0.29, green: 0.62, blue: 1.0)
-
-        return HStack(spacing: isCompact ? 1.5 : 2) {
+        let bars = HStack(spacing: isCompact ? 1.5 : 2) {
             ForEach(0..<5, id: \.self) { i in
                 let amp = CGFloat((sin((t + Self.listenOffsets[i]) / Self.listenSpeeds[i] * .pi * 2) + 1) / 2)
                 let h   = reduceMotion ? maxH * 0.55 : minH + amp * (maxH - minH)
@@ -153,6 +152,14 @@ struct SharedStatusView: View {
             }
         }
         .frame(height: maxH)
+
+        if isCompact && !reduceMotion {
+            return AnyView(HStack(spacing: 5) {
+                notchEyes(t: t, irisColor: blue)
+                bars
+            })
+        }
+        return AnyView(bars)
     }
 
     // MARK: - Speaking: reed waveform
@@ -166,8 +173,7 @@ struct SharedStatusView: View {
         let barW: CGFloat  = isCompact ? 2.0 : 2.5
         let maxH: CGFloat  = isCompact ? 14  : 18
         let minH: CGFloat  = 3
-
-        return HStack(spacing: isCompact ? 1.5 : 2) {
+        let bars = HStack(spacing: isCompact ? 1.5 : 2) {
             ForEach(0..<7, id: \.self) { i in
                 let amp = CGFloat((sin((t + Self.reedOffsets[i]) / Self.reedSpeeds[i] * .pi * 2) + 1) / 2)
                 let h   = reduceMotion ? maxH * 0.55 : minH + amp * (maxH - minH)
@@ -177,5 +183,51 @@ struct SharedStatusView: View {
             }
         }
         .frame(height: maxH)
+
+        if isCompact && !reduceMotion {
+            return AnyView(HStack(spacing: 5) {
+                notchEyes(t: t, irisColor: miraTeale)
+                bars
+            })
+        }
+        return AnyView(bars)
+    }
+
+    // MARK: - NotchEyeView — twin animated eyes (HeyClicky NotchEyeView equivalent)
+    // Rendered alongside waveform bars in the collapsed pill for listening + speaking.
+    // Driven by absolute time (no per-view state) to avoid animation resets.
+
+    private func notchEyes(t: Double, irisColor: Color) -> some View {
+        HStack(spacing: 3) {
+            singleEye(t: t, irisColor: irisColor, blinkInterval: 3.7, gazePhase: 0.0)
+            singleEye(t: t, irisColor: irisColor, blinkInterval: 3.7, gazePhase: 0.4)
+        }
+    }
+
+    private func singleEye(t: Double, irisColor: Color, blinkInterval: Double, gazePhase: Double) -> some View {
+        let gazeX  = CGFloat(sin((t + gazePhase) / 2.2 * .pi) * 1.6)
+        let phase  = t.truncatingRemainder(dividingBy: blinkInterval)
+        let closed = phase < 0.09
+
+        return ZStack {
+            // Sclera
+            Capsule()
+                .fill(Color.white.opacity(0.90))
+                .frame(width: 9, height: closed ? 2 : 7)
+            if !closed {
+                // Iris
+                Circle()
+                    .fill(irisColor.opacity(0.92))
+                    .frame(width: 4.5, height: 4.5)
+                    .offset(x: gazeX)
+                // Pupil
+                Circle()
+                    .fill(Color.black.opacity(0.80))
+                    .frame(width: 2.0, height: 2.0)
+                    .offset(x: gazeX)
+            }
+        }
+        .frame(width: 9, height: 7)
+        .clipShape(Capsule())
     }
 }

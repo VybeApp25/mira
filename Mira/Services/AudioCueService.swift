@@ -1,26 +1,42 @@
+import AVFoundation
 import AppKit
 import Foundation
 
-// MARK: - Audio cue service
-//
-// Sound palette for Mira's notch pill. All sounds are opt-out per cue;
-// global mute is respected; repeated cues are rate-limited to 1.5 s so
-// rapid mode flicker doesn't spam sounds.
-//
-// Audio is never the sole indicator — all cues have VoiceOver + visual alternatives.
+// MARK: - Sound catalog
+
+enum MiraSound: String, CaseIterable {
+    // Agent lifecycle (HeyClicky mp3s)
+    case agentLaunch   = "agent-launch"
+    case agentDone     = "agent-done"
+    case agentClose    = "agent-close"
+    // Interaction
+    case enter         = "enter"
+    case textSend      = "clicky-text-send"
+    case textReceive   = "clicky-text-receive"
+    case skillUp       = "skill-up"
+    case skillDown     = "skill-down"
+
+    var fileExtension: String {
+        switch self {
+        case .agentLaunch, .agentDone, .agentClose, .enter: return "mp3"
+        default: return "wav"
+        }
+    }
+}
+
+// MARK: - AudioCueService
 
 @MainActor
 final class AudioCueService {
     static let shared = AudioCueService()
+    private init() { preload() }
 
-    // MARK: - Global mute
+    // MARK: - Settings
 
     var isMuted: Bool {
         get { UserDefaults.standard.bool(forKey: "mira_audio_muted") }
         set { UserDefaults.standard.set(newValue, forKey: "mira_audio_muted") }
     }
-
-    // MARK: - Per-cue toggles (default enabled)
 
     func isCueEnabled(_ name: String) -> Bool {
         let key = "mira_audio_cue_\(name)"
@@ -32,25 +48,48 @@ final class AudioCueService {
         UserDefaults.standard.set(enabled, forKey: "mira_audio_cue_\(name)")
     }
 
-    // MARK: - Rate limiting
+    // MARK: - Player pool (8 simultaneous cues)
 
-    private var lastPlayed: [String: Date] = [:]
+    private var players: [MiraSound: AVAudioPlayer] = [:]
+    private var lastPlayed: [MiraSound: Date] = [:]
     private let rateLimitInterval: TimeInterval = 1.5
 
-    private func shouldPlay(_ name: String) -> Bool {
-        guard !isMuted, isCueEnabled(name) else { return false }
-        if let last = lastPlayed[name],
-           Date().timeIntervalSince(last) < rateLimitInterval { return false }
-        return true
+    private func preload() {
+        for sound in MiraSound.allCases {
+            if let url = Bundle.main.url(forResource: sound.rawValue, withExtension: sound.fileExtension),
+               let player = try? AVAudioPlayer(contentsOf: url) {
+                player.prepareToPlay()
+                players[sound] = player
+            }
+        }
     }
 
     // MARK: - Public API
 
+    func play(_ sound: MiraSound) {
+        guard !isMuted, isCueEnabled(sound.rawValue) else { return }
+        if let last = lastPlayed[sound],
+           Date().timeIntervalSince(last) < rateLimitInterval { return }
+        lastPlayed[sound] = Date()
+
+        if let player = players[sound] {
+            // Reset and play
+            if player.isPlaying { player.stop() }
+            player.currentTime = 0
+            player.play()
+        } else {
+            // Fallback to system sound if bundle file missing
+            NSSound(named: NSSound.Name(fallbackName(sound)))?.play()
+        }
+    }
+
+    // MARK: - Named convenience methods (used by existing callers)
+
     func playModeChange(_ mode: PillMode) {
         switch mode {
-        case .thinking:  play("thinking",  sound: "Tink")
-        case .speaking:  play("speaking",  sound: "Pop")
-        case .listening: play("listening", sound: "Tink")
+        case .thinking:  play(.skillUp)
+        case .speaking:  play(.textReceive)
+        case .listening: play(.enter)
         case .working:   break
         case .idle:      break
         }
@@ -58,36 +97,50 @@ final class AudioCueService {
 
     func playEvent(_ event: PillEvent) {
         switch event {
-        case .shortcut:  play("invoke",    sound: "Ping")
-        case .complete:  play("complete",  sound: "Glass")
-        case .error:     play("error",     sound: "Funk")
-        case .listening: play("listening", sound: "Tink")
-        case .handoff:   play("handoff",   sound: "Purr")
+        case .shortcut:  play(.enter)
+        case .complete:  play(.agentDone)
+        case .error:     play(.skillDown)
+        case .listening: play(.textSend)
+        case .handoff:   play(.skillUp)
         }
     }
 
-    // MARK: - Agent lifecycle cues (ported from HeyClicky's agent-launch/done sounds)
+    func playAgentLaunch()    { play(.agentLaunch) }
+    func playAgentComplete()  { play(.agentDone) }
+    func playAgentClose()     { play(.agentClose) }
+    func playAgentBlocked()   { play(.skillDown) }
+    func playTextSend()       { play(.textSend) }
+    func playTextReceive()    { play(.textReceive) }
 
-    /// Called when an agent run begins (mirrors HeyClicky agent-launch.mp3).
-    func playAgentLaunch() {
-        play("agentLaunch", sound: "Purr")
-    }
+    // MARK: - ChimeWarmer
+    // Plays a silent 0-volume note through the audio pipeline at launch to prime
+    // the hardware and eliminate any first-play latency spike (HeyClicky's ClickyChimeWarmer).
 
-    /// Called when an agent run completes successfully (mirrors HeyClicky agent-done.mp3).
-    func playAgentComplete() {
-        play("agentComplete", sound: "Hero")
-    }
-
-    /// Called when an agent run fails or is blocked.
-    func playAgentBlocked() {
-        play("agentBlocked", sound: "Funk")
+    func warmHardware() {
+        guard let player = players[.enter] else { return }
+        let savedVolume  = player.volume
+        player.volume    = 0
+        player.currentTime = 0
+        player.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            player.stop()
+            player.volume = savedVolume
+            player.currentTime = 0
+        }
     }
 
     // MARK: - Private
 
-    private func play(_ name: String, sound: String) {
-        guard shouldPlay(name) else { return }
-        lastPlayed[name] = Date()
-        NSSound(named: NSSound.Name(sound))?.play()
+    private func fallbackName(_ sound: MiraSound) -> String {
+        switch sound {
+        case .agentLaunch:  return "Purr"
+        case .agentDone:    return "Hero"
+        case .agentClose:   return "Pop"
+        case .enter:        return "Ping"
+        case .textSend:     return "Tink"
+        case .textReceive:  return "Pop"
+        case .skillUp:      return "Tink"
+        case .skillDown:    return "Funk"
+        }
     }
 }

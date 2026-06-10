@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case chat, home, agents, briefing, projects, reliability }
+enum IslandTab: Equatable { case chat, home, agents, briefing, projects, reliability, threads, crons }
 
 // MARK: - Main island view
 
@@ -67,8 +67,14 @@ struct MiraIslandView: View {
         let isNew  = last.map { !Calendar.current.isDateInToday($0) } ?? true
         return isNew ? .briefing : .chat
     }()
-    @State private var showSettings = false
+    @State private var showSettings    = false
     @StateObject private var pillState = PillStateModel()
+    // Agent flight burst — pulsing ring that fires on job launch
+    @State private var showBurst       = false
+    @State private var burstScale: CGFloat = 1.0
+    @State private var burstOpacity: Double = 0.0
+    // Live accent color
+    @ObservedObject private var accentSvc = AccentColorService.shared
 
     private var isExpanded: Bool { animController.state == .expanded }
 
@@ -135,13 +141,35 @@ struct MiraIslandView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miraActivateText)) { _ in
             pillState.postEvent(.shortcut)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .miraAgentFlightLaunched)) { _ in
+            fireAgentBurst()
+        }
+    }
+
+    private func fireAgentBurst() {
+        guard !reduceMotion else { return }
+        burstScale   = 1.0
+        burstOpacity = 0.60
+        showBurst    = true
+        withAnimation(.easeOut(duration: 0.55)) {
+            burstScale   = 2.8
+            burstOpacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.60) { showBurst = false }
     }
 
     // MARK: - Pill container
 
+    @AppStorage("mira_transparent_panes") private var transparentPanes = false
+
     private var pill: some View {
         ZStack {
-            Color.black
+            if transparentPanes {
+                Color.black.opacity(0.55)
+                    .background(.ultraThinMaterial)
+            } else {
+                Color.black
+            }
             if isExpanded {
                 expandedContent
                     .opacity(animController.contentVisible ? 1 : 0)
@@ -186,6 +214,27 @@ struct MiraIslandView: View {
         .overlay(
             IslandShape(topRadius: topR, bottomRadius: botR)
                 .stroke(Color.white.opacity(isExpanded ? 0.08 : 0), lineWidth: 0.5)
+        )
+        // NotchGlowView — colored ring border when collapsed + active
+        .overlay(
+            IslandShape(topRadius: topR, bottomRadius: botR)
+                .stroke(
+                    collapsedAccent.opacity(!isExpanded && collapsedIndicatorActive && !reduceMotion ? 0.38 : 0),
+                    lineWidth: 1.2
+                )
+                .blur(radius: 2)
+                .allowsHitTesting(false)
+        )
+        // Agent launch burst ring
+        .overlay(
+            Group {
+                if showBurst {
+                    IslandShape(topRadius: botR, bottomRadius: botR)
+                        .stroke(collapsedAccent.opacity(burstOpacity), lineWidth: 2.5)
+                        .scaleEffect(burstScale)
+                        .allowsHitTesting(false)
+                }
+            }
         )
         // Colored halo under the pill when an active state is present; fades when idle.
         .shadow(
@@ -485,12 +534,14 @@ struct MiraIslandView: View {
     private var navBar: some View {
         HStack(spacing: 4) {
             // Left group — primary tabs
-            navTab(icon: "message.fill",  label: "Chat",     tab: .chat)
-            navTab(icon: "folder.fill",   label: "Projects", tab: .projects)
-            navTab(icon: "sparkles",      label: "Today",    tab: .briefing)
-            navTab(icon: "house.fill",    label: "Home",     tab: .home)
-            navTab(icon: "cpu",           label: "Agents",   tab: .agents)
-            navTab(icon: "chart.bar.fill", label: "Stats",   tab: .reliability)
+            navTab(icon: "message.fill",        label: "Chat",     tab: .chat)
+            navTab(icon: "folder.fill",         label: "Projects", tab: .projects)
+            navTab(icon: "sparkles",            label: "Today",    tab: .briefing)
+            navTab(icon: "house.fill",          label: "Home",     tab: .home)
+            navTab(icon: "cpu",                 label: "Agents",   tab: .agents)
+            navTab(icon: "bubble.left.and.bubble.right.fill", label: "Threads", tab: .threads)
+            navTab(icon: "chart.bar.fill",      label: "Stats",    tab: .reliability)
+            navTab(icon: "clock.fill",          label: "Crons",    tab: .crons)
 
             Spacer()
 
@@ -629,6 +680,17 @@ struct MiraIslandView: View {
             )
         case .reliability:
             ReliabilityDashboardView()
+        case .crons:
+            CronsTabView()
+        case .threads:
+            ThreadsTabView(onResume: { prompt in
+                selectedTab = .chat
+                NotificationCenter.default.post(
+                    name: .miraChipPromptSelected,
+                    object: nil,
+                    userInfo: ["prompt": prompt]
+                )
+            })
         }
     }
 }

@@ -7,11 +7,16 @@ import SwiftUI
 // Mirrors HeyClicky's CodexHUDInteractiveRectPreferenceKey approach.
 
 final class AgentHUDPassThroughView: NSView {
+    // Retained but unused for coordinate gating — kept for API compatibility.
     var interactiveRect: CGRect = .zero
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard interactiveRect != .zero, interactiveRect.contains(point) else { return nil }
-        return super.hitTest(point)
+        // Ask the view hierarchy if anything wants this point.
+        // SwiftUI views that have no gesture handler return nil from their hit test,
+        // so transparent panel regions naturally pass through to what's below.
+        let candidate = super.hitTest(point)
+        // Only swallow events that an actual sub-view claims (not just this container).
+        return candidate === self ? nil : candidate
     }
 
     override var acceptsFirstResponder: Bool { false }

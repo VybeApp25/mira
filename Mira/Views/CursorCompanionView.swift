@@ -269,6 +269,31 @@ struct CursorCompanionView: View {
     }
 }
 
+// MARK: - TypewriterWaveformView
+// Animated 3-bar waveform that pulses while the AI is generating a reply.
+// Shows in place of the static Mira dot while typewriter reveal is in progress.
+
+private struct TypewriterWaveformView: View {
+    private static let speeds:  [Double] = [0.32, 0.26, 0.38]
+    private static let offsets: [Double] = [0.00, 0.18, 0.09]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 1.5) {
+                ForEach(0..<3, id: \.self) { i in
+                    let amp = CGFloat((sin((t + Self.offsets[i]) / Self.speeds[i] * .pi * 2) + 1) / 2)
+                    let h   = 3 + amp * 9
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(accent.opacity(0.88))
+                        .frame(width: 2.5, height: h)
+                }
+            }
+            .frame(height: 12)
+        }
+    }
+}
+
 // MARK: - Pulse dot
 
 private struct PulseDot: View {
@@ -315,11 +340,17 @@ private struct TypewriterReplyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 8) {
-                // Mira dot
-                Circle()
-                    .fill(accent)
-                    .frame(width: 6, height: 6)
-                    .padding(.top, 5)
+                // Mira dot — replaces with waveform while typewriting
+                if !done {
+                    TypewriterWaveformView()
+                        .frame(width: 18)
+                        .padding(.top, 3)
+                } else {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 5)
+                }
 
                 // Typewriter text + blinking cursor
                 (Text(displayed) + (done ? Text("") : Text(cursor ? "▋" : " ")

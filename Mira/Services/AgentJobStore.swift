@@ -40,6 +40,8 @@ final class AgentJobStore: ObservableObject {
         job.estimatedDuration = buildMode?.estimatedDuration ?? Self.estimatedDuration(for: type)
         jobs.insert(job, at: 0)
         save()
+        AudioCueService.shared.playAgentLaunch()
+        NotificationCenter.default.post(name: .miraAgentFlightLaunched, object: nil)
 
         let jobId = job.id
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -447,6 +449,7 @@ final class AgentJobStore: ObservableObject {
             }
         }
         if let job = job(id: id) {
+            AudioCueService.shared.playAgentComplete()
             postNotification(for: job)
             OutputStore.shared.register(from: job)
 
@@ -489,6 +492,7 @@ final class AgentJobStore: ObservableObject {
             job.completedAt   = Date()
             job.currentStep   = "Failed"
         }
+        AudioCueService.shared.playAgentBlocked()
         CursorCompanionManager.shared.send(.agentFailed(
             message: resolution.userMessage,
             actions: resolution.companionActions
