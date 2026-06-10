@@ -12,10 +12,11 @@ let miraViolet = Color(red: 0.62, green: 0.50, blue: 0.92)   // soft violet  #9E
 // regardless of when the view is first rendered or how many times the pill resizes.
 //
 // Visualizations:
-//   idle     — spark glyph, barely visible
-//   thinking — 3-dot breathing constellation (violet → teal)
-//   working  — 4-dot left-to-right pulse (violet)
-//   speaking — 7-bar reed waveform (teal)
+//   idle      — spark glyph, barely visible
+//   listening — 5-bar input waveform (blue) — user speaking
+//   thinking  — 3-dot breathing constellation (violet → teal)
+//   working   — 4-dot left-to-right pulse (violet)
+//   speaking  — 7-bar reed waveform (teal) — AI speaking
 
 struct SharedStatusView: View {
     @ObservedObject var pillState: PillStateModel
@@ -40,6 +41,9 @@ struct SharedStatusView: View {
         case .idle:
             sparkGlyph
                 .transition(.opacity.combined(with: .scale(scale: 0.70)))
+        case .listening:
+            listeningWaveform(t: t)
+                .transition(.opacity.combined(with: .scale(scale: 0.80)))
         case .thinking:
             constellation(t: t)
                 .transition(.opacity.combined(with: .scale(scale: 0.80)))
@@ -124,6 +128,31 @@ struct SharedStatusView: View {
                     .frame(width: sz, height: sz)
             }
         }
+    }
+
+    // MARK: - Listening: input waveform (user speaking → AI)
+
+    // 5 blue bars that mirror the legacyListeningWaveformBars pattern from HeyClicky.
+    // Shorter and blue to differentiate from the teal speaking waveform.
+    private static let listenSpeeds:  [Double] = [0.30, 0.38, 0.28, 0.42, 0.33]
+    private static let listenOffsets: [Double] = [0.00, 0.22, 0.44, 0.11, 0.33]
+
+    private func listeningWaveform(t: Double) -> some View {
+        let barW: CGFloat = isCompact ? 2.0 : 2.5
+        let maxH: CGFloat = isCompact ? 12  : 16
+        let minH: CGFloat = 3
+        let blue = Color(red: 0.29, green: 0.62, blue: 1.0)
+
+        return HStack(spacing: isCompact ? 1.5 : 2) {
+            ForEach(0..<5, id: \.self) { i in
+                let amp = CGFloat((sin((t + Self.listenOffsets[i]) / Self.listenSpeeds[i] * .pi * 2) + 1) / 2)
+                let h   = reduceMotion ? maxH * 0.55 : minH + amp * (maxH - minH)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(blue.opacity(0.88))
+                    .frame(width: barW, height: h)
+            }
+        }
+        .frame(height: maxH)
     }
 
     // MARK: - Speaking: reed waveform

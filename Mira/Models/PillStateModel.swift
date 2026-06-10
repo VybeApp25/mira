@@ -3,14 +3,15 @@ import SwiftUI
 // MARK: - Persistent assistant modes (debounced, drive SharedStatusView)
 
 enum PillMode: Equatable {
-    case idle, thinking, working, speaking
+    case idle, thinking, working, listening, speaking
 
     var accessibilityLabel: String {
         switch self {
-        case .idle:     return "Mira is ready."
-        case .thinking: return "Mira is thinking."
-        case .working:  return "Mira is working on your request."
-        case .speaking: return "Mira is speaking."
+        case .idle:      return "Mira is ready."
+        case .thinking:  return "Mira is thinking."
+        case .working:   return "Mira is working on your request."
+        case .listening: return "Mira is listening."
+        case .speaking:  return "Mira is speaking."
         }
     }
 }
@@ -90,7 +91,7 @@ final class PillStateModel: ObservableObject {
         case .connecting, .transcribing:
             newMode = .working
         case .recording:
-            newMode = .working
+            newMode = .listening
         case .thinking:
             newMode = .thinking
         case .speaking:

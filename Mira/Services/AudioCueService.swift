@@ -48,10 +48,11 @@ final class AudioCueService {
 
     func playModeChange(_ mode: PillMode) {
         switch mode {
-        case .thinking: play("thinking", sound: "Tink")
-        case .speaking: play("speaking", sound: "Pop")
-        case .working:  break
-        case .idle:     break
+        case .thinking:  play("thinking",  sound: "Tink")
+        case .speaking:  play("speaking",  sound: "Pop")
+        case .listening: play("listening", sound: "Tink")
+        case .working:   break
+        case .idle:      break
         }
     }
 

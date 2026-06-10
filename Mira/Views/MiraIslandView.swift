@@ -78,10 +78,12 @@ struct MiraIslandView: View {
         pillState.mode != .idle || pointTo.isActive
     }
 
-    // Widen the pill to fit label + indicator when active.
+    // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
     private var pillW: CGFloat {
         if isExpanded { return AnimationController.expandedW }
-        return collapsedIndicatorActive ? geometry.notchWidth + 110 : geometry.notchWidth
+        guard collapsedIndicatorActive else { return geometry.notchWidth }
+        let hasSupplementaryContent = !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive
+        return geometry.notchWidth + (hasSupplementaryContent ? 110 : 54)
     }
     private var pillH: CGFloat { isExpanded ? AnimationController.expandedH : geometry.notchHeight }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
@@ -90,10 +92,10 @@ struct MiraIslandView: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.clear.ignoresSafeArea()
-            // Idle breathing glow — sits behind the pill so it bleeds out like a soft halo.
-            // Only visible when collapsed and idle; fades away the moment a state activates.
-            if !isExpanded && pillState.mode == .idle && !reduceMotion {
-                IdleBreathingGlow(width: pillW, height: pillH)
+            // State-aware ambient glow behind the collapsed pill.
+            // Color shifts with voice state: blue=listening, violet=thinking, teal=speaking/idle.
+            if !isExpanded && !reduceMotion {
+                NotchAmbientGlow(pillMode: pillState.mode, width: pillW, height: pillH)
                     .allowsHitTesting(false)
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.40), value: pillState.mode)
@@ -152,12 +154,12 @@ struct MiraIslandView: View {
 
             // Always-mounted SharedStatusView — never recreated on expand/collapse because it
             // lives at a stable ZStack slot above the content branches.
-            // Collapsed: trailing edge, vertically centered.
+            // Collapsed: centered in the pill (HeyClicky NotchActivitySurface placement).
             // Expanded:  top-right area of nav bar (88 pt from trailing to clear gear/mic).
             SharedStatusView(pillState: pillState, isCompact: !isExpanded)
                 .frame(maxWidth: .infinity, maxHeight: .infinity,
-                       alignment: isExpanded ? .topTrailing : .trailing)
-                .padding(.trailing, isExpanded ? 88 : 12)
+                       alignment: isExpanded ? .topTrailing : .center)
+                .padding(.trailing, isExpanded ? 88 : 0)
                 .padding(.top, isExpanded ? 12 : 0)
                 .allowsHitTesting(false)
                 .animation(
@@ -180,6 +182,11 @@ struct MiraIslandView: View {
         }
         .frame(width: pillW, height: pillH)
         .clipShape(IslandShape(topRadius: topR, bottomRadius: botR))
+        // Glass border on expanded panel — mirrors HeyClicky's NotchSilhouetteBorderShape.
+        .overlay(
+            IslandShape(topRadius: topR, bottomRadius: botR)
+                .stroke(Color.white.opacity(isExpanded ? 0.08 : 0), lineWidth: 0.5)
+        )
         // Colored halo under the pill when an active state is present; fades when idle.
         .shadow(
             color: isExpanded
@@ -210,32 +217,12 @@ struct MiraIslandView: View {
 
     @ObservedObject private var hudVM = HUDViewModel.shared
 
-    // Human-readable label for the active state shown on the left of the collapsed pill.
-    private var collapsedStateLabel: String? {
-        switch miraState.realtimeState {
-        case .connecting:              return "Connecting"
-        case .recording:               return "Listening"
-        case .transcribing:            return "Processing"
-        case .thinking:                return "Thinking"
-        case .speaking:                return "Speaking"
-        case .error:                   return nil
-        case .idle:
-            if voice.isListening   { return "Listening" }
-            if miraState.isLoading { return "Thinking"  }
-            return nil
-        }
-    }
-
+    // Supplementary left-side badge when an agent task or cursor action is active.
+    // Voice states (listening/thinking/speaking) show no text — the centered animation speaks.
     private var collapsedContent: some View {
         HStack(spacing: 0) {
-            // Left: active state label, or HUD status text, or agent badge, or cursor-flight badge
             Group {
-                if let label = collapsedStateLabel {
-                    Text(label)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
-                } else if !hudVM.statusText.isEmpty {
+                if !hudVM.statusText.isEmpty {
                     Text(hudVM.statusText)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.80))
@@ -250,8 +237,6 @@ struct MiraIslandView: View {
                         .clipShape(Capsule())
                         .transition(.opacity)
                 } else if pointTo.isActive {
-                    // Docked cursor badge — mirrors HeyClicky's dockedCursorBadge.
-                    // Shows a mini teal triangle + label while the agent cursor is in flight.
                     HStack(spacing: 5) {
                         Image(systemName: "triangle.fill")
                             .font(.system(size: 7, weight: .bold))
@@ -264,20 +249,21 @@ struct MiraIslandView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.80, anchor: .leading)))
                 }
             }
-            // SharedStatusView provides the right-side animated indicator (in the ZStack overlay)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: miraState.realtimeState)
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: miraState.isLoading)
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voice.isListening)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: hudVM.statusText)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: taskStore.tasks.count)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: pointTo.isActive)
     }
 
     private var collapsedAccent: Color {
         switch pillState.mode {
-        case .thinking: return miraViolet
-        case .working:  return miraViolet
-        case .speaking: return miraTeale
-        case .idle:     return miraTeale
+        case .listening: return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .thinking:  return miraViolet
+        case .working:   return miraViolet
+        case .speaking:  return miraTeale
+        case .idle:      return miraTeale
         }
     }
 
@@ -558,7 +544,7 @@ struct MiraIslandView: View {
                 .accessibilityLabel("Open settings")
         }
         .padding(.horizontal, 10)
-        .frame(height: 42)
+        .frame(height: 38)
     }
 
     /// Renders as "icon + label" pill when selected, plain icon button when not.
@@ -587,7 +573,7 @@ struct MiraIslandView: View {
             .background(selected ? accent.opacity(0.22) : Color.clear)
             .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle())
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityHint("Switch to \(label) tab")
@@ -802,27 +788,56 @@ private struct CollapsedConnectingDot: View {
     }
 }
 
-// MARK: - Idle breathing glow
+// MARK: - State-aware ambient glow
 
-// Bloom-breath halo behind the collapsed pill — mirrors HeyClicky's bloomBreathPeak pattern.
-// Uses a raised-cosine squared (gamma) curve so it lingers near zero, peaks briefly, retreats.
-private struct IdleBreathingGlow: View {
-    let width:  CGFloat
-    let height: CGFloat
+// Color-shifting bloom halo behind the collapsed pill — mirrors HeyClicky's CornerGlowLayer.
+// Uses a raised-cosine squared (gamma) curve so the glow breathes organically.
+// Color shifts with voice state: blue=listening, violet=thinking, teal=speaking/idle.
+private struct NotchAmbientGlow: View {
+    let pillMode: PillMode
+    let width:    CGFloat
+    let height:   CGFloat
+
+    private var glowColor: Color {
+        switch pillMode {
+        case .idle, .speaking: return miraTeale
+        case .listening, .working: return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .thinking: return miraViolet
+        }
+    }
+    private var baseOpacity: CGFloat {
+        switch pillMode {
+        case .idle: return 0.04
+        case .listening: return 0.10
+        case .working: return 0.08
+        case .thinking: return 0.10
+        case .speaking: return 0.12
+        }
+    }
+    private var peakOpacity: CGFloat {
+        switch pillMode {
+        case .idle: return 0.11
+        case .listening: return 0.20
+        case .working: return 0.16
+        case .thinking: return 0.20
+        case .speaking: return 0.22
+        }
+    }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 8.0)) { ctx in
+        let c = glowColor
+        let b = baseOpacity
+        let p = peakOpacity
+        return TimelineView(.animation(minimumInterval: 1.0 / 8.0)) { ctx in
             let t     = ctx.date.timeIntervalSinceReferenceDate
-            // 3.4 s bloom cycle — same organic rhythm as the sparkle glyph
             let raw   = CGFloat((cos(t / 3.4 * .pi * 2) + 1) / 2)
-            let bloom = raw * raw   // gamma curve: sharp peak, long trough
-
+            let bloom = raw * raw
             RoundedRectangle(cornerRadius: height / 2 + 10)
                 .fill(
                     RadialGradient(
                         colors: [
-                            miraTeale.opacity(0.04 + bloom * 0.11),
-                            miraTeale.opacity(0),
+                            c.opacity(b + bloom * p),
+                            c.opacity(0),
                         ],
                         center:      .center,
                         startRadius: 0,
@@ -832,5 +847,15 @@ private struct IdleBreathingGlow: View {
                 .frame(width: width + 52, height: height + 30)
                 .blur(radius: 7)
         }
+    }
+}
+
+// MARK: - Press-scale button style (HeyClicky's NotchTabPressButtonStyle)
+
+private struct PressScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
+            .animation(.easeInOut(duration: 0.08), value: configuration.isPressed)
     }
 }
