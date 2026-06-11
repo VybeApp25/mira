@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AudioCueService.shared.warmHardware()
         }
 
+        _ = UpdateService.shared   // starts Sparkle background update checks
         PostHogService.shared.capture("app_launched")
         _ = AppContextService.shared       // start frontmost-app observer
         _ = SidecarSuggestionService.shared // start dwell tracker
