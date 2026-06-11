@@ -414,6 +414,9 @@ enum MiraPrompts {
         // Inject active skill context (reads from nonisolated cache)
         let skillContext = SkillStore.cachedContext
         if !skillContext.isEmpty { base += skillContext }
+        // Inject connected integration context (reads from nonisolated cache)
+        let integrationCtx = IntegrationContextService.cachedContext
+        if !integrationCtx.isEmpty { base += integrationCtx }
         // Inject frontmost-app context (reads from nonisolated cache)
         if let appCtx = AppContextService.cachedContext { base += "\n\n" + appCtx }
         if UserDefaults.standard.bool(forKey: "mira_cat_mode") {

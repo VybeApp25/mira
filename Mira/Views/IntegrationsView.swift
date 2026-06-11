@@ -232,6 +232,7 @@ struct IntegrationsView: View {
             var map: [String: Bool] = [:]
             for id in integrations.map(\.id) { map[id] = connected.contains(id) }
             status = map
+            IntegrationContextService.shared.update(connected: Set(connected))
         } catch {
             errorMsg = "Could not load connections — is the agent service running?"
         }
@@ -250,6 +251,7 @@ struct IntegrationsView: View {
                 let connected = try await AgentService.shared.connections()
                 if connected.contains(item.id) {
                     status[item.id] = true
+                    IntegrationContextService.shared.update(connected: Set(connected))
                     break
                 }
             }
