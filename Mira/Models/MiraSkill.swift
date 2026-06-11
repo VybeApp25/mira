@@ -445,5 +445,44 @@ enum MiraSkillCatalog {
                 Route creative work to the best available medium: build-preview/frontend-design for UI, pdf/doc for documents, Markdown for outlines. Provider-backed image, video, or slide generation is not shipped — offer a document or frontend alternative instead. Keep real text in code/document layers, not baked into images.
                 """
         ),
+
+        // MARK: Spotify (ported from farzaa/clicky spotify.md, MIT)
+
+        MiraSkill(
+            id: "spotify",
+            name: "Spotify",
+            tagline: "Play, search, queue & manage playlists",
+            icon: "music.note",
+            category: .productivity,
+            context: """
+                Skill active: Spotify.
+                Use control_spotify(action:...) for all playback control.
+                Actions: "play", "pause", "next", "previous", "get_state", "play_song" (requires song: parameter).
+                When user says "play X": call open_application("Spotify") then control_spotify(action:"play_song", song:"X").
+                When user says "what's playing": call control_spotify(action:"get_state").
+                For volume: control_spotify(action:"set_volume", volume:50).
+                Prefer the structured control_spotify tool over AppleScript for Spotify. \
+                Playback-mutating actions require Spotify Premium.
+                """
+        ),
+
+        // MARK: iMessage (ported from farzaa/clicky imessage.md, MIT)
+
+        MiraSkill(
+            id: "imessage",
+            name: "iMessage",
+            tagline: "Send & read iMessages via AppleScript",
+            icon: "message.fill",
+            category: .communication,
+            context: """
+                Skill active: iMessage.
+                Use run_apple_script to send and read iMessages via Messages.app.
+                To send: run_apple_script("tell application \\"Messages\\" to send \\"<text>\\" to buddy \\"<number or Apple ID>\\" of service \\"iMessage\\"").
+                To read recent chats: run_shell_command("imsg chats --limit 10 --json") — requires `brew install steipete/tap/imsg`.
+                ALWAYS confirm recipient and message text before sending. Never send without explicit user approval. \
+                For group chats or attachments, use run_apple_script with the relevant Messages.app AppleScript dictionary.
+                Requires Automation permission for Messages.app.
+                """
+        ),
     ]
 }

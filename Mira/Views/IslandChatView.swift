@@ -679,16 +679,42 @@ struct IslandChatView: View {
             // Data fetch failed — handle() will call Claude for a text answer
         }
 
+        // Pre-append a streaming placeholder for routes that call Claude for text.
+        // Clarification / confirmation / permission routes resolve without a Claude text reply.
+        let skipStream: Set<MiraRoute> = [.clarificationRequired, .confirmationRequired, .permissionRequired]
+        var placeholderID: UUID? = nil
+        if !skipStream.contains(decision.route) {
+            let ph = ChatMessage(role: .mira, text: "")
+            streamingMsgId = ph.id
+            placeholderID  = ph.id
+            messages.append(ph)
+        }
+
+        // Extract callback with explicit type so the compiler can check the closure independently.
+        var onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
+        if placeholderID != nil {
+            onStreamChunk = { [self] chunk in
+                if let idx = self.messages.firstIndex(where: { $0.id == self.streamingMsgId }) {
+                    self.messages[idx].text = chunk
+                }
+            }
+        }
+
         let result = await RouterService.shared.handle(
-            prompt:      prompt,
-            context:     context,
-            apiKey:      miraState.effectiveAPIKey,
-            capture:     capture,
-            precomputed: decision
+            prompt:        prompt,
+            context:       context,
+            apiKey:        miraState.effectiveAPIKey,
+            capture:       capture,
+            precomputed:   decision,
+            onStreamChunk: onStreamChunk
         )
+        streamingMsgId = nil
 
         switch result.route {
         case .clarificationRequired:
+            if let id = placeholderID, let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages.remove(at: idx)
+            }
             if let spec = result.clarificationSpec {
                 if let opening = result.reply {
                     messages.append(ChatMessage(role: .mira, text: opening))
@@ -698,8 +724,14 @@ struct IslandChatView: View {
                 messages.append(ChatMessage(role: .mira, text: q))
             }
         case .confirmationRequired:
+            if let id = placeholderID, let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages.remove(at: idx)
+            }
             pendingAction = result.pendingConfirmation
         case .permissionRequired:
+            if let id = placeholderID, let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages.remove(at: idx)
+            }
             if let perm = result.missingPermission {
                 retryPrompt       = prompt
                 pendingPermission = perm
@@ -708,7 +740,12 @@ struct IslandChatView: View {
             }
         default:
             if let reply = result.reply {
-                messages.append(ChatMessage(role: .mira, text: reply))
+                // If streaming filled the placeholder, leave it; otherwise fill it now.
+                if let id = placeholderID, let idx = messages.firstIndex(where: { $0.id == id }) {
+                    if messages[idx].text.isEmpty { messages[idx].text = reply }
+                } else {
+                    messages.append(ChatMessage(role: .mira, text: reply))
+                }
                 if !hasPlayedReceiveChime {
                     hasPlayedReceiveChime = true
                     AudioCueService.shared.playTextReceive()
@@ -719,7 +756,6 @@ struct IslandChatView: View {
                 if let info = detectArtifact(in: reply) {
                     messages.append(ChatMessage(role: .mira, widget: .artifact(info)))
                 }
-                // Auto-dismiss after text response — matches HeyClicky's notchTextResponseAutoDismiss
                 scheduleAutoDismiss(after: 8.0)
             }
             if let target = result.guidanceTarget, target.confidence >= 0.60 {

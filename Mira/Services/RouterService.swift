@@ -315,11 +315,12 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// Classify the prompt, run pre-flight checks, and execute. No view logic.
     /// Pass `precomputed` to reuse a decision already made by `classifyIntent()`.
     func handle(
-        prompt:      String,
-        context:     RouterContext,
-        apiKey:      String,
-        capture:     ScreenCaptureService,
-        precomputed: RouteDecision? = nil
+        prompt:        String,
+        context:       RouterContext,
+        apiKey:        String,
+        capture:       ScreenCaptureService,
+        precomputed:   RouteDecision? = nil,
+        onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> RouteResult {
         let decision = precomputed ?? route(prompt: prompt, context: context)
         appendLog(RouteLogEntry(input: prompt, route: decision.route, confidence: decision.confidence))
@@ -366,7 +367,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
                 NSWorkspace.shared.open(url)
                 return .reply("Opened \(url.host ?? url.absoluteString) in your browser.", route: .openURL)
             }
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .openURL)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .openURL, onStreamChunk: onStreamChunk)
 
         case .memoryQuery:
             let q      = extractMemoryQuery(from: prompt)
@@ -378,17 +379,17 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             return .reply(result, route: .memoryQuery)
 
         case .screenGuidance:
-            return await screenGuidanceResult(prompt: prompt, apiKey: apiKey, capture: capture)
+            return await screenGuidanceResult(prompt: prompt, apiKey: apiKey, capture: capture, onStreamChunk: onStreamChunk)
 
         case .stockLookup, .imageSearch, .placeSearch:
             // Widget data is fetched in IslandChatView; this path is the text fallback.
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
 
         case .mapsQuery, .computerUse:
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
 
         case .findMyDevices:
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices, onStreamChunk: onStreamChunk)
 
         case .gptQuery:
             let key = OpenAIService.effectiveKey
@@ -400,15 +401,15 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             return .reply(reply.isEmpty ? "GPT-4o returned no response." : reply, route: .gptQuery)
 
         case .emailTask, .researchTask, .repoTask:
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
 
         case .codexTask:
-            return await codexOrFallback(prompt: prompt, apiKey: apiKey, capture: capture)
+            return await codexOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, onStreamChunk: onStreamChunk)
 
         case .obsidianAction, .polymarketQuery,
              .memoryWrite, .fileOperation, .calendarAction, .notesAction,
              .agentTask, .websiteBuilder, .composioAction, .higherModel:
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
         }
     }
 
@@ -914,13 +915,11 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     }
 
     private func screenGuidanceResult(
-        prompt:  String,
-        apiKey:  String,
-        capture: ScreenCaptureService
+        prompt:        String,
+        apiKey:        String,
+        capture:       ScreenCaptureService,
+        onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> RouteResult {
-        // Capture first — if it fails, tell the user immediately rather than passing
-        // no image to Claude while claiming one is attached (which causes a confusing
-        // "I can't see anything" response from the model).
         guard let screenshot = try? await capture.captureMainDisplay() else {
             return .reply(
                 "I can't see your screen right now. To fix this: open System Settings → Privacy & Security → Screen Recording, remove Mira if it's listed, re-add it, then relaunch Mira.",
@@ -928,14 +927,26 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             )
         }
 
-        let claude = ClaudeService(apiKey: apiKey)
+        let claude       = ClaudeService(apiKey: apiKey)
+        let screenSystem = "You are Mira, a screen-aware Mac assistant. You CAN see the user's screen — a screenshot is attached to this message. Describe what you see accurately. Be concise and direct."
 
-        let text = (try? await claude.ask(
-            prompt: prompt,
-            screenshot: screenshot,
-            system: "You are Mira, a screen-aware Mac assistant. You CAN see the user's screen — a screenshot is attached to this message. Describe what you see accurately. Be concise and direct.",
-            maxTokensOverride: 600
-        )) ?? "I couldn't process the screenshot. Please try again."
+        let text: String
+        if let stream = onStreamChunk {
+            text = (try? await claude.askStreaming(
+                prompt: prompt,
+                screenshot: screenshot,
+                system: screenSystem,
+                maxTokensOverride: 600,
+                onChunk: stream
+            )) ?? "I couldn't process the screenshot. Please try again."
+        } else {
+            text = (try? await claude.ask(
+                prompt: prompt,
+                screenshot: screenshot,
+                system: screenSystem,
+                maxTokensOverride: 600
+            )) ?? "I couldn't process the screenshot. Please try again."
+        }
 
         let target = try? await claude.locateGuidanceTarget(goal: prompt, in: screenshot)
         return RouteResult(route: .screenGuidance, reply: text,
@@ -944,23 +955,24 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     }
 
     private func codexOrFallback(
-        prompt:  String,
-        apiKey:  String,
-        capture: ScreenCaptureService
+        prompt:        String,
+        apiKey:        String,
+        capture:       ScreenCaptureService,
+        onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> RouteResult {
         let result = await CodexService.shared.run(prompt: prompt, workdir: nil)
         if result.success && !result.output.isEmpty {
             return .reply(result.output, route: .codexTask)
         }
-        // Codex unavailable or errored — fall back to agent / Claude
-        return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .codexTask)
+        return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .codexTask, onStreamChunk: onStreamChunk)
     }
 
     private func agentOrFallback(
-        prompt:  String,
-        apiKey:  String,
-        capture: ScreenCaptureService,
-        route:   MiraRoute
+        prompt:        String,
+        apiKey:        String,
+        capture:       ScreenCaptureService,
+        route:         MiraRoute,
+        onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> RouteResult {
         // For general reasoning (higherModel), use Claude directly with a screenshot
         // so Mira can actually see the screen. The TypeScript agent is text-only
@@ -968,7 +980,16 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         if route == .higherModel {
             let screenshot = try? await capture.captureMainDisplay()
             let claude     = ClaudeService(apiKey: apiKey)
-            let text       = (try? await claude.ask(
+            if let stream = onStreamChunk {
+                let text = (try? await claude.askStreaming(
+                    prompt: prompt,
+                    screenshot: screenshot,
+                    maxTokensOverride: 600,
+                    onChunk: stream
+                )) ?? "I had trouble processing that request."
+                return .reply(text, route: route)
+            }
+            let text = (try? await claude.ask(
                 prompt: prompt,
                 screenshot: screenshot,
                 maxTokensOverride: 600
@@ -986,13 +1007,21 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         }
         let screenshot = try? await capture.captureMainDisplay()
         let claude     = ClaudeService(apiKey: apiKey)
-        // Use the full agent behavior contract when falling back to direct Claude for complex tasks.
         let agentRoutes: Set<MiraRoute> = [.agentTask, .websiteBuilder, .composioAction,
                                             .emailTask, .researchTask, .repoTask, .codexTask,
                                             .fileOperation, .calendarAction, .notesAction]
         let system = agentRoutes.contains(route) ? MiraPrompts.agentMode : MiraPrompts.system
-        let text   = (try? await claude.ask(prompt: prompt, screenshot: screenshot, system: system))
-                     ?? "I had trouble processing that request."
+        if let stream = onStreamChunk {
+            let text = (try? await claude.askStreaming(
+                prompt: prompt,
+                screenshot: screenshot,
+                system: system,
+                onChunk: stream
+            )) ?? "I had trouble processing that request."
+            return .reply(text, route: route)
+        }
+        let text = (try? await claude.ask(prompt: prompt, screenshot: screenshot, system: system))
+                   ?? "I had trouble processing that request."
         return .reply(text, route: route)
     }
 

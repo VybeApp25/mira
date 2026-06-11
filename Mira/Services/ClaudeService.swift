@@ -396,6 +396,78 @@ class ClaudeService {
         )
     }
 
+    // MARK: - Streaming (ported from farzaa/clicky ClaudeAPI.analyzeImageStreaming, MIT)
+
+    /// Streams a Claude response, calling `onChunk` on the main actor as each text
+    /// delta arrives. Returns the full accumulated text when the stream completes.
+    ///
+    /// Usage: UI layers call this and update a @Published var with each chunk for
+    /// progressive text rendering — identical to how HeyClicky's response overlay works.
+    func askStreaming(
+        prompt: String,
+        screenshot: NSImage? = nil,
+        system: String = MiraPrompts.system,
+        modelOverride: String? = nil,
+        maxTokensOverride: Int? = nil,
+        onChunk: @MainActor @Sendable (String) -> Void
+    ) async throws -> String {
+        var content: [[String: Any]] = []
+        if let img = screenshot, let b64 = img.pngBase64() {
+            content.append([
+                "type": "image",
+                "source": ["type": "base64", "media_type": "image/png", "data": b64]
+            ])
+        }
+        content.append(["type": "text", "text": prompt])
+
+        let resolvedModel = modelOverride ?? model
+        let maxTokens = maxTokensOverride ?? (screenshot != nil ? 800 : 512)
+
+        let body: [String: Any] = [
+            "model": resolvedModel,
+            "max_tokens": maxTokens,
+            "stream": true,
+            "system": system,
+            "messages": [["role": "user", "content": content]]
+        ]
+
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = max(120, Double(maxTokens) / 40)
+
+        let session = URLSession(configuration: {
+            let c = URLSessionConfiguration.default
+            c.urlCache = nil; c.httpCookieStorage = nil; return c
+        }())
+        let (byteStream, response) = try await session.bytes(for: req)
+
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw MiraError.api("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+        }
+
+        var accumulated = ""
+        for try await line in byteStream.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let json = String(line.dropFirst(6))
+            guard json != "[DONE]" else { break }
+            guard let data = json.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  (payload["type"] as? String) == "content_block_delta",
+                  let delta = payload["delta"] as? [String: Any],
+                  (delta["type"] as? String) == "text_delta",
+                  let chunk = delta["text"] as? String else { continue }
+            accumulated += chunk
+            let current = accumulated
+            await onChunk(current)
+        }
+        return accumulated
+    }
+
     func locateGuidanceTarget(goal: String, in screenshot: NSImage) async throws -> GuidanceTarget? {
         let startTime = Date()
         let prompt = """
