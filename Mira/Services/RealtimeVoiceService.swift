@@ -229,10 +229,11 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - WebSocket lifecycle
 
     private func openSocket() {
-        let model = "gpt-realtime-2"
+        let model = "gpt-4o-realtime-preview"
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
         req.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
+        req.addValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
 
         NSLog("[MiraRealtime] WebSocket session opened model=%@", model)
         urlSession = URLSession(configuration: .default)
