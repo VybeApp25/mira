@@ -17,7 +17,10 @@ final class IntegrationContextService {
     nonisolated(unsafe) static var cachedContext: String = ""
 
     // Slugs whose MD files are always injected regardless of Composio status.
-    private static let builtIn: Set<String> = ["spotify", "imessage", "apple-notes", "apple-reminders"]
+    private static let builtIn: Set<String> = [
+        "spotify", "imessage", "apple-notes", "apple-reminders", "findmy",
+        "maps", "computer-use", "claude-code",
+    ]
 
     private init() {
         // Load built-ins immediately so the first system prompt is already enriched.

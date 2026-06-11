@@ -1,49 +1,44 @@
 # Apple Reminders
-tool: run_apple_script (built-in)
+tools: run_python_skill (full CRUD), run_apple_script (quick add)
 
 ## When to use
-User says: reminder, remind me, to-do, task, due date, Reminders app.
+User says: reminder, remind me, to-do, task, due date, Reminders app, what are my reminders, add to my list.
 
-## AppleScript patterns
+## Python skill (preferred — structured JSON responses)
+
+### List all reminder lists
+`run_python_skill(skill:"reminders_rw", args:{op:"list_lists"})`
+
+### List reminders
+`run_python_skill(skill:"reminders_rw", args:{op:"list", list?:"<name>", include_completed?:false})`
+Returns: `{success, reminders:[{title, list, due, notes, completed}], total}`
 
 ### Add a reminder
-```applescript
-tell application "Reminders"
-  tell list "Reminders"
-    make new reminder with properties {name:"<text>", due date:date "<datetime>"}
-  end tell
-end tell
-```
-
-### List incomplete reminders
-```applescript
-tell application "Reminders"
-  set incompleteReminders to every reminder whose completed is false
-  repeat with r in incompleteReminders
-    get {name of r, due date of r}
-  end repeat
-end tell
-```
+`run_python_skill(skill:"reminders_rw", args:{op:"add", title:"<text>", list?:"Reminders", due?:"YYYY-MM-DD HH:MM", notes?:"<text>"})`
+Omit `due` if no time specified. Confirm with user before adding if any ambiguity.
 
 ### Complete a reminder
-```applescript
-tell application "Reminders"
-  set targetReminder to first reminder whose name contains "<query>"
-  set completed of targetReminder to true
-end tell
-```
+`run_python_skill(skill:"reminders_rw", args:{op:"complete", query:"<title fragment>", list?:"<name>"})`
+
+### Delete a reminder
+`run_python_skill(skill:"reminders_rw", args:{op:"delete", query:"<title fragment>"})`
+**Always confirm before deleting.**
+
+### Search reminders
+`run_python_skill(skill:"reminders_rw", args:{op:"search", query:"<text>"})`
 
 ## Canonical patterns
 
 ### "Remind me to <task> at <time>"
-`run_apple_script` with add snippet — confirm time before creating.
+Parse time → `run_python_skill` op:"add" with due date. Confirm: "Add reminder: '<task>' due <time>?"
 
 ### "What are my reminders?"
-List incomplete reminders, group by due date.
+`run_python_skill` op:"list" → group by list, show due dates.
 
 ### "Mark <task> as done"
-Search by name → set completed = true — confirm which reminder.
+`run_python_skill` op:"complete", query:"<task>" → report how many were completed.
 
 ## Constraints
-- Requires Automation permission for Reminders app.
-- Omit `due date` property if no time specified.
+- Requires Automation permission for Reminders.app.
+- Confirm before deleting — irreversible.
+- If success is false, show the error string to the user.

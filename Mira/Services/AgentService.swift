@@ -96,6 +96,15 @@ class AgentService: ObservableObject {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.connected ?? []
     }
 
+    func disconnect(_ app: String) async throws {
+        var req = try post("/disconnect/\(app)", body: ["userId": userId])
+        req.timeoutInterval = 15
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
+            throw AgentError.serviceDown
+        }
+    }
+
     func connectAppURL(_ app: String) async throws -> URL {
         guard var comps = URLComponents(url: base.appendingPathComponent("connect/\(app)"), resolvingAgainstBaseURL: false) else {
             throw AgentError.badURL

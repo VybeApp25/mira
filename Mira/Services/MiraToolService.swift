@@ -484,6 +484,90 @@ enum MiraToolService {
                 "required": ["question"]
             ] as [String: Any]
         ],
+        // ── GPT-4o ────────────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "ask_gpt",
+            "description": """
+                Ask GPT-4o (OpenAI) a question. Use when the user explicitly requests ChatGPT or GPT-4, \
+                or when you want a second opinion from a different AI model. \
+                Returns GPT-4o's plain-text response.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "prompt": ["type": "string", "description": "The question or task for GPT-4o"],
+                    "model":  ["type": "string",
+                               "enum": ["gpt-4o", "gpt-4o-mini"],
+                               "description": "gpt-4o (default) or gpt-4o-mini (faster/cheaper)"]
+                ],
+                "required": ["prompt"]
+            ] as [String: Any]
+        ],
+        // ── Coding agent ──────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "run_coding_agent",
+            "description": """
+                Delegate a coding or developer task to Claude Code CLI running as a subprocess. \
+                Use for: reading a codebase and explaining it, finding bugs, writing/editing files, \
+                running tests, git operations, building projects, refactoring code, \
+                or any multi-step engineering task that requires reading/writing files in a project directory. \
+                Returns the agent's full text output. \
+                Provide cwd (absolute path to the project root) whenever working on a specific codebase. \
+                Prefer haiku model for quick lookups; use sonnet for complex multi-file changes.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "prompt": [
+                        "type": "string",
+                        "description": "The task or question for the coding agent, e.g. 'Find all TODO comments in src/ and list them'"],
+                    "cwd": [
+                        "type": "string",
+                        "description": "Absolute path to the working directory (project root). Omit for general questions."],
+                    "model": [
+                        "type": "string",
+                        "enum": ["haiku", "sonnet", "opus"],
+                        "description": "Model to use. haiku = fast/cheap, sonnet = balanced (default), opus = best reasoning."],
+                    "budget_usd": [
+                        "type": "number",
+                        "description": "Max spend in USD (default 0.20, max 1.00). Stops the agent if exceeded."]
+                ],
+                "required": ["prompt"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "run_python_skill",
+            "description": """
+                Run a bundled Python skill. Deps are installed automatically on first use. \
+                Skills: \
+                pdf_extract — extract text from a PDF (args: path, pages?, max_chars?); \
+                docx_rw — read/write/append a .docx (args: op["read"|"write"|"append"], path, content?, heading?); \
+                sheet_rw — read/write/append .xlsx or .csv (args: op["read"|"write"|"append"|"csv_to_xlsx"], path, sheet?, headers?, rows?, row?); \
+                youtube_transcript — fetch a YouTube transcript (args: url, languages?); \
+                ocr_image — extract text from an image via OCR (args: path, lang?, psm?); \
+                imessage_read — query iMessage history (args: op["recent"|"thread"|"search"|"contacts"], count?, contact?, query?); \
+                findmy_devices — list devices registered in FindMy (no args needed); \
+                reminders_rw — Apple Reminders CRUD (args: op["list_lists"|"list"|"add"|"complete"|"delete"|"search"], title?, list?, due?, notes?, query?, include_completed?); \
+                notes_rw — Apple Notes CRUD (args: op["list_folders"|"list"|"read"|"create"|"append"|"search"], title?, body?, folder?, text?, query?, count?); \
+                pptx_rw — create/read/edit .pptx files (args: op["create"|"read"|"append_slide"], path, title?, slides?:[{title,body?,bullets?,layout?}]); \
+                diagram_gen — generate Mermaid or Excalidraw HTML diagrams (args: format["mermaid"|"excalidraw"], definition, title?, path?, theme?["dark"|"light"]). \
+                All skills return JSON with {success, ...result fields, error?}.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "skill": ["type": "string",
+                               "enum": ["pdf_extract", "docx_rw", "sheet_rw", "youtube_transcript", "ocr_image", "imessage_read", "findmy_devices", "reminders_rw", "notes_rw", "pptx_rw", "diagram_gen"],
+                               "description": "Name of the bundled skill to run"],
+                    "args":  ["type": "object",
+                               "description": "Skill-specific arguments as documented in the description"]
+                ],
+                "required": ["skill", "args"]
+            ] as [String: Any]
+        ],
     ]
 
     // MARK: - Execution router
@@ -517,6 +601,9 @@ enum MiraToolService {
         case "add_project_decision":  return await addProjectDecision(args)
         case "get_project_context":   return await getProjectContext(args)
         case "query_project_history": return await queryProjectHistory(args)
+        case "run_python_skill":      return await runPythonSkill(args)
+        case "run_coding_agent":      return await runCodingAgent(args)
+        case "ask_gpt":               return await askGPT(args)
         default:                      return "Unknown tool: \(name)"
         }
     }
@@ -1076,6 +1163,115 @@ enum MiraToolService {
             return try await service.queryProjectHistory(question: question, context: context)
         } catch {
             return "Could not query session history: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - run_python_skill
+
+    private static func runPythonSkill(_ args: [String: Any]) async -> String {
+        guard let skill    = args["skill"] as? String,
+              let skillArgs = args["args"] as? [String: Any] else {
+            return "run_python_skill requires 'skill' (string) and 'args' (object)."
+        }
+        let result = await PythonSkillRunner.shared.run(skill: skill, args: skillArgs)
+        guard let data = try? JSONSerialization.data(withJSONObject: result),
+              let text = String(data: data, encoding: .utf8) else {
+            return "Skill returned unserializable result."
+        }
+        return text
+    }
+
+    // MARK: - ask_gpt
+
+    private static func askGPT(_ args: [String: Any]) async -> String {
+        guard let prompt = args["prompt"] as? String, !prompt.isEmpty else {
+            return "ask_gpt requires a 'prompt'."
+        }
+        let model = args["model"] as? String ?? "gpt-4o"
+        let key   = OpenAIService.effectiveKey
+        guard !key.isEmpty else {
+            return "OpenAI key not configured. Add it in Mira Settings → API Keys."
+        }
+        let service = OpenAIService(apiKey: key)
+        let reply   = await service.chatOrEmpty(prompt: prompt, model: model, maxTokens: 800)
+        return reply.isEmpty ? "GPT-4o returned an empty response." : reply
+    }
+
+    // MARK: - run_coding_agent
+
+    private static func runCodingAgent(_ args: [String: Any]) async -> String {
+        guard let prompt = args["prompt"] as? String, !prompt.isEmpty else {
+            return "run_coding_agent requires a 'prompt'."
+        }
+        let cwd       = args["cwd"] as? String
+        let modelArg  = args["model"] as? String ?? "sonnet"
+        let budget    = min(args["budget_usd"] as? Double ?? 0.20, 1.00)
+
+        let modelID: String
+        switch modelArg {
+        case "haiku": modelID = "claude-haiku-4-5-20251001"
+        case "opus":  modelID = "claude-opus-4-8"
+        default:      modelID = "claude-sonnet-4-6"
+        }
+
+        let claudeBin = "/Users/trevonbarbour/.local/bin/claude"
+        guard FileManager.default.fileExists(atPath: claudeBin) else {
+            return "Claude Code CLI not found at \(claudeBin). Install with: npm install -g @anthropic-ai/claude-code"
+        }
+
+        return await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let proc = Process()
+                proc.launchPath = "/bin/zsh"
+
+                // Build command: optionally cd to cwd first, then run claude --print
+                var cmd = ""
+                if let d = cwd, !d.isEmpty {
+                    let safeDir = d.replacingOccurrences(of: "'", with: "'\\''")
+                    cmd += "cd '\(safeDir)' && "
+                }
+                let safePrompt = prompt.replacingOccurrences(of: "'", with: "'\\''")
+                cmd += "'\(claudeBin)' --print --output-format text"
+                cmd += " --model \(modelID)"
+                cmd += " --max-budget-usd \(String(format: "%.2f", budget))"
+                cmd += " '\(safePrompt)'"
+
+                proc.arguments = ["-lc", cmd]
+                let pipe  = Pipe()
+                let errPipe = Pipe()
+                proc.standardOutput = pipe
+                proc.standardError  = errPipe
+
+                let kill = DispatchWorkItem { proc.terminate() }
+                DispatchQueue.global().asyncAfter(deadline: .now() + 120, execute: kill)
+
+                do {
+                    try proc.run()
+                    proc.waitUntilExit()
+                    kill.cancel()
+                } catch {
+                    kill.cancel()
+                    cont.resume(returning: "Failed to launch Claude Code: \(error.localizedDescription)")
+                    return
+                }
+
+                let outData = pipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                let out = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let err = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+                if out.isEmpty && !err.isEmpty {
+                    cont.resume(returning: "Claude Code error: \(String(err.prefix(800)))")
+                } else if out.isEmpty {
+                    cont.resume(returning: "Claude Code returned no output (exit \(proc.terminationStatus)).")
+                } else {
+                    // Cap at 4000 chars to avoid flooding the context
+                    let capped = out.count > 4000
+                        ? String(out.prefix(4000)) + "\n\n[output truncated at 4000 chars]"
+                        : out
+                    cont.resume(returning: capped)
+                }
+            }
         }
     }
 }

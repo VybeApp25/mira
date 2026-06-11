@@ -17,6 +17,19 @@ enum MiraRoute: String, CaseIterable {
     case calendarAction         = "calendar_action"
     case notesAction            = "notes_action"
     case composioAction         = "composio_action"
+    case stockLookup            = "stock_lookup"
+    case imageSearch            = "image_search"
+    case placeSearch            = "place_search"
+    case mapsQuery              = "maps_query"
+    case computerUse            = "computer_use"
+    case findMyDevices          = "findmy_devices"
+    case gptQuery               = "gpt_query"
+    case obsidianAction         = "obsidian_action"
+    case polymarketQuery        = "polymarket_query"
+    case emailTask              = "email_task"
+    case researchTask           = "research_task"
+    case repoTask               = "repo_task"
+    case codexTask              = "codex_task"
     case clarificationRequired  = "clarification_required"
     case confirmationRequired   = "confirmation_required"
     case permissionRequired     = "permission_required"
@@ -36,6 +49,19 @@ enum MiraRoute: String, CaseIterable {
         case .calendarAction:         return "Calendar"
         case .notesAction:            return "Notes"
         case .composioAction:         return "Integration"
+        case .stockLookup:            return "Stock"
+        case .imageSearch:            return "Images"
+        case .placeSearch:            return "Place"
+        case .mapsQuery:              return "Maps"
+        case .computerUse:            return "Computer Use"
+        case .findMyDevices:          return "Find My"
+        case .gptQuery:               return "GPT-4o"
+        case .obsidianAction:         return "Obsidian"
+        case .polymarketQuery:        return "Polymarket"
+        case .emailTask:              return "Email"
+        case .researchTask:           return "Research"
+        case .repoTask:               return "Repo"
+        case .codexTask:              return "Codex"
         case .clarificationRequired:  return "Clarify"
         case .confirmationRequired:   return "Confirm"
         case .permissionRequired:     return "Permission"
@@ -181,14 +207,121 @@ final class RouterService: ObservableObject {
 
     // MARK: - Public entry point
 
+    // MARK: - Haiku gate (Phase 18)
+
+    /// Async Haiku-powered classification. Deterministic routes (safety checks, Spotify,
+    /// URL open, memory ops) bypass Haiku since they don't benefit from LLM classification.
+    /// Falls back to the sync `route()` if the API key is missing or the Haiku call fails.
+    func classifyIntent(prompt: String, context: RouterContext, apiKey: String) async -> RouteDecision {
+        guard !apiKey.isEmpty else { return route(prompt: prompt, context: context) }
+
+        let sync = route(prompt: prompt, context: context)
+        switch sync.route {
+        case .confirmationRequired, .permissionRequired,
+             .spotifyControl, .openURL, .memoryWrite, .memoryQuery,
+             .emailTask, .researchTask, .repoTask, .codexTask:
+            return sync
+        default: break
+        }
+
+        guard let haiku = try? await haikuClassify(prompt: prompt, apiKey: apiKey) else {
+            return sync
+        }
+        return haiku
+    }
+
+    private struct HaikuReq: Encodable {
+        let model: String; let max_tokens: Int; let system: String
+        let messages: [HaikuMsg]
+    }
+    private struct HaikuMsg: Encodable { let role: String; let content: String }
+    private struct HaikuResp: Decodable {
+        let content: [HaikuBlock]
+        struct HaikuBlock: Decodable { let type: String; let text: String? }
+        var text: String { content.compactMap(\.text).joined() }
+    }
+    private struct ClassifyJSON: Decodable {
+        let route: String; let confidence: Double; let explanation: String
+    }
+
+    private func haikuClassify(prompt: String, apiKey: String) async throws -> RouteDecision {
+        let system = """
+You are a routing classifier. Output JSON on one line:
+{"route":"<route>","confidence":<0-1>,"explanation":"<8 words max>"}
+
+Routes and when to use them:
+- local_response: chitchat, greetings, simple Q&A answerable without tools or live data
+- screen_guidance: explain screen content, "what is this", "what am I looking at"
+- agent_task: background automation, multi-step tasks requiring external tools
+- website_builder: build/create a website or landing page
+- spotify_control: play/pause/skip/volume music
+- open_url: open a URL or link
+- memory_query: recall stored preferences or facts about the user
+- memory_write: store a preference, fact, or instruction
+- file_operation: read/write/move/list files on disk
+- calendar_action: schedule, view, or manage calendar events
+- notes_action: Apple Notes create/search/append
+- composio_action: GitHub, Gmail, Notion, Slack, Linear, Vercel, Netlify, Google Drive, Google Docs, Google Sheets, Airtable tasks
+- stock_lookup: current stock price, share price, market quote, ticker symbol lookup
+- image_search: show images of, pictures of, find photos of
+- place_search: where is, directions to, find nearby, navigate to a location
+- findmy_devices: Find My, list Apple devices, where is my iPhone/Mac/Watch/AirPods
+- gpt_query: ask GPT, ask ChatGPT, use GPT-4, what does ChatGPT say
+- obsidian_action: Obsidian vault, open vault note, search vault, wikilinks, markdown notes in Obsidian
+- polymarket_query: Polymarket, prediction market odds, what are the chances, market probability, will X happen
+- maps_query: nearby, directions to, how far, distance between, find a coffee shop, geocode, navigate to, find nearest
+- computer_use: click on, type into, open the app, automate, fill out the form, control my Mac, screenshot desktop
+- email_task: draft email, write email, send email, check inbox, unread emails, triage email, reply to email, email assistant
+- research_task: research report, market research, competitor analysis, web research, write a report on
+- repo_task: pull request, create PR, git commit, git push, code review, review this code, github issues
+- codex_task: use Codex, run Codex, codex CLI, openai codex, codex exec
+- higher_model: analysis, coding, writing, research, complex reasoning
+
+Output ONLY the JSON line. No preamble, no markdown fences.
+"""
+        let body = HaikuReq(
+            model: "claude-haiku-4-5-20251001", max_tokens: 80, system: system,
+            messages: [HaikuMsg(role: "user", content: prompt)]
+        )
+        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        req.httpMethod = "POST"
+        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+        req.timeoutInterval = 5
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api("haiku-gate-\((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        }
+        let raw = try JSONDecoder().decode(HaikuResp.self, from: data).text
+        let clean = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let jsonData = clean.data(using: .utf8),
+              let parsed   = try? JSONDecoder().decode(ClassifyJSON.self, from: jsonData),
+              let route    = MiraRoute(rawValue: parsed.route) else {
+            throw MiraError.api("haiku-gate-parse")
+        }
+        return RouteDecision(route: route, confidence: parsed.confidence,
+                             explanation: parsed.explanation)
+    }
+
+    // MARK: - Execution
+
     /// Classify the prompt, run pre-flight checks, and execute. No view logic.
+    /// Pass `precomputed` to reuse a decision already made by `classifyIntent()`.
     func handle(
-        prompt:  String,
-        context: RouterContext,
-        apiKey:  String,
-        capture: ScreenCaptureService
+        prompt:      String,
+        context:     RouterContext,
+        apiKey:      String,
+        capture:     ScreenCaptureService,
+        precomputed: RouteDecision? = nil
     ) async -> RouteResult {
-        let decision = route(prompt: prompt, context: context)
+        let decision = precomputed ?? route(prompt: prompt, context: context)
         appendLog(RouteLogEntry(input: prompt, route: decision.route, confidence: decision.confidence))
 
         switch decision.route {
@@ -247,13 +380,39 @@ final class RouterService: ObservableObject {
         case .screenGuidance:
             return await screenGuidanceResult(prompt: prompt, apiKey: apiKey, capture: capture)
 
-        case .memoryWrite, .fileOperation, .calendarAction, .notesAction,
+        case .stockLookup, .imageSearch, .placeSearch:
+            // Widget data is fetched in IslandChatView; this path is the text fallback.
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+
+        case .mapsQuery, .computerUse:
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+
+        case .findMyDevices:
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices)
+
+        case .gptQuery:
+            let key = OpenAIService.effectiveKey
+            guard !key.isEmpty else {
+                return .reply("OpenAI key not set. Add it in Mira Settings → API Keys.", route: .gptQuery)
+            }
+            let service = OpenAIService(apiKey: key)
+            let reply   = await service.chatOrEmpty(prompt: prompt, maxTokens: 800)
+            return .reply(reply.isEmpty ? "GPT-4o returned no response." : reply, route: .gptQuery)
+
+        case .emailTask, .researchTask, .repoTask:
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
+
+        case .codexTask:
+            return await codexOrFallback(prompt: prompt, apiKey: apiKey, capture: capture)
+
+        case .obsidianAction, .polymarketQuery,
+             .memoryWrite, .fileOperation, .calendarAction, .notesAction,
              .agentTask, .websiteBuilder, .composioAction, .higherModel:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route)
         }
     }
 
-    // MARK: - Classification (pure, synchronous, no side effects)
+    // MARK: - Synchronous classification (pure, no side effects)
 
     func route(prompt: String, context: RouterContext) -> RouteDecision {
         let lower   = prompt.lowercased()
@@ -292,6 +451,80 @@ final class RouterService: ObservableObject {
             }
             return RouteDecision(route: .openURL, confidence: 0.92,
                                  explanation: "Open URL in browser")
+        }
+
+        // Widget routes (structured data cards)
+        if matchesStockLookup(lower) {
+            return RouteDecision(route: .stockLookup, confidence: 0.90,
+                                 explanation: "Stock quote lookup")
+        }
+        if matchesImageSearch(lower) {
+            return RouteDecision(route: .imageSearch, confidence: 0.90,
+                                 explanation: "Image search")
+        }
+        if matchesPlaceSearch(lower) {
+            return RouteDecision(route: .placeSearch, confidence: 0.87,
+                                 explanation: "Place / directions lookup")
+        }
+
+        // GPT / OpenAI explicit request
+        if matchesGPT(lower) {
+            return RouteDecision(route: .gptQuery, confidence: 0.93,
+                                 explanation: "GPT/ChatGPT explicit request")
+        }
+
+        // FindMy device list
+        if matchesFindMy(lower) {
+            return RouteDecision(route: .findMyDevices, confidence: 0.90,
+                                 explanation: "Find My device query")
+        }
+
+        // Obsidian vault
+        if matchesObsidian(lower) {
+            return RouteDecision(route: .obsidianAction, confidence: 0.88,
+                                 explanation: "Obsidian vault operation")
+        }
+
+        // Polymarket prediction markets
+        if matchesPolymarket(lower) {
+            return RouteDecision(route: .polymarketQuery, confidence: 0.90,
+                                 explanation: "Prediction market query")
+        }
+
+        // Email drafting / triage
+        if matchesEmailTask(lower) {
+            return RouteDecision(route: .emailTask, confidence: 0.88,
+                                 explanation: "Email drafting or triage task")
+        }
+
+        // Research report
+        if matchesResearchTask(lower) {
+            return RouteDecision(route: .researchTask, confidence: 0.86,
+                                 explanation: "Research and report generation")
+        }
+
+        // Git / GitHub / repo operations
+        if matchesRepoTask(lower) {
+            return RouteDecision(route: .repoTask, confidence: 0.88,
+                                 explanation: "Git / GitHub repository operation")
+        }
+
+        // Explicit Codex CLI request
+        if matchesCodexTask(lower) {
+            return RouteDecision(route: .codexTask, confidence: 0.93,
+                                 explanation: "Explicit Codex CLI agent request")
+        }
+
+        // Maps / geocoding / nearby / directions (uses Python maps skill)
+        if matchesMaps(lower) {
+            return RouteDecision(route: .mapsQuery, confidence: 0.88,
+                                 explanation: "Maps / location / directions query")
+        }
+
+        // Computer Use (explicit GUI automation request)
+        if matchesComputerUse(lower) {
+            return RouteDecision(route: .computerUse, confidence: 0.88,
+                                 explanation: "Desktop GUI automation request")
         }
 
         // App integrations
@@ -455,6 +688,65 @@ final class RouterService: ObservableObject {
          "show me files", "what files are"].contains { lower.contains($0) }
     }
 
+    private func matchesStockLookup(_ lower: String) -> Bool {
+        if lower.range(of: #"\$[a-z]{1,5}\b"#, options: .regularExpression) != nil { return true }
+        return ["stock price", "stock quote", "share price", "trading at", "what is the price of",
+                "how much is", "price of", "stock of", "how is"].contains { lower.contains($0) }
+            && ["stock", "shares", "trading", "$"].contains { lower.contains($0) }
+            || ["stock price", "stock quote", "share price", "ticker"].contains { lower.contains($0) }
+    }
+
+    private func matchesImageSearch(_ lower: String) -> Bool {
+        ["show me images of", "images of ", "pictures of ", "show pictures of",
+         "find images of", "search images", "image search"].contains { lower.contains($0) }
+    }
+
+    private func matchesGPT(_ lower: String) -> Bool {
+        ["ask gpt", "ask chatgpt", "use gpt", "use chatgpt", "ask openai",
+         "gpt-4", "gpt4", "chatgpt", "via gpt", "with gpt",
+         "what does gpt say", "what does chatgpt say"].contains { lower.contains($0) }
+    }
+
+    private func matchesMaps(_ lower: String) -> Bool {
+        let nearbyTerms = ["nearby", "near me", "closest", "find a ", "find the nearest",
+                           "coffee shop", "restaurant near", "directions to", "how far is",
+                           "distance from", "distance between", "route to", "route from",
+                           "navigate to", "what's around", "geocode", "what is the address of"]
+        let placeTerms  = ["find nearby", "find a nearby"]
+        return nearbyTerms.contains { lower.contains($0) } || placeTerms.contains { lower.contains($0) }
+    }
+
+    private func matchesComputerUse(_ lower: String) -> Bool {
+        ["click on", "type into", "type in the", "open the app", "drive the app",
+         "automate this", "fill out the form", "use my mouse", "use computer use",
+         "control my mac", "operate the", "screenshot my desktop",
+         "click the button", "click submit", "scroll down in"].contains { lower.contains($0) }
+    }
+
+    private func matchesObsidian(_ lower: String) -> Bool {
+        ["obsidian", "my vault", "vault note", "open vault", "search vault",
+         "wikilink", "[["].contains { lower.contains($0) }
+    }
+
+    private func matchesPolymarket(_ lower: String) -> Bool {
+        ["polymarket", "prediction market", "prediction odds",
+         "market odds", "what are the odds", "what are the chances",
+         "will it happen", "market probability"].contains { lower.contains($0) }
+    }
+
+    private func matchesFindMy(_ lower: String) -> Bool {
+        ["find my", "findmy", "where is my iphone", "where is my mac", "where is my airpods",
+         "where is my watch", "where is my ipad", "where are my devices",
+         "track my phone", "track my device", "locate my device",
+         "find my device", "find my phone", "list my devices",
+         "my apple devices"].contains { lower.contains($0) }
+    }
+
+    private func matchesPlaceSearch(_ lower: String) -> Bool {
+        ["where is ", "directions to ", "how do i get to ", "navigate to ",
+         "find a nearby", "find nearby", "nearest "].contains { lower.contains($0) }
+    }
+
     private func matchesScreenGuidance(_ lower: String) -> Bool {
         ["what am i looking at", "what's on my screen", "what is on my screen",
          "read my screen", "look at my screen", "analyze my screen", "analyze this screen",
@@ -489,6 +781,36 @@ final class RouterService: ObservableObject {
                                                && !lower.contains("for a ")
                                                && !lower.contains("for our "))
         return !(hasType && hasName)
+    }
+
+    private func matchesEmailTask(_ lower: String) -> Bool {
+        ["draft email", "write email", "send email", "reply to email", "compose email",
+         "email to ", "email draft", "check my inbox", "check inbox", "check email",
+         "unread emails", "my emails", "triage email", "triage my inbox",
+         "sort my emails", "reply to this email", "respond to email",
+         "write a reply", "email assistant"].contains { lower.contains($0) }
+    }
+
+    private func matchesResearchTask(_ lower: String) -> Bool {
+        ["research report", "market research", "competitor analysis",
+         "find information about", "write a report on", "market brief",
+         "compile research", "web research", "source-backed",
+         "do research on", "research about", "research the"].contains { lower.contains($0) }
+    }
+
+    private func matchesRepoTask(_ lower: String) -> Bool {
+        ["pull request", "create pr", "open pr", "merge pr", "review pr",
+         "git commit", "git push", "git status", "git diff", "git log",
+         "code review", "review this code", "review this pr",
+         "create a branch", "checkout branch", "close issue", "open issue",
+         "github issues", "push to github", "push to main",
+         "commit this", "create a commit"].contains { lower.contains($0) }
+    }
+
+    private func matchesCodexTask(_ lower: String) -> Bool {
+        ["use codex", "run codex", "codex cli", "openai codex",
+         "codex exec", "codex agent"].contains { lower.contains($0) }
+        || (lower.contains("codex") && ["fix ", "build ", "refactor", "write "].contains { lower.contains($0) })
     }
 
     private func matchesAgentTask(_ lower: String) -> Bool {
@@ -621,6 +943,19 @@ final class RouterService: ObservableObject {
                            permissionNeeded: nil, guidanceTarget: target)
     }
 
+    private func codexOrFallback(
+        prompt:  String,
+        apiKey:  String,
+        capture: ScreenCaptureService
+    ) async -> RouteResult {
+        let result = await CodexService.shared.run(prompt: prompt, workdir: nil)
+        if result.success && !result.output.isEmpty {
+            return .reply(result.output, route: .codexTask)
+        }
+        // Codex unavailable or errored — fall back to agent / Claude
+        return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .codexTask)
+    }
+
     private func agentOrFallback(
         prompt:  String,
         apiKey:  String,
@@ -651,8 +986,13 @@ final class RouterService: ObservableObject {
         }
         let screenshot = try? await capture.captureMainDisplay()
         let claude     = ClaudeService(apiKey: apiKey)
-        let text       = (try? await claude.ask(prompt: prompt, screenshot: screenshot))
-                         ?? "I had trouble processing that request."
+        // Use the full agent behavior contract when falling back to direct Claude for complex tasks.
+        let agentRoutes: Set<MiraRoute> = [.agentTask, .websiteBuilder, .composioAction,
+                                            .emailTask, .researchTask, .repoTask, .codexTask,
+                                            .fileOperation, .calendarAction, .notesAction]
+        let system = agentRoutes.contains(route) ? MiraPrompts.agentMode : MiraPrompts.system
+        let text   = (try? await claude.ask(prompt: prompt, screenshot: screenshot, system: system))
+                     ?? "I had trouble processing that request."
         return .reply(text, route: route)
     }
 

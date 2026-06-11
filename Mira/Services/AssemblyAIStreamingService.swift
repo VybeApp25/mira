@@ -33,7 +33,7 @@ final class AssemblyAIStreamingService: ObservableObject {
 
     // MARK: - Private
 
-    private let wsURL     = URL(string: "wss://api.assemblyai.com/v3/realtime/ws?sample_rate=16000")!
+    private let wsURL     = URL(string: "wss://streaming.assemblyai.com/v3/ws")!
     private let captureHz: Double = 16_000
 
     private var webSocketTask:  URLSessionWebSocketTask?
@@ -41,6 +41,8 @@ final class AssemblyAIStreamingService: ObservableObject {
     private var captureEngine   = AVAudioEngine()
     private var inputConverter: AVAudioConverter?
     private var accumulatedFinals: [String] = []
+    // Gates audio sends until server confirms session is ready.
+    private var sessionReady = false
 
     // MARK: - Public API
 
@@ -52,24 +54,31 @@ final class AssemblyAIStreamingService: ObservableObject {
         partial            = ""
         sessionID          = ""
         accumulatedFinals  = []
+        sessionReady       = false
 
-        // Open WebSocket
+        // Open WebSocket — Authorization is raw key, no Bearer prefix.
         var request = URLRequest(url: wsURL)
         request.setValue(AppSecrets.assemblyAIKey, forHTTPHeaderField: "Authorization")
         urlSession    = URLSession(configuration: .default)
         let task      = urlSession!.webSocketTask(with: request)
         webSocketTask = task
         task.resume()
+
+        // v3 requires a config message as the very first text frame.
+        let cfg = #"{"sample_rate":16000,"encoding":"pcm_s16le"}"#
+        task.send(.string(cfg)) { _ in }
+
         receiveLoop()
 
-        // Start mic capture
+        // Start mic capture; audio frames are held until sessionReady == true.
         try startCapture()
         isStreaming = true
     }
 
     func stopStreaming() {
         guard isStreaming else { return }
-        isStreaming = false
+        isStreaming   = false
+        sessionReady  = false
         sendTerminate()
         stopCapture()
     }
@@ -87,6 +96,7 @@ final class AssemblyAIStreamingService: ObservableObject {
             case .failure:
                 Task { @MainActor [weak self] in
                     self?.isStreaming = false
+                    self?.sessionReady = false
                 }
             }
         }
@@ -96,24 +106,25 @@ final class AssemblyAIStreamingService: ObservableObject {
         guard case .string(let text) = message,
               let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type = json["message_type"] as? String else { return }
+              let type = json["type"] as? String else { return }
 
         switch type {
-        case "SessionBegins":
-            sessionID = json["session_id"] as? String ?? ""
+        case "session_begins":
+            sessionID    = json["session_id"] as? String ?? ""
+            sessionReady = true
 
-        case "PartialTranscript":
-            let t = json["text"] as? String ?? ""
+        case "partial_transcript":
+            let t = json["transcript"] as? String ?? ""
             if !t.isEmpty { partial = t }
 
-        case "FinalTranscript":
-            let t = json["text"] as? String ?? ""
+        case "final_transcript":
+            let t = json["transcript"] as? String ?? ""
             if !t.isEmpty {
                 accumulatedFinals.append(t)
                 partial = ""
             }
 
-        case "SessionTerminated":
+        case "session_terminated":
             webSocketTask?.cancel(with: .normalClosure, reason: nil)
             webSocketTask = nil
 
@@ -123,7 +134,7 @@ final class AssemblyAIStreamingService: ObservableObject {
     }
 
     private func sendTerminate() {
-        let msg = URLSessionWebSocketTask.Message.string(#"{"terminate_session":true}"#)
+        let msg = URLSessionWebSocketTask.Message.string(#"{"type":"terminate"}"#)
         webSocketTask?.send(msg) { _ in }
     }
 
@@ -157,7 +168,7 @@ final class AssemblyAIStreamingService: ObservableObject {
 
     // Called on the audio tap thread — no @MainActor state access here.
     private func encodeAndSend(_ buffer: AVAudioPCMBuffer) {
-        guard let conv = inputConverter else { return }
+        guard sessionReady, let conv = inputConverter else { return }
         let outFrames = AVAudioFrameCount(
             Double(buffer.frameLength) * captureHz / buffer.format.sampleRate
         )

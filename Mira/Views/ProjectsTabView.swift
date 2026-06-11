@@ -390,6 +390,25 @@ private struct ProjectDetailView: View {
                                     }
                                 }
 
+                                let approvedProposals = proposalStore.load(for: localProject.id)
+                                    .filter { $0.status == .approved }
+                                    .sorted { ($0.reviewedAt ?? $0.createdAt) > ($1.reviewedAt ?? $1.createdAt) }
+                                if !approvedProposals.isEmpty {
+                                    let unassessed = approvedProposals.filter { $0.outcomes.isEmpty }.count
+                                    approvedProposalSectionHeader(total: approvedProposals.count,
+                                                                  unassessed: unassessed)
+                                    ForEach(approvedProposals) { proposal in
+                                        ApprovedProposalRowView(proposal: proposal)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                withAnimation(.easeInOut(duration: 0.18)) {
+                                                    selectedProposal = proposal
+                                                }
+                                            }
+                                        Rectangle().fill(Color.white.opacity(0.04)).frame(height: 0.5)
+                                    }
+                                }
+
                                 dependencySection
 
                                 let completedSessions = localProject.sessions
@@ -567,6 +586,31 @@ private struct ProjectDetailView: View {
             Text("pending review")
                 .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.20))
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
+    }
+
+    private func approvedProposalSectionHeader(total: Int, unassessed: Int) -> some View {
+        HStack(spacing: 6) {
+            Text("Approved")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.28))
+                .tracking(0.5)
+            Text("\(total)")
+                .font(.system(size: 9))
+                .foregroundColor(successG.opacity(0.80))
+                .padding(.horizontal, 4).padding(.vertical, 1)
+                .background(successG.opacity(0.14))
+                .clipShape(Capsule())
+            if unassessed > 0 {
+                Text("·")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.15))
+                Text("\(unassessed) need outcomes")
+                    .font(.system(size: 9))
+                    .foregroundColor(amber.opacity(0.65))
+            }
             Spacer()
         }
         .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
@@ -1317,6 +1361,92 @@ private struct ProposalRowView: View {
     }
 }
 
+// MARK: - ApprovedProposalRowView
+
+private struct ApprovedProposalRowView: View {
+    let proposal: ProposalMetadata
+    private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
+    private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
+
+    private var summary: OutcomeSummary? {
+        OutcomeSummary.compute(from: proposal.outcomes, reviewedAt: proposal.reviewedAt)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(successG.opacity(0.10))
+                    .frame(width: 26, height: 26)
+                Image(systemName: typeIcon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(successG.opacity(0.70))
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(proposal.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.88))
+                    .lineLimit(1)
+                if let s = summary {
+                    HStack(spacing: 4) {
+                        outcomeBadge(s.currentAdoption.label, color: adoptionColor(s.currentAdoption))
+                        outcomeBadge(s.currentImpact.label,   color: impactColor(s.currentImpact))
+                        if s.currentRegret != .none {
+                            outcomeBadge(s.currentRegret.label, color: Color(red: 1.0, green: 0.40, blue: 0.40))
+                        }
+                    }
+                } else {
+                    Text("No outcome recorded yet")
+                        .font(.system(size: 10))
+                        .foregroundColor(amber.opacity(0.55))
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.16))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+    }
+
+    private func outcomeBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(color.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+
+    private func adoptionColor(_ s: AdoptionStatus) -> Color {
+        switch s {
+        case .notReviewed:            return .white.opacity(0.30)
+        case .approvedNotImplemented: return amber
+        case .implemented:            return successG
+        case .abandoned:              return Color(red: 1.0, green: 0.40, blue: 0.40)
+        }
+    }
+
+    private func impactColor(_ s: ImpactStatus) -> Color {
+        switch s {
+        case .unknown:  return .white.opacity(0.30)
+        case .improved: return successG
+        case .neutral:  return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .worsened: return Color(red: 1.0, green: 0.40, blue: 0.40)
+        }
+    }
+
+    private var typeIcon: String {
+        switch proposal.type {
+        case .investigation: return "magnifyingglass"
+        case .refactor:      return "arrow.triangle.2.circlepath"
+        case .test:          return "checkmark.shield"
+        case .migration:     return "arrow.right.circle"
+        case .patch:         return "doc.badge.plus"
+        }
+    }
+}
+
 // MARK: - ProposalDetailView
 
 private struct ProposalDetailView: View {
@@ -1525,10 +1655,23 @@ private struct ProposalDetailView: View {
 
     private var actionBar: some View {
         VStack(spacing: 0) {
-            confidencePicker
+            if proposal.status == .pending { confidencePicker }
             HStack(spacing: 8) {
                 Spacer()
-                if showRejectField {
+                // Non-pending proposals: show status pill only — outcome tracking is in the scroll body above
+                if proposal.status != .pending {
+                    HStack(spacing: 5) {
+                        Image(systemName: proposal.status == .approved ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(proposal.status == .approved ? successG : Color(red: 1.0, green: 0.40, blue: 0.40))
+                        Text(proposal.status == .approved ? "Approved" : proposal.status.rawValue.capitalized)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else if showRejectField {
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) { showRejectField = false; rejectNote = "" }
                     } label: {

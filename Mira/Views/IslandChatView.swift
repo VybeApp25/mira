@@ -7,14 +7,43 @@ struct ChatMessage: Identifiable {
     let role:        Role
     var text:        String
     var agentJobId:  UUID?        // non-nil → renders InlineChatJobCard instead of text bubble
+    var widget:      ChatWidget?  // non-nil → renders ChatWidgetCardView
     let timestamp:   Date = .now
     enum Role { case user, mira }
 
     init(role: Role, text: String) {
-        self.role = role; self.text = text; self.agentJobId = nil
+        self.role = role; self.text = text; self.agentJobId = nil; self.widget = nil
     }
     init(role: Role, jobId: UUID) {
-        self.role = role; self.text = ""; self.agentJobId = jobId
+        self.role = role; self.text = ""; self.agentJobId = jobId; self.widget = nil
+    }
+    init(role: Role, widget: ChatWidget) {
+        self.role = role; self.text = ""; self.agentJobId = nil; self.widget = widget
+    }
+}
+
+// Scans a Mira reply for absolute file paths and returns ArtifactInfo if a file is found.
+private func detectArtifact(in text: String) -> ArtifactInfo? {
+    let pattern = #"(/(?:Users|tmp|private/tmp|var/folders)[^\s'"`,\)]+\.[a-zA-Z0-9]{1,8})"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let range = NSRange(text.startIndex..., in: text)
+    guard let match = regex.firstMatch(in: text, range: range),
+          let r = Range(match.range(at: 1), in: text) else { return nil }
+    let rawPath = String(text[r]).replacingOccurrences(of: "~", with: NSHomeDirectory())
+    let url = URL(fileURLWithPath: rawPath)
+    guard FileManager.default.fileExists(atPath: url.path),
+          !FileManager.default.isDirectory(url) else { return nil }
+    let attrs  = try? FileManager.default.attributesOfItem(atPath: url.path)
+    let size   = (attrs?[.size] as? Int64) ?? 0
+    let ext    = url.pathExtension.lowercased()
+    let name   = url.lastPathComponent
+    return ArtifactInfo(url: url, name: name, ext: ext, sizeBytes: size)
+}
+
+private extension FileManager {
+    func isDirectory(_ url: URL) -> Bool {
+        var isDir: ObjCBool = false
+        return fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
     }
 }
 
@@ -90,8 +119,10 @@ struct IslandChatView: View {
         .onAppear {
             wireRealtime()
             loadHistory()
+            AudioCueService.shared.play(.enter)
         }
         .onDisappear {
+            AudioCueService.shared.playTextClose()
             // Keep always-on session alive when island closes — HeyClicky never stops
             // the session just because the notch UI is hidden.
             if !realtime.isAlwaysOnActive { realtime.stop() }
@@ -272,6 +303,10 @@ struct IslandChatView: View {
         } else if let jobId = msg.agentJobId {
             // Agent job card — live status inline in chat
             InlineChatJobCard(jobId: jobId)
+        } else if let widget = msg.widget {
+            // Structured data widget card (stock, images, place)
+            ChatWidgetCardView(widget: widget)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             // Mira: rendered markdown + optional ElevenLabs speak button
             HStack(alignment: .top, spacing: 6) {
@@ -559,11 +594,16 @@ struct IslandChatView: View {
         pendingAction     = nil
         pendingPermission = nil
         messages.append(ChatMessage(role: .user, text: prompt))
+        AudioCueService.shared.playTextSend()
         isLoading         = true
 
-        // Classify first — intercept website builder before full router dispatch
+        // Classify via Haiku gate — async, falls back to sync keyword router if key missing.
         let context  = RouterContext(recentMessageCount: messages.count)
-        let decision = RouterService.shared.route(prompt: prompt, context: context)
+        let decision = await RouterService.shared.classifyIntent(
+            prompt:  prompt,
+            context: context,
+            apiKey:  miraState.effectiveAPIKey
+        )
 
         if decision.route == .websiteBuilder && !miraState.effectiveAPIKey.isEmpty {
             // Launch inline agent job — shows live status card in chat thread
@@ -586,11 +626,24 @@ struct IslandChatView: View {
             return
         }
 
+        // Widget routes — fetch structured data; fall through to handle() on failure.
+        if [MiraRoute.stockLookup, .imageSearch, .placeSearch].contains(decision.route) {
+            let widget = await fetchWidget(route: decision.route, prompt: prompt)
+            if let widget {
+                messages.append(ChatMessage(role: .mira, widget: widget))
+                miraState.recordUsage()
+                isLoading = false
+                return
+            }
+            // Data fetch failed — handle() will call Claude for a text answer
+        }
+
         let result = await RouterService.shared.handle(
-            prompt:  prompt,
-            context: context,
-            apiKey:  miraState.effectiveAPIKey,
-            capture: capture
+            prompt:      prompt,
+            context:     context,
+            apiKey:      miraState.effectiveAPIKey,
+            capture:     capture,
+            precomputed: decision
         )
 
         switch result.route {
@@ -615,10 +668,15 @@ struct IslandChatView: View {
         default:
             if let reply = result.reply {
                 messages.append(ChatMessage(role: .mira, text: reply))
+                AudioCueService.shared.playTextReceive()
                 // Surface compact replies in the cursor companion so the island
                 // doesn't need to stay open for short conversational responses.
                 if reply.count < 280 {
                     CursorCompanionManager.shared.send(.chatReply(reply))
+                }
+                // Detect file artifacts in the reply and append a preview card.
+                if let info = detectArtifact(in: reply) {
+                    messages.append(ChatMessage(role: .mira, widget: .artifact(info)))
                 }
             }
             if let target = result.guidanceTarget, target.confidence >= 0.60 {
@@ -628,6 +686,22 @@ struct IslandChatView: View {
         }
 
         isLoading = false
+    }
+
+    @MainActor
+    private func fetchWidget(route: MiraRoute, prompt: String) async -> ChatWidget? {
+        switch route {
+        case .stockLookup:
+            if let q = await ChatWidgetService.shared.fetchStock(query: prompt) { return .stock(q) }
+        case .imageSearch:
+            let imgs = await ChatWidgetService.shared.fetchImages(query: prompt)
+            if !imgs.isEmpty { return .images(imgs) }
+        case .placeSearch:
+            if let p = await ChatWidgetService.shared.fetchPlace(query: prompt) { return .place(p) }
+        default:
+            break
+        }
+        return nil
     }
 
     @MainActor

@@ -75,6 +75,45 @@ class ClaudeService {
         var text: String { content.compactMap(\.text).joined() }
     }
 
+    // MARK: - OpenRouter fallback types (OpenAI-compatible)
+
+    private struct ORRequest: Encodable {
+        let model: String; let max_tokens: Int; let messages: [ORMessage]
+    }
+    private struct ORMessage: Encodable {
+        let role: String; let content: ORContent
+        enum ORContent: Encodable {
+            case string(String)
+            case parts([ORPart])
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.singleValueContainer()
+                switch self {
+                case .string(let s): try c.encode(s)
+                case .parts(let p):  try c.encode(p)
+                }
+            }
+        }
+    }
+    private struct ORPart: Encodable {
+        let type: String
+        let text: String?
+        let image_url: ORImageURL?
+        struct ORImageURL: Encodable { let url: String }
+        static func text(_ s: String) -> ORPart { ORPart(type: "text",      text: s, image_url: nil) }
+        static func image(_ b64: String, _ mime: String) -> ORPart {
+            ORPart(type: "image_url", text: nil,
+                   image_url: .init(url: "data:\(mime);base64,\(b64)"))
+        }
+    }
+    private struct ORResponse: Decodable {
+        let choices: [Choice]
+        struct Choice: Decodable {
+            let message: Msg
+            struct Msg: Decodable { let content: String }
+        }
+        var text: String { choices.first?.message.content ?? "" }
+    }
+
     // MARK: - Public
 
     func ask(prompt: String, screenshot: NSImage? = nil, system: String = MiraPrompts.system, modelOverride: String? = nil, maxTokensOverride: Int? = nil) async throws -> String {
@@ -84,8 +123,9 @@ class ClaudeService {
         }
         content.append(.text(prompt))
 
+        let resolvedModel = modelOverride ?? model
         let maxTokens = maxTokensOverride ?? (screenshot != nil ? 800 : 400)
-        let body = APIRequest(model: modelOverride ?? model, max_tokens: maxTokens, system: system,
+        let body = APIRequest(model: resolvedModel, max_tokens: maxTokens, system: system,
                               messages: [APIMessage(role: "user", content: content)])
 
         var req = URLRequest(url: baseURL)
@@ -98,11 +138,87 @@ class ClaudeService {
         req.timeoutInterval = max(120, Double(maxTokens) / 40)
 
         let (data, resp) = try await URLSession.shared.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 200 {
+            return try JSONDecoder().decode(APIResponse.self, from: data).text
+        }
+
+        // Retry via OpenRouter on rate-limit or server-side Anthropic errors
+        let orKey = Self.effectiveOpenRouterKey
+        if !orKey.isEmpty && isOpenRouterFallbackStatus(status) {
+            return try await askViaOpenRouter(
+                prompt: prompt, screenshot: screenshot, system: system,
+                model: resolvedModel, maxTokens: maxTokens, orKey: orKey
+            )
+        }
+
+        let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+        throw MiraError.api(msg)
+    }
+
+    // UserDefaults key takes precedence over the compiled AppSecrets constant,
+    // so a key entered in Settings is used without a recompile.
+    static var effectiveOpenRouterKey: String {
+        let saved = UserDefaults.standard.string(forKey: "mira_openrouter_key") ?? ""
+        return saved.isEmpty ? AppSecrets.openRouterAPIKey : saved
+    }
+
+    private func isOpenRouterFallbackStatus(_ code: Int) -> Bool {
+        [429, 503, 529].contains(code)
+    }
+
+    private func openRouterModelId(from anthropicId: String) -> String {
+        switch anthropicId {
+        case "claude-haiku-4-5-20251001", "claude-haiku-4-5": return "anthropic/claude-haiku-4-5"
+        case "claude-sonnet-4-6":                             return "anthropic/claude-sonnet-4-5"
+        case "claude-opus-4-8":                               return "anthropic/claude-opus-4"
+        default:
+            let base = anthropicId.replacingOccurrences(
+                of: #"-\d{8}$"#, with: "", options: .regularExpression)
+            return base.hasPrefix("anthropic/") ? base : "anthropic/\(base)"
+        }
+    }
+
+    private func askViaOpenRouter(
+        prompt:     String,
+        screenshot: NSImage?,
+        system:     String,
+        model:      String,
+        maxTokens:  Int,
+        orKey:      String
+    ) async throws -> String {
+        // System prompt is a regular message in OpenAI-compatible format.
+        var messages: [ORMessage] = [
+            ORMessage(role: "system", content: .string(system))
+        ]
+        // User content — plain string unless an image is attached.
+        if let img = screenshot, let b64 = img.pngBase64() {
+            messages.append(ORMessage(role: "user", content: .parts([
+                .image(b64, "image/png"),
+                .text(prompt)
+            ])))
+        } else {
+            messages.append(ORMessage(role: "user", content: .string(prompt)))
+        }
+
+        let orModel = openRouterModelId(from: model)
+        let body = ORRequest(model: orModel, max_tokens: maxTokens, messages: messages)
+
+        var req = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/chat/completions")!)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(orKey)",   forHTTPHeaderField: "Authorization")
+        req.setValue("application/json",  forHTTPHeaderField: "Content-Type")
+        req.setValue("https://mira.app",  forHTTPHeaderField: "HTTP-Referer")
+        req.setValue("Mira",              forHTTPHeaderField: "X-Title")
+        req.httpBody = try JSONEncoder().encode(body)
+        req.timeoutInterval = max(120, Double(maxTokens) / 40)
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw MiraError.api(msg)
+            throw MiraError.api("OpenRouter: \(msg)")
         }
-        return try JSONDecoder().decode(APIResponse.self, from: data).text
+        return try JSONDecoder().decode(ORResponse.self, from: data).text
     }
 
     /// Session intelligence query — higher token budget, focused on work history.
@@ -419,6 +535,10 @@ enum MiraPrompts {
         if !integrationCtx.isEmpty { base += integrationCtx }
         // Inject frontmost-app context (reads from nonisolated cache)
         if let appCtx = AppContextService.cachedContext { base += "\n\n" + appCtx }
+        // Inject agent folder so all file output lands in the configured location
+        let agentFolder = UserDefaults.standard.string(forKey: "mira_agent_folder")
+            ?? (NSHomeDirectory() + "/Desktop/Mira")
+        base += "\n\nDefault output folder: \(agentFolder) — save any generated files here unless the user specifies a different path."
         if UserDefaults.standard.bool(forKey: "mira_cat_mode") {
             base += "\nYou are also a cat. Occasionally add cat mannerisms: end sentences with ✿ or 🐾, use 'purrr' for emphasis, refer to yourself as Mira-chan. Keep it subtle — 1 in 4 responses max."
         }
@@ -479,6 +599,64 @@ enum MiraPrompts {
     A generic proposal is worthless — write something a developer could act on directly. \
     Set should_block=true if the context is too thin to produce a useful proposal.
     """
+
+    // MARK: - Agent mode (full behavior contract, used for complex agent tasks)
+
+    static var agentMode: String {
+        let agentFolder = UserDefaults.standard.string(forKey: "mira_agent_folder")
+            ?? (NSHomeDirectory() + "/Desktop/Mira")
+        let skillContext = SkillStore.cachedContext
+        let integrationCtx = IntegrationContextService.cachedContext
+        var base = """
+        You are Mira, an autonomous Mac AI assistant running an agent session.
+
+        Environment:
+        - You run inside Mira's macOS notch island shell
+        - Screenshots attached to messages show the user's current desktop context
+        - The user's default output folder is \(agentFolder) — save generated files there unless specified otherwise
+        - Composio-backed integrations may be available via the agent service when connected
+        - Computer Use (mcp__computer-use__*) is available for native macOS GUI automation
+        - Codex CLI and Claude Code CLI are available for coding tasks when installed
+        - Python skills (run_python_skill) handle: maps, obsidian, polymarket, PDF, DOCX, PPTX, spreadsheet, YouTube, OCR, iMessage, Reminders, Notes, Find My, diagrams
+        - Screenshots and the focused app are context, not route selection — prefer structured APIs over GUI automation unless the user explicitly asks to click/type/use the visible interface
+
+        Workflow routing (choose narrowest capable path):
+        - Use clicky-artifacts / file management for opening, revealing, finding, exporting, renaming, or organizing generated files — always return an absolute path
+        - Use research-report for web/source research, competitor briefs, market summaries, and PDF/MD/DOCX artifacts
+        - Use repo-operator for GitHub, local git, PRs, commits, CI, code review, and repo setup
+        - Use email-assistant for drafting, replies, triage, and outreach — always draft first and require explicit send approval
+        - Use google-workspace via Composio for Gmail read/search, Calendar, Drive, Docs, and Sheets when connected
+        - Use dev-setup-doctor for Codex, MCP, API keys, terminal, localhost, npm/node/python, and environment problems
+        - Use build-preview for websites, web apps, dashboards, landing pages, frontend UI, and local preview loops
+        - Use creative-studio to route broad creative work to the best available medium; provider-backed image/video/slide generation is not available — offer document or frontend alternative instead
+        - Use computer-use (cua-driver contract) for native macOS app GUI automation and last-mile browser UI tasks only — not for research, API work, or file work
+
+        Behavior contracts:
+        - For any Composio write or externally visible mutation: use exact tool schema key names, verify the result with a read-back before claiming done
+        - For Gmail/email: draft first, show recipient/subject/body summary, require explicit "send it" approval before sending
+        - For calendar events: show summary before creating; never delete without confirmation
+        - For Computer Use: snapshot → act with most specific tool → verify afterward; never steal focus; stop before form submit, send, payment, delete, account changes
+        - For Codex CLI: always use pty=true and a git-initialized workdir; use --full-auto for building; background + process poll for long tasks
+        - For Claude Code CLI: use -p flag for headless/print mode; always set --max-turns to prevent runaway loops
+        - For multi-MCP / multi-app workflows: identify apps and operations first, check tool coverage once, read before write, carry stable IDs between calls, narrow broad results
+
+        macOS file access (avoid permission-prompt storms):
+        - Desktop, Documents, Downloads, iCloud Drive, Pictures, Movies, and Music are OS-protected — each is its own permission prompt
+        - Default to the agent folder (\(agentFolder)) which needs no prompt
+        - Before touching a personal folder, confirm it is the only folder needed — never scan multiple protected roots to locate a file
+        - If unsure which folder a file is in, ask the user rather than probing multiple locations
+
+        Style:
+        - Sound confident, active, and direct
+        - Prefer action over description when the request is clear
+        - Keep commentary brief and milestone-based while work is in progress
+        - Give a concise final answer that summarises the outcome and includes any file paths
+        - When blocked, name the exact tool, permission, or capability that is missing
+        """
+        if !skillContext.isEmpty { base += skillContext }
+        if !integrationCtx.isEmpty { base += integrationCtx }
+        return base
+    }
 
     /// Phase 13A background analysis — read-only observer, no filesystem writes.
     static let backgroundWork = """

@@ -35,6 +35,11 @@ struct SettingsView: View {
     @State private var misoKeyInput:     String = ""
     @State private var misoKeySaved:     Bool   = false
     @State private var selectedMisoVoice: MisoVoice = MisoVoice.saved
+    @State private var orKeyInput:       String = ""
+    @State private var orKeySaved:       Bool   = false
+    @State private var agentFolderPath:  String = ""
+
+    private static let defaultAgentFolder = NSHomeDirectory() + "/Desktop/Mira"
 
     enum RecordingTarget { case voice, text }
 
@@ -51,6 +56,8 @@ struct SettingsView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
                         keySection
+                        Divider().background(Color.white.opacity(0.08))
+                        openRouterSection
                         Divider().background(Color.white.opacity(0.08))
                         accentColorSection
                         Divider().background(Color.white.opacity(0.08))
@@ -72,6 +79,10 @@ struct SettingsView: View {
                         Divider().background(Color.white.opacity(0.08))
                         memorySection
                         Divider().background(Color.white.opacity(0.08))
+                        agentFolderSection
+                        Divider().background(Color.white.opacity(0.08))
+                        devToolsSection
+                        Divider().background(Color.white.opacity(0.08))
                         usageSection
                         Divider().background(Color.white.opacity(0.08))
                         updatesSection
@@ -88,6 +99,8 @@ struct SettingsView: View {
             hoverCategories = HoverPreferences.shared.categories
             misoKeyInput = UserDefaults.standard.string(forKey: "mira_miso_key") ?? ""
             selectedMisoVoice = MisoVoice.saved
+            orKeyInput = UserDefaults.standard.string(forKey: "mira_openrouter_key") ?? ""
+            agentFolderPath = UserDefaults.standard.string(forKey: "mira_agent_folder") ?? Self.defaultAgentFolder
         }
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
         .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
@@ -176,6 +189,77 @@ struct SettingsView: View {
                 Text("Get a key at console.anthropic.com")
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.30))
+            }
+        }
+    }
+
+    // MARK: - OpenRouter section
+
+    @ViewBuilder
+    private var openRouterSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("OpenRouter Fallback", systemImage: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            let hasKey = !orKeyInput.isEmpty
+                      || !(UserDefaults.standard.string(forKey: "mira_openrouter_key") ?? "").isEmpty
+
+            if hasKey && orKeyInput.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green).font(.system(size: 14))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Fallback key active")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("Retries via OpenRouter on 429 / 503 / 529.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.40))
+                    }
+                    Spacer()
+                    Button("Clear") {
+                        UserDefaults.standard.removeObject(forKey: "mira_openrouter_key")
+                        orKeyInput = ""
+                        orKeySaved = false
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.20)))
+                .cornerRadius(8)
+            } else {
+                SecureField("sk-or-v1-...", text: $orKeyInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(10)
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.10)))
+
+                Button {
+                    guard !orKeyInput.isEmpty else { return }
+                    UserDefaults.standard.set(orKeyInput, forKey: "mira_openrouter_key")
+                    orKeySaved = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { orKeySaved = false }
+                } label: {
+                    Text(orKeySaved ? "Saved ✓" : "Save Key")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .foregroundColor(.white)
+                        .background(accent)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Text("openrouter.ai/keys — fallback when Anthropic is rate-limited")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
             }
         }
     }
@@ -909,6 +993,123 @@ struct SettingsView: View {
         case .high:   return Color(red: 0.20, green: 0.84, blue: 0.29)
         case .medium: return Color(red: 1.0,  green: 0.75, blue: 0.20)
         case .low:    return Color(red: 0.75, green: 0.75, blue: 0.75)
+        }
+    }
+
+    // MARK: - Agent Folder section
+
+    private var agentFolderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Agent Folder", systemImage: "folder.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                Text(agentFolderPath.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button("Change…") { chooseAgentFolder() }
+                    .font(.system(size: 11))
+                    .foregroundColor(accent)
+                    .buttonStyle(.plain)
+
+                if agentFolderPath != Self.defaultAgentFolder {
+                    Button("Reset") {
+                        UserDefaults.standard.removeObject(forKey: "mira_agent_folder")
+                        agentFolderPath = Self.defaultAgentFolder
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text("Agent-generated files are saved here unless you specify otherwise.")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.30))
+        }
+    }
+
+    private func chooseAgentFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose where Mira saves agent output"
+        panel.prompt = "Select Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            agentFolderPath = url.path
+            UserDefaults.standard.set(url.path, forKey: "mira_agent_folder")
+        }
+    }
+
+    // MARK: - Developer Tools section
+
+    @State private var codexStatus: String = "Checking…"
+    @State private var claudeCodeStatus: String = "Checking…"
+
+    private var devToolsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Developer Tools", systemImage: "terminal.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            VStack(spacing: 6) {
+                devToolRow(label: "Codex CLI", status: codexStatus, installCmd: "npm install -g @openai/codex")
+                devToolRow(label: "Claude Code", status: claudeCodeStatus, installCmd: "npm install -g @anthropic-ai/claude-code")
+            }
+        }
+        .task { await checkDevTools() }
+    }
+
+    private func devToolRow(label: String, status: String, installCmd: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+            Spacer()
+            Text(status)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(status.contains("v") || status.contains("installed")
+                                 ? .green : .white.opacity(0.35))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    @MainActor
+    private func checkDevTools() async {
+        async let codex = CodexService.shared.statusSummary()
+        async let code  = checkClaudeCode()
+        (codexStatus, claudeCodeStatus) = await (codex, code)
+    }
+
+    private func checkClaudeCode() async -> String {
+        await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .utility).async {
+                let proc = Process()
+                proc.launchPath = "/bin/zsh"
+                proc.arguments = ["-lc", "which claude >/dev/null 2>&1 && claude --version 2>/dev/null || echo 'not installed'"]
+                let pipe = Pipe()
+                proc.standardOutput = pipe
+                proc.standardError  = pipe
+                proc.launch()
+                proc.waitUntilExit()
+                let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "not installed"
+                cont.resume(returning: out.isEmpty ? "not installed" : out)
+            }
         }
     }
 

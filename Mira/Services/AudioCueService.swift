@@ -5,20 +5,29 @@ import Foundation
 // MARK: - Sound catalog
 
 enum MiraSound: String, CaseIterable {
-    // Agent lifecycle (HeyClicky mp3s)
-    case agentLaunch   = "agent-launch"
-    case agentDone     = "agent-done"
-    case agentClose    = "agent-close"
+    // Agent lifecycle
+    case agentLaunch         = "agent-launch"
+    case agentDone           = "agent-done"
+    case agentClose          = "agent-close"
     // Interaction
-    case enter         = "enter"
-    case textSend      = "clicky-text-send"
-    case textReceive   = "clicky-text-receive"
-    case skillUp       = "skill-up"
-    case skillDown     = "skill-down"
+    case enter               = "enter"
+    case textSend            = "clicky-text-send"
+    case textReceive         = "clicky-text-receive"
+    case textClose           = "clicky-text-close"
+    case skillUp             = "skill-up"
+    case skillDown           = "skill-down"
+    // State cues
+    case question            = "clicky-question"
+    case surprised           = "clicky-surprised"
+    case connectionQuestion  = "connection-question"
+    // Ambient
+    case eshop               = "eshop"
+    case ff                  = "ff"
+    case hatching            = "hatching"
 
     var fileExtension: String {
         switch self {
-        case .agentLaunch, .agentDone, .agentClose, .enter: return "mp3"
+        case .agentLaunch, .agentDone, .agentClose, .enter, .eshop, .ff: return "mp3"
         default: return "wav"
         }
     }
@@ -105,12 +114,15 @@ final class AudioCueService {
         }
     }
 
-    func playAgentLaunch()    { play(.agentLaunch) }
-    func playAgentComplete()  { play(.agentDone) }
-    func playAgentClose()     { play(.agentClose) }
-    func playAgentBlocked()   { play(.skillDown) }
-    func playTextSend()       { play(.textSend) }
-    func playTextReceive()    { play(.textReceive) }
+    func playAgentLaunch()         { play(.agentLaunch) }
+    func playAgentComplete()       { play(.agentDone) }
+    func playAgentClose()          { play(.agentClose) }
+    func playAgentBlocked()        { play(.skillDown) }
+    func playTextSend()            { play(.textSend) }
+    func playTextReceive()         { play(.textReceive) }
+    func playTextClose()           { play(.textClose) }
+    func playClarification()       { play(.question) }
+    func playConnectionQuestion()  { play(.connectionQuestion) }
 
     // MARK: - ChimeWarmer
     // Plays a silent 0-volume note through the audio pipeline at launch to prime
@@ -133,14 +145,21 @@ final class AudioCueService {
 
     private func fallbackName(_ sound: MiraSound) -> String {
         switch sound {
-        case .agentLaunch:  return "Purr"
-        case .agentDone:    return "Hero"
-        case .agentClose:   return "Pop"
-        case .enter:        return "Ping"
-        case .textSend:     return "Tink"
-        case .textReceive:  return "Pop"
-        case .skillUp:      return "Tink"
-        case .skillDown:    return "Funk"
+        case .agentLaunch:        return "Purr"
+        case .agentDone:          return "Hero"
+        case .agentClose:         return "Pop"
+        case .enter:              return "Ping"
+        case .textSend:           return "Tink"
+        case .textReceive:        return "Pop"
+        case .textClose:          return "Pop"
+        case .skillUp:            return "Tink"
+        case .skillDown:          return "Funk"
+        case .question:           return "Ping"
+        case .surprised:          return "Basso"
+        case .connectionQuestion: return "Ping"
+        case .eshop:              return "Hero"
+        case .ff:                 return "Tink"
+        case .hatching:           return "Purr"
         }
     }
 }
