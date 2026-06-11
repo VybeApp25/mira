@@ -91,6 +91,105 @@ enum ProposalType: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Phase 15: Outcome observation types
+
+/// Whether the user actually implemented the approved proposal.
+enum AdoptionStatus: String, Codable, CaseIterable {
+    case notReviewed             = "not_reviewed"
+    case approvedNotImplemented  = "approved_not_implemented"
+    case implemented             = "implemented"
+    case abandoned               = "abandoned"
+
+    var label: String {
+        switch self {
+        case .notReviewed:            return "Not reviewed"
+        case .approvedNotImplemented: return "Pending impl."
+        case .implemented:            return "Implemented"
+        case .abandoned:              return "Abandoned"
+        }
+    }
+}
+
+/// Observed impact after implementation.
+enum ImpactStatus: String, Codable, CaseIterable {
+    case unknown  = "unknown"
+    case improved = "improved"
+    case neutral  = "neutral"
+    case worsened = "worsened"
+
+    var label: String { rawValue.capitalized }
+}
+
+/// Whether implementation was later regretted or reversed.
+enum RegretStatus: String, Codable, CaseIterable {
+    case none                        = "none"
+    case reverted                    = "reverted"
+    case supersededAfterImplementation = "superseded_after_implementation"
+
+    var label: String {
+        switch self {
+        case .none:                          return "None"
+        case .reverted:                      return "Reverted"
+        case .supersededAfterImplementation: return "Superseded"
+        }
+    }
+}
+
+/// Reviewer's confidence in this outcome observation.
+enum AssessmentConfidence: Int, Codable, CaseIterable {
+    case low    = 1
+    case medium = 2
+    case high   = 3
+
+    var label: String {
+        switch self { case .low: return "Low"; case .medium: return "Medium"; case .high: return "High" }
+    }
+}
+
+/// One point-in-time outcome observation. Append-only — never overwrite.
+///
+/// Proposals carry [OutcomeAssessment] as an ordered sequence.
+/// The system retains every event so adoption latency, impact drift, and
+/// regret emergence can all be studied retrospectively.
+struct OutcomeAssessment: Identifiable, Codable {
+    let id:                   UUID
+    let assessedAt:           Date
+    /// Who or what recorded this assessment ("user", automated check label, etc.)
+    let assessedBy:           String
+    let adoptionStatus:       AdoptionStatus
+    let impactStatus:         ImpactStatus
+    let regretStatus:         RegretStatus
+    let assessmentConfidence: AssessmentConfidence
+    let note:                 String?
+}
+
+/// Derived projection of an outcome assessment sequence. Never stored — always recomputed.
+struct OutcomeSummary {
+    let currentAdoption:  AdoptionStatus
+    let currentImpact:    ImpactStatus
+    let currentRegret:    RegretStatus
+    /// Time from approval to first .implemented assessment. nil if not yet implemented.
+    let adoptionLatency:  TimeInterval?
+    let assessmentCount:  Int
+
+    static func compute(from assessments: [OutcomeAssessment],
+                        reviewedAt: Date?) -> OutcomeSummary? {
+        guard !assessments.isEmpty else { return nil }
+        let sorted = assessments.sorted { $0.assessedAt < $1.assessedAt }
+        let latest = sorted.last!
+        var latency: TimeInterval?
+        if let anchor = reviewedAt,
+           let first = sorted.first(where: { $0.adoptionStatus == .implemented }) {
+            latency = first.assessedAt.timeIntervalSince(anchor)
+        }
+        return OutcomeSummary(currentAdoption: latest.adoptionStatus,
+                              currentImpact:   latest.impactStatus,
+                              currentRegret:   latest.regretStatus,
+                              adoptionLatency: latency,
+                              assessmentCount: sorted.count)
+    }
+}
+
 // MARK: - ProposalMetadata
 
 /// Sidecar record stored alongside each proposal artifact in Proposals/<project-id>/metadata.json.
@@ -110,13 +209,63 @@ struct ProposalMetadata: Identifiable, Codable {
 
     var status:              ProposalStatus
     var reviewedAt:          Date?
-    var reviewNote:          String?          // user's note on approval or rejection
-    var reviewConfidence:    ReviewConfidence? // how certain the reviewer was — nil = not recorded
+    var reviewNote:          String?
+    var reviewConfidence:    ReviewConfidence?
+    /// Append-only outcome observations (Phase 15). Never overwrite an entry.
+    var outcomes:            [OutcomeAssessment]
 
     // Deterministic filename used as the artifact on disk
     var artifactFilename: String {
         let prefix = id.uuidString.prefix(8)
         return "\(prefix)-\(type.rawValue).\(type.fileExtension)"
+    }
+
+    /// Explicit init so call sites can omit `outcomes` (defaults to []).
+    init(id: UUID, projectId: UUID, generatedInSession: UUID, createdAt: Date,
+         title: String, rationale: String, type: ProposalType, confidence: Double,
+         affectedFiles: [String], status: ProposalStatus,
+         reviewedAt: Date? = nil, reviewNote: String? = nil,
+         reviewConfidence: ReviewConfidence? = nil,
+         outcomes: [OutcomeAssessment] = []) {
+        self.id                 = id
+        self.projectId          = projectId
+        self.generatedInSession = generatedInSession
+        self.createdAt          = createdAt
+        self.title              = title
+        self.rationale          = rationale
+        self.type               = type
+        self.confidence         = confidence
+        self.affectedFiles      = affectedFiles
+        self.status             = status
+        self.reviewedAt         = reviewedAt
+        self.reviewNote         = reviewNote
+        self.reviewConfidence   = reviewConfidence
+        self.outcomes           = outcomes
+    }
+
+    // Migration-safe decoder: existing records without `outcomes` decode to [].
+    enum CodingKeys: String, CodingKey {
+        case id, projectId, generatedInSession, createdAt
+        case title, rationale, type, confidence, affectedFiles
+        case status, reviewedAt, reviewNote, reviewConfidence, outcomes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                 = try c.decode(UUID.self,          forKey: .id)
+        projectId          = try c.decode(UUID.self,          forKey: .projectId)
+        generatedInSession = try c.decode(UUID.self,          forKey: .generatedInSession)
+        createdAt          = try c.decode(Date.self,          forKey: .createdAt)
+        title              = try c.decode(String.self,        forKey: .title)
+        rationale          = try c.decode(String.self,        forKey: .rationale)
+        type               = try c.decode(ProposalType.self,  forKey: .type)
+        confidence         = try c.decode(Double.self,        forKey: .confidence)
+        affectedFiles      = try c.decode([String].self,      forKey: .affectedFiles)
+        status             = try c.decode(ProposalStatus.self, forKey: .status)
+        reviewedAt         = try c.decodeIfPresent(Date.self,            forKey: .reviewedAt)
+        reviewNote         = try c.decodeIfPresent(String.self,          forKey: .reviewNote)
+        reviewConfidence   = try c.decodeIfPresent(ReviewConfidence.self, forKey: .reviewConfidence)
+        outcomes           = (try? c.decode([OutcomeAssessment].self,    forKey: .outcomes)) ?? []
     }
 }
 

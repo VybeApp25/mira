@@ -1136,9 +1136,16 @@ private struct ProposalDetailView: View {
     let onBack:   () -> Void
 
     @ObservedObject private var proposalStore = ProposalStore.shared
-    @State private var selectedConfidence: ReviewConfidence? = nil
+    @State private var selectedConfidence:    ReviewConfidence? = nil
     @State private var rejectNote = ""
     @State private var showRejectField = false
+    // Phase 15 — outcome form state
+    @State private var oAdoption:    AdoptionStatus       = .approvedNotImplemented
+    @State private var oImpact:      ImpactStatus         = .unknown
+    @State private var oRegret:      RegretStatus         = .none
+    @State private var oConfidence:  AssessmentConfidence = .medium
+    @State private var oNote:        String               = ""
+    @State private var oSubmitted:   Bool                 = false
 
     private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
@@ -1194,6 +1201,11 @@ private struct ProposalDetailView: View {
                                 .foregroundColor(.white)
                                 .tint(accent)
                         }
+                    }
+                    // Phase 15: outcome tracking (approved proposals only)
+                    if proposal.status == .approved {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 0.5)
+                        outcomeSection
                     }
                 }
                 .padding(.bottom, 8)
@@ -1390,6 +1402,163 @@ private struct ProposalDetailView: View {
         }
         .background(Color.white.opacity(0.03))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
+    }
+
+    // MARK: - Phase 15 outcome section
+
+    @ViewBuilder
+    private var outcomeSection: some View {
+        // Load the freshest copy so form reflects any just-saved assessment
+        let live = proposalStore.load(for: project.id).first(where: { $0.id == proposal.id }) ?? proposal
+        let summary = OutcomeSummary.compute(from: live.outcomes, reviewedAt: live.reviewedAt)
+
+        metaSection("Outcome Tracking") {
+            VStack(alignment: .leading, spacing: 10) {
+                // Summary badge row if assessments exist
+                if let s = summary {
+                    HStack(spacing: 8) {
+                        outcomeBadge(s.currentAdoption.label, color: adoptionColor(s.currentAdoption))
+                        outcomeBadge(s.currentImpact.label,   color: impactColor(s.currentImpact))
+                        outcomeBadge(s.currentRegret.label,   color: regretColor(s.currentRegret))
+                        Spacer()
+                        Text("\(s.assessmentCount) assessment\(s.assessmentCount == 1 ? "" : "s")")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.25))
+                    }
+                }
+
+                // Assessment form
+                VStack(alignment: .leading, spacing: 8) {
+                    outcomePickerRow("Adoption", cases: AdoptionStatus.allCases,
+                                     label: \.label, selection: $oAdoption)
+                    outcomePickerRow("Impact",   cases: ImpactStatus.allCases,
+                                     label: \.label, selection: $oImpact)
+                    outcomePickerRow("Regret",   cases: RegretStatus.allCases,
+                                     label: \.label, selection: $oRegret)
+                    outcomePickerRow("Confidence", cases: AssessmentConfidence.allCases,
+                                     label: \.label, selection: $oConfidence)
+
+                    TextField("Note (optional)", text: $oNote)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.70))
+                        .tint(accent)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                    Button {
+                        let assessment = OutcomeAssessment(
+                            id:                   UUID(),
+                            assessedAt:           Date(),
+                            assessedBy:           "user",
+                            adoptionStatus:       oAdoption,
+                            impactStatus:         oImpact,
+                            regretStatus:         oRegret,
+                            assessmentConfidence: oConfidence,
+                            note:                 oNote.isEmpty ? nil : oNote
+                        )
+                        proposalStore.appendOutcome(assessment, to: proposal.id, projectId: project.id)
+                        oNote      = ""
+                        oSubmitted = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { oSubmitted = false }
+                    } label: {
+                        Text(oSubmitted ? "Recorded ✓" : "Record Outcome")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .foregroundColor(.white)
+                            .background(oSubmitted ? successG : accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // History list (most recent first)
+                if !live.outcomes.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("HISTORY")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.20))
+                            .tracking(1)
+                        ForEach(live.outcomes.sorted { $0.assessedAt > $1.assessedAt }) { a in
+                            HStack(spacing: 6) {
+                                Text(a.assessedAt, style: .relative)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.30))
+                                    .frame(width: 70, alignment: .leading)
+                                outcomeBadge(a.adoptionStatus.label, color: adoptionColor(a.adoptionStatus))
+                                outcomeBadge(a.impactStatus.label,   color: impactColor(a.impactStatus))
+                                outcomeBadge(a.regretStatus.label,   color: regretColor(a.regretStatus))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func outcomeBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(color)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func outcomePickerRow<T: Hashable>(_ title: String, cases: [T],
+                                               label: KeyPath<T, String>,
+                                               selection: Binding<T>) -> some View {
+        HStack(spacing: 0) {
+            Text(title)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.30))
+                .frame(width: 68, alignment: .leading)
+            HStack(spacing: 3) {
+                ForEach(cases, id: \.self) { c in
+                    let sel = selection.wrappedValue == c
+                    Button { selection.wrappedValue = c } label: {
+                        Text(c[keyPath: label])
+                            .font(.system(size: 9, weight: sel ? .semibold : .regular))
+                            .foregroundColor(sel ? .white : .white.opacity(0.35))
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(sel ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func adoptionColor(_ s: AdoptionStatus) -> Color {
+        switch s {
+        case .notReviewed:            return .white.opacity(0.30)
+        case .approvedNotImplemented: return amber
+        case .implemented:            return successG
+        case .abandoned:              return Color(red: 1.0, green: 0.40, blue: 0.40)
+        }
+    }
+
+    private func impactColor(_ s: ImpactStatus) -> Color {
+        switch s {
+        case .unknown:  return .white.opacity(0.30)
+        case .improved: return successG
+        case .neutral:  return accent
+        case .worsened: return Color(red: 1.0, green: 0.40, blue: 0.40)
+        }
+    }
+
+    private func regretColor(_ s: RegretStatus) -> Color {
+        switch s {
+        case .none:                          return successG
+        case .reverted:                      return Color(red: 1.0, green: 0.40, blue: 0.40)
+        case .supersededAfterImplementation: return amber
+        }
     }
 
     // MARK: - Helpers

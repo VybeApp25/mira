@@ -146,6 +146,44 @@ final class ProposalStore: ObservableObject {
         }
     }
 
+    // MARK: - Outcome tracking (Phase 15)
+
+    /// Appends one assessment to a proposal's outcome sequence. Never overwrites.
+    func appendOutcome(_ assessment: OutcomeAssessment, to proposalId: UUID, projectId: UUID) {
+        var proposals = load(for: projectId)
+        guard let idx = proposals.firstIndex(where: { $0.id == proposalId }) else { return }
+        proposals[idx].outcomes.append(assessment)
+        if let data = try? JSONEncoder().encode(proposals) {
+            try? data.write(to: metadataURL(for: projectId), options: .atomic)
+        }
+    }
+
+    /// Funnel counts across a set of projects.
+    struct OutcomeFunnel {
+        let approved:      Int
+        let implemented:   Int   // latest assessment has adoptionStatus == .implemented
+        let improved:      Int   // implemented AND latest impact == .improved
+        let notReverted:   Int   // improved AND latest regret == .none
+    }
+
+    func outcomeFunnel(for projects: [MiraProject]) -> OutcomeFunnel {
+        var approved = 0, implemented = 0, improved = 0, notReverted = 0
+        for project in projects {
+            for p in load(for: project.id) where p.status == .approved {
+                approved += 1
+                guard let summary = OutcomeSummary.compute(from: p.outcomes,
+                                                           reviewedAt: p.reviewedAt) else { continue }
+                guard summary.currentAdoption == .implemented else { continue }
+                implemented += 1
+                guard summary.currentImpact == .improved else { continue }
+                improved += 1
+                if summary.currentRegret == .none { notReverted += 1 }
+            }
+        }
+        return OutcomeFunnel(approved: approved, implemented: implemented,
+                             improved: improved, notReverted: notReverted)
+    }
+
     // MARK: - Metrics (Phase 13B → 13C promotion gate)
 
     /// Stale threshold: pending proposals older than this are counted as "never reviewed."

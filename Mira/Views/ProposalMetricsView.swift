@@ -29,6 +29,8 @@ struct ProposalMetricsView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             globalSection
                             Divider().background(Color.white.opacity(0.06))
+                            outcomeFunnelSection
+                            Divider().background(Color.white.opacity(0.06))
                             dimensionsSection
                             Divider().background(Color.white.opacity(0.06))
                             gateBreakdownSection
@@ -457,6 +459,58 @@ struct ProposalMetricsView: View {
         .padding(8)
         .background(amber.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 6)))
+    }
+
+    // MARK: - Phase 15 outcome funnel
+
+    private var outcomeFunnelSection: some View {
+        let funnel = proposalStore.outcomeFunnel(for: engine.projects)
+        return VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Outcome Funnel")
+            if funnel.approved == 0 {
+                Text("No approved proposals yet — funnel begins at approval.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.28))
+            } else {
+                VStack(spacing: 6) {
+                    funnelRow("Approved",      count: funnel.approved,    of: funnel.approved,  color: accent)
+                    funnelRow("Implemented",   count: funnel.implemented, of: funnel.approved,  color: successG)
+                    funnelRow("Improved",      count: funnel.improved,    of: funnel.implemented == 0 ? 1 : funnel.implemented, color: successG.opacity(0.75))
+                    funnelRow("Not Reverted",  count: funnel.notReverted, of: funnel.improved   == 0 ? 1 : funnel.improved,    color: successG.opacity(0.50))
+                }
+                Text("Record outcomes in each approved proposal's detail view.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.22))
+                    .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private func funnelRow(_ label: String, count: Int, of total: Int, color: Color) -> some View {
+        let pct = total > 0 ? Double(count) / Double(total) : 0
+        return HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.65))
+                .frame(width: 96, alignment: .leading)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.55))
+                        .frame(width: geo.size.width * pct)
+                }
+            }
+            .frame(height: 10)
+            Text("\(count)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(color)
+                .frame(width: 28, alignment: .trailing)
+            Text(total > 0 ? String(format: "%.0f%%", pct * 100) : "—")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.28))
+                .frame(width: 30, alignment: .trailing)
+        }
     }
 
     // MARK: - Latency
