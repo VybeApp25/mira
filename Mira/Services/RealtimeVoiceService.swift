@@ -96,7 +96,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private var captureEngine   = AVAudioEngine()
     private var inputConverter: AVAudioConverter?
-    private let captureRate:    Double = 24_000
+    private let captureRate:    Double = 16_000   // OpenAI Realtime expects PCM16 at 16 kHz
 
     // MARK: Private — Audio playback (API → speakers)
 
@@ -456,14 +456,20 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let contextBlock = ContextService.shared.buildPromptBlock()
         let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
 
-        var session: [String: Any] = [
-            "type":         "realtime",
-            "instructions": instructions,
-        ]
+        var session: [String: Any] = ["instructions": instructions]
 
         if includeFullConfig {
-            // gpt-realtime-2 rejects modalities, voice, turn_detection, all audio format fields.
-            // Only tools and tool_choice are configurable beyond type + instructions.
+            session["modalities"]    = ["text", "audio"]
+            session["voice"]         = MiraVoice.saved.rawValue
+            session["input_audio_format"]        = "pcm16"
+            session["output_audio_format"]       = "pcm16"
+            session["input_audio_transcription"] = ["model": "whisper-1"] as [String: Any]
+            session["turn_detection"] = [
+                "type":               "server_vad",
+                "threshold":          0.5,
+                "prefix_padding_ms":  300,
+                "silence_duration_ms": 500
+            ] as [String: Any]
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
         }

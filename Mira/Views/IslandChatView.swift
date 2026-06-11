@@ -495,17 +495,18 @@ struct IslandChatView: View {
 
     private var voiceStatusBar: some View {
         HStack(spacing: 12) {
-            RealtimeOrb(state: realtime.state)
+            VoiceActivityIndicator(state: realtime.state,
+                                   powerHistory: realtime.audioPowerHistory)
+                .frame(width: 44, height: 26)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(voiceStatusLabel)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
 
-                // Priority: tool status > user draft > ai transcript
                 let subtitle: String = {
-                    if !realtime.toolStatus.isEmpty  { return realtime.toolStatus }
-                    if realtime.state == .recording   { return realtime.userDraft }
+                    if !realtime.toolStatus.isEmpty { return realtime.toolStatus }
+                    if realtime.state == .recording  { return realtime.userDraft }
                     return realtime.aiDraft
                 }()
                 if !subtitle.isEmpty {
@@ -914,44 +915,96 @@ private struct InlineChatJobCard: View {
 // MARK: - Realtime orb
 
 /// Animated circle that reflects the current realtime voice state.
-private struct RealtimeOrb: View {
+// HeyClicky-style three-state voice activity indicator:
+// recording → waveform bars driven by mic power
+// thinking  → three bouncing dots
+// speaking  → equalizer bars at staggered speeds
+private struct VoiceActivityIndicator: View {
     let state: RealtimeState
-    @State private var pulse: CGFloat = 1.0
-
-    private var color: Color {
-        switch state {
-        case .recording:    return Color(red: 0.20, green: 0.84, blue: 0.29)
-        case .transcribing: return Color(red: 0.29, green: 0.62, blue: 1.0)
-        case .thinking:     return Color(red: 1.0,  green: 0.75, blue: 0.20)
-        case .speaking:     return Color(red: 0.75, green: 0.35, blue: 0.95)
-        default:            return .white.opacity(0.25)
-        }
-    }
-
-    private var shouldPulse: Bool {
-        state == .recording || state == .speaking
-    }
+    let powerHistory: [CGFloat]
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(0.20))
-                .frame(width: 32, height: 32)
-                .scaleEffect(pulse)
-            Circle()
-                .fill(color)
-                .frame(width: 18, height: 18)
-            Image(systemName: "waveform")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(.white)
+        switch state {
+        case .recording:
+            ListeningWaveformBars(powerHistory: powerHistory)
+        case .thinking, .connecting, .transcribing:
+            ThinkingDots()
+        case .speaking:
+            SpeakingEqualizerBars()
+        default:
+            ListeningWaveformBars(powerHistory: Array(repeating: 0.02, count: 44))
         }
-        .onChange(of: shouldPulse) { active in
-            if active {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    pulse = 1.35
+    }
+}
+
+private struct ListeningWaveformBars: View {
+    let powerHistory: [CGFloat]
+
+    private let barCount = 7
+    private let barWidth: CGFloat = 3
+    private let spacing:  CGFloat = 2.5
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(0..<barCount, id: \.self) { i in
+                let idx = max(0, powerHistory.count - barCount + i)
+                let raw  = idx < powerHistory.count ? powerHistory[idx] : 0.02
+                let h    = max(3, raw * 26)
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color(red: 0.29, green: 0.62, blue: 1.0))
+                    .frame(width: barWidth, height: h)
+                    .animation(.easeOut(duration: 0.08), value: h)
+            }
+        }
+    }
+}
+
+private struct ThinkingDots: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color(red: 0.98, green: 0.82, blue: 0.34))
+                    .frame(width: 6, height: 6)
+                    .offset(y: sin(phase + CGFloat(i) * .pi * 0.7) * 5)
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                phase = .pi * 2
+            }
+        }
+    }
+}
+
+private struct SpeakingEqualizerBars: View {
+    private let barCount = 5
+    private let barWidth: CGFloat = 3.5
+    private let spacing:  CGFloat = 2.5
+    private let speeds:   [Double] = [0.38, 0.52, 0.31, 0.58, 0.44]
+    @State private var heights: [CGFloat] = [10, 18, 8, 22, 14]
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(0..<barCount, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color(red: 0.55, green: 0.85, blue: 0.80))
+                    .frame(width: barWidth, height: heights[i])
+                    .animation(
+                        .easeInOut(duration: speeds[i]).repeatForever(autoreverses: true),
+                        value: heights[i]
+                    )
+            }
+        }
+        .onAppear {
+            for i in 0..<barCount {
+                withAnimation(
+                    .easeInOut(duration: speeds[i]).repeatForever(autoreverses: true)
+                ) {
+                    heights[i] = [24, 10, 26, 8, 20][i]
                 }
-            } else {
-                withAnimation(.spring()) { pulse = 1.0 }
             }
         }
     }
