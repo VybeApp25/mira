@@ -123,7 +123,7 @@ final class AudioCueService {
     func playTextSend()            { play(.textSend) }
     func playTextReceive()         { play(.textReceive) }
     func playTextClose()           { play(.textClose) }
-    func playVoiceStart()          { play(.ff) }
+    func playVoiceStart()          { /* silent — no activation chime on voice start */ }
     func playClarification()       { play(.question) }
     func playConnectionQuestion()  { play(.connectionQuestion) }
 
