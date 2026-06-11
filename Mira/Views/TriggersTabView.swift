@@ -4,7 +4,7 @@
 import SwiftUI
 
 private let cardBG  = Color(red: 0.11, green: 0.11, blue: 0.14)
-private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let accent  = DS.Colors.accent
 private let amber   = Color(red: 1.0,  green: 0.75, blue: 0.20)
 private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
 

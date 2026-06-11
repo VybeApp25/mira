@@ -61,7 +61,7 @@ struct AgentHUDView: View {
     @ObservedObject var hud: HUDService
 
     // Accent matches the island's blue
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -129,7 +129,7 @@ private struct HUDMessageRow: View {
     let update: HUDUpdate
     let isCurrent: Bool
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -152,7 +152,7 @@ private struct HUDMessageRow: View {
 
 private struct PulsingDot: View {
     @State private var pulsing = false
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         Circle()

@@ -9,7 +9,7 @@ struct ClarificationCard: View {
     @State private var currentStep = 0
     @State private var textInput   = ""
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let surface  = Color.white.opacity(0.04)
     private let divider  = Color.white.opacity(0.08)
 

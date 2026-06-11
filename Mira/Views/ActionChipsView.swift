@@ -37,7 +37,7 @@ private struct ChipButton: View {
 
     @State private var pressed = false
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         Button(action: action) {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let miraBlue = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let miraBlue = DS.Colors.accent
 private let panelBG  = Color(red: 0.09, green: 0.09, blue: 0.11)
 private let surfaceBG = Color(red: 0.13, green: 0.13, blue: 0.16)
 

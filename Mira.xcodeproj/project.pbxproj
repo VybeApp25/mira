@@ -109,6 +109,7 @@
 		6354AEC26CBF8A68590170E0 /* reminders_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 041B7A6A32E7D953B37E758B /* reminders_rw.py */; };
 		64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4486101C5C80FCD26BD6F11C /* OnboardingService.swift */; };
 		65A733FC2AA9E0468290BBD9 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 177D935B2C9FEEDB97A25EE9 /* IOKit.framework */; };
+		00DSGN11AA22BB33CC442222 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00DSGN11AA22BB33CC441111 /* DesignSystem.swift */; };
 		6662E3A1A711180F0D5F6856 /* MiraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847AFAFC451130DC3C6A6545 /* MiraApp.swift */; };
 		672A2547217E0BAB12193C2E /* OutputStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556FE075FEBF1DA1129BA4C8 /* OutputStore.swift */; };
 		672D0A3D7C0666D0587DB0C3 /* AppContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */; };
@@ -254,6 +255,7 @@
 
 /* Begin PBXFileReference section */
 		00BE74A77CD7AABB77733BC1 /* realtime-voice-preview-cedar.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "realtime-voice-preview-cedar.mp3"; sourceTree = "<group>"; };
+		00DSGN11AA22BB33CC441111 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		01ACF9118D36B54D9E00146F /* ComputerUseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseService.swift; sourceTree = "<group>"; };
 		041B7A6A32E7D953B37E758B /* reminders_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = reminders_rw.py; sourceTree = "<group>"; };
 		04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDController.swift; sourceTree = "<group>"; };
@@ -667,6 +669,7 @@
 		B1E35459BDE79C37D5E39EE8 /* Mira */ = {
 			isa = PBXGroup;
 			children = (
+				00DSGN11AA22BB33CC441111 /* DesignSystem.swift */,
 				B81907F9DDB9297D51C992A8 /* Assets.xcassets */,
 				D6A379AF3382596E92921264 /* Info.plist */,
 				DA0389949E9946918CEE0916 /* Mira.entitlements */,
@@ -1031,6 +1034,7 @@
 				2984C9424D7B8E9A636ADAE5 /* AgentOutputsView.swift in Sources */,
 				421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */,
 				5115F2CE84E84A8009B70C81 /* AgentResultView.swift in Sources */,
+				00DSGN11AA22BB33CC442222 /* DesignSystem.swift in Sources */,
 				F957E4929A175438F6FA0F24 /* AgentService.swift in Sources */,
 				4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */,
 				BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */,

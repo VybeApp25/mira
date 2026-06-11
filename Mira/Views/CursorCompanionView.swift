@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Design tokens
 
-private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let accent   = DS.Colors.accent
 private let positive = Color(red: 0.11, green: 0.73, blue: 0.33)
 private let negative = Color(red: 1.0,  green: 0.27, blue: 0.23)
 private let surface  = Color(red: 0.11, green: 0.11, blue: 0.14)

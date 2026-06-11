@@ -82,9 +82,9 @@ struct IslandChatView: View {
         }
     }
 
-    private let accent    = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent    = DS.Colors.accent
     private let miraTeale = Color(red: 0.20, green: 0.85, blue: 0.75)
-    private let surface   = Color(red: 0.14, green: 0.14, blue: 0.17)
+    private let surface   = DS.Colors.surface2
     private var claude: ClaudeService { ClaudeService(apiKey: miraState.effectiveAPIKey) }
 
     var body: some View {
@@ -110,7 +110,7 @@ struct IslandChatView: View {
             }
             if let action = pendingAction { confirmCard(action) }
             if let err    = errorText     { errorBanner(err)    }
-            if isVoiceActive { voiceStatusBar } else { inputBar }
+            bottomPanel
         }
         .onChange(of: dictate.partial) { _, partial in
             if dictate.isStreaming { input = partial }
@@ -291,8 +291,8 @@ struct IslandChatView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color.white.opacity(0.055))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(DS.Colors.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -302,16 +302,15 @@ struct IslandChatView: View {
     @ViewBuilder
     private func messageRow(_ msg: ChatMessage) -> some View {
         if msg.role == .user {
-            // User: right-aligned bubble
             HStack {
-                Spacer(minLength: 80)
+                Spacer(minLength: 60)
                 Text(msg.text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(accent.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.80))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(DS.Colors.surface3)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.extraLarge, style: .continuous))
             }
         } else if let jobId = msg.agentJobId {
             // Agent job card — live status inline in chat
@@ -398,67 +397,122 @@ struct IslandChatView: View {
         .background(Color.orange.opacity(0.09))
     }
 
-    // MARK: - Input bar (matches mockup: wide field + 3 icon buttons)
+    // MARK: - Bottom panel: NotchActivitySurface + hint row + InlineFollowUpComposer
 
-    private var inputBar: some View {
+    private var bottomPanel: some View {
         VStack(spacing: 0) {
+            if isVoiceActive {
+                notchActivitySurface
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(height: 0.5)
             voiceShortcutHintRow
-            HStack(spacing: 8) {
-            // Text field
+            inlineFollowUpComposer
+        }
+        .background(DS.Colors.surface1)
+        .animation(.easeInOut(duration: 0.18), value: isVoiceActive)
+    }
+
+    // Activity surface shown above the composer when voice is active
+    private var notchActivitySurface: some View {
+        HStack(spacing: 10) {
+            VoiceActivityIndicator(state: realtime.state, powerHistory: realtime.audioPowerHistory)
+                .frame(width: 44, height: 22)
+
+            Text(voiceStatusLabel)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.80))
+                .animation(.easeInOut(duration: 0.15), value: voiceStatusLabel)
+
+            Spacer()
+
+            Button { realtime.stop() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 19))
+                    .foregroundColor(.white.opacity(0.30))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+
+    // Single composer that morphs: waveform when recording, text field when idle
+    private var inlineFollowUpComposer: some View {
+        HStack(spacing: 8) {
             ZStack(alignment: .leading) {
-                if input.isEmpty {
-                    HStack(spacing: 0) {
-                        Text("How can I help you today?")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.22))
+                RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous)
+                    .fill(DS.Colors.surface2)
+
+                if isVoiceActive {
+                    HStack {
                         Spacer()
-                        wakeWordBadge.padding(.trailing, 4)
+                        VoiceActivityIndicator(state: realtime.state, powerHistory: realtime.audioPowerHistory)
+                            .frame(width: 64, height: 22)
+                        Spacer()
+                    }
+                    .transition(.opacity)
+                } else {
+                    HStack(spacing: 0) {
+                        ZStack(alignment: .leading) {
+                            if input.isEmpty {
+                                Text("Type a follow-up message")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.22))
+                                    .accessibilityHidden(true)
+                            }
+                            TextField("", text: $input)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .tint(accent)
+                                .onSubmit { Task { await submit() } }
+                                .accessibilityLabel("Message")
+                        }
+                        if input.isEmpty {
+                            wakeWordBadge.padding(.trailing, 4)
+                        }
                     }
                     .padding(.horizontal, 12)
-                    .accessibilityHidden(true)
+                    .transition(.opacity)
                 }
-                TextField("", text: $input)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
-                    .tint(accent)
-                    .padding(.horizontal, 12)
-                    .onSubmit { Task { await submit() } }
-                    .accessibilityLabel("Message to Mira")
             }
             .frame(height: 34)
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .animation(.easeInOut(duration: 0.18), value: isVoiceActive)
+            .clipped()
 
             #if DEBUG
-            inputIconButton(icon: "viewfinder.circle", a11yLabel: "Test overlay") { overlay.showTest() }
+            if !isVoiceActive {
+                inputIconButton(icon: "viewfinder.circle", a11yLabel: "Test overlay") { overlay.showTest() }
+            }
             #endif
 
-            inputIconButton(icon: "arrow.up.circle.fill",
-                            tint: canSend ? accent : nil,
-                            disabled: !canSend,
-                            a11yLabel: "Send message") {
-                Task { await submit() }
+            if !isVoiceActive {
+                inputIconButton(icon: "arrow.up.circle.fill",
+                                tint: canSend ? accent : nil,
+                                disabled: !canSend,
+                                a11yLabel: "Send message") {
+                    Task { await submit() }
+                }
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.white.opacity(0.03))
-        .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
-        } // closes VStack content
+        .padding(.bottom, 9)
+        .padding(.top, 4)
     }
 
-    // HeyClicky-style shortcut hint + always-on toggle
     private var voiceShortcutHintRow: some View {
         let voiceLabel = ShortcutStore.shared.voice.displayString
         let alwaysOn   = realtime.isAlwaysOnActive
         return HStack(spacing: 6) {
             KeyCapChip(label: voiceLabel)
-            Text("Hold to talk · release to send")
+            Text("Hold to start a voice session. Release to send.")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.22))
+                .lineLimit(1)
             Spacer()
-            // Always-on toggle — tap to keep mic open between turns (no hotkey needed)
             Button {
                 NotificationCenter.default.post(name: .miraToggleAlwaysOn, object: nil)
             } label: {
@@ -476,7 +530,7 @@ struct IslandChatView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
-        .padding(.top, 6)
+        .padding(.top, 5)
         .padding(.bottom, 2)
     }
 
@@ -508,49 +562,6 @@ struct IslandChatView: View {
         }
     }
 
-    // MARK: - Voice status bar (shown instead of input bar when realtime is active)
-
-    private var voiceStatusBar: some View {
-        HStack(spacing: 12) {
-            VoiceActivityIndicator(state: realtime.state,
-                                   powerHistory: realtime.audioPowerHistory)
-                .frame(width: 44, height: 26)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(voiceStatusLabel)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-
-                let subtitle: String = {
-                    if !realtime.toolStatus.isEmpty { return realtime.toolStatus }
-                    if realtime.state == .recording  { return realtime.userDraft }
-                    return realtime.aiDraft
-                }()
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor(realtime.toolStatus.isEmpty
-                                         ? .white.opacity(0.45)
-                                         : Color(red: 1.0, green: 0.70, blue: 0.25))
-                        .lineLimit(1)
-                        .animation(.easeInOut(duration: 0.2), value: subtitle)
-                }
-            }
-
-            Spacer()
-
-            Button { realtime.stop() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.white.opacity(0.35))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.04))
-        .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
-    }
 
     // Wake word idle indicator — shown in input bar when not in a voice session
     private var wakeWordBadge: some View {
@@ -567,13 +578,13 @@ struct IslandChatView: View {
 
     private var voiceStatusLabel: String {
         switch realtime.state {
-        case .connecting:    return "Connecting…"
-        case .recording:     return "Listening…"
-        case .transcribing:  return "Connecting…"
-        case .thinking:      return "Thinking…"
-        case .speaking:      return "Mira is speaking"
+        case .connecting:    return "Connecting..."
+        case .recording:     return "Listening"
+        case .transcribing:  return "Connecting..."
+        case .thinking:      return realtime.toolStatus.isEmpty ? "Thinking" : "Thinking deeper"
+        case .speaking:      return "Speaking"
         case .error(let m):  return m
-        default:             return "Voice"
+        default:             return "Listening"
         }
     }
 
@@ -835,10 +846,10 @@ private struct InlineChatJobCard: View {
 
     private var job: AgentJob? { store.job(id: jobId) }
 
-    private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
-    private let green   = Color(red: 0.20, green: 0.84, blue: 0.29)
-    private let red     = Color(red: 1.0,  green: 0.35, blue: 0.35)
-    private let surface = Color(red: 0.13, green: 0.13, blue: 0.16)
+    private let accent  = DS.Colors.accent
+    private let green   = DS.Colors.success
+    private let red     = DS.Colors.error
+    private let surface = DS.Colors.surface1
 
     var body: some View {
         if let job = job {
@@ -875,7 +886,7 @@ private struct InlineChatJobCard: View {
                 if job.status.isActive {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            Color.white.opacity(0.06).frame(height: 2)
+                            DS.Colors.surface3.frame(height: 2)
                             green
                                 .frame(width: max(0, geo.size.width * job.progress), height: 2)
                                 .animation(.linear(duration: 0.4), value: job.progress)
@@ -899,13 +910,13 @@ private struct InlineChatJobCard: View {
                         Button {
                             NotificationCenter.default.post(
                                 name: .miraTabSelected,
-                                object: IslandTab.projects
+                                object: IslandTab.agents
                             )
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "folder")
+                                Image(systemName: "cpu")
                                     .font(.system(size: 9))
-                                Text("View in Library")
+                                Text("View in Agents")
                                     .font(.system(size: 10, weight: .medium))
                             }
                             .foregroundColor(accent)
@@ -927,8 +938,8 @@ private struct InlineChatJobCard: View {
                 }
             }
             .background(surface)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.large))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.large).stroke(DS.Colors.borderSubtle, lineWidth: 0.5))
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -941,6 +952,18 @@ private struct InlineChatJobCard: View {
         default:          return accent
         }
     }
+}
+
+// MARK: - Color lerp helper
+
+private func lerp(_ a: Color, _ b: Color, t: CGFloat) -> Color {
+    guard let ca = NSColor(a).usingColorSpace(.sRGB),
+          let cb = NSColor(b).usingColorSpace(.sRGB) else { return a }
+    return Color(
+        red:   ca.redComponent   + (cb.redComponent   - ca.redComponent)   * t,
+        green: ca.greenComponent + (cb.greenComponent - ca.greenComponent) * t,
+        blue:  ca.blueComponent  + (cb.blueComponent  - ca.blueComponent)  * t
+    )
 }
 
 // MARK: - Realtime orb
@@ -981,9 +1004,13 @@ private struct ListeningWaveformBars: View {
                 let idx = max(0, powerHistory.count - barCount + i)
                 let raw  = idx < powerHistory.count ? powerHistory[idx] : 0.02
                 let h    = max(3, raw * 26)
+                let t = CGFloat(i) / CGFloat(barCount - 1)
+                let barColor = lerp(BuddyComposerVisualStyle.waveformLeadingColor,
+                                    BuddyComposerVisualStyle.waveformTrailingColor, t: t)
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color(red: 0.29, green: 0.62, blue: 1.0))
+                    .fill(barColor)
                     .frame(width: barWidth, height: h)
+                    .shadow(color: BuddyComposerVisualStyle.waveformGlowColor.opacity(0.5), radius: 3)
                     .animation(.easeOut(duration: 0.08), value: h)
             }
         }
@@ -1021,7 +1048,7 @@ private struct SpeakingEqualizerBars: View {
         HStack(spacing: spacing) {
             ForEach(0..<barCount, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color(red: 0.55, green: 0.85, blue: 0.80))
+                    .fill(BuddyComposerVisualStyle.waveformTrailingColor)
                     .frame(width: barWidth, height: heights[i])
                     .animation(
                         .easeInOut(duration: speeds[i]).repeatForever(autoreverses: true),

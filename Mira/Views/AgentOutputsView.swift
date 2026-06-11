@@ -3,7 +3,7 @@ import AppKit
 
 private let surface  = Color(red: 0.11, green: 0.11, blue: 0.13)
 private let surface2 = Color(red: 0.14, green: 0.14, blue: 0.17)
-private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let accent   = DS.Colors.accent
 private let green    = Color(red: 0.20, green: 0.84, blue: 0.29)
 private let amber    = Color(red: 1.0,  green: 0.78, blue: 0.20)
 private let red      = Color(red: 1.0,  green: 0.35, blue: 0.35)

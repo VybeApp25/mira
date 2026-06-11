@@ -141,7 +141,7 @@ struct SharedStatusView: View {
         let barW: CGFloat = isCompact ? 2.0 : 2.5
         let maxH: CGFloat = isCompact ? 12  : 16
         let minH: CGFloat = 3
-        let blue = Color(red: 0.29, green: 0.62, blue: 1.0)
+        let blue = DS.Colors.accent
         let bars = HStack(spacing: isCompact ? 1.5 : 2) {
             ForEach(0..<5, id: \.self) { i in
                 let amp = CGFloat((sin((t + Self.listenOffsets[i]) / Self.listenSpeeds[i] * .pi * 2) + 1) / 2)

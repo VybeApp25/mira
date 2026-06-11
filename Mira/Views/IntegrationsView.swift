@@ -66,7 +66,7 @@ struct IntegrationsView: View {
     @State private var searchText            = ""
     @State private var agentOnline           = false
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
     private let green  = Color(red: 0.20, green: 0.84, blue: 0.29)
 
     // MARK: - Computed lists
@@ -411,7 +411,7 @@ struct IntegrationSuggestionBanner: View {
     let onConnect: () -> Void
     let onDismiss: () -> Void
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         HStack(spacing: 10) {

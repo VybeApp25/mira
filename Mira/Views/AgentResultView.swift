@@ -11,7 +11,7 @@ struct AgentResultView: View {
     @ObservedObject var chipService: ActionChipService
     var onChipTapped: (String) -> Void = { _ in }
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
 
     var body: some View {

@@ -5,7 +5,7 @@ import CoreGraphics
 
 private let bg      = Color(red: 0.09, green: 0.09, blue: 0.11)
 private let surface = Color(red: 0.13, green: 0.13, blue: 0.16)
-private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let accent  = DS.Colors.accent
 
 // MARK: - Try-it entry
 

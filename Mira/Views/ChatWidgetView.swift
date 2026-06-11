@@ -248,7 +248,7 @@ struct ArtifactCardView: View {
     private var accentColor: Color {
         switch info.accentColor {
         case "red":    return Color(red: 0.95, green: 0.35, blue: 0.35)
-        case "blue":   return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case "blue":   return DS.Colors.accent
         case "green":  return Color(red: 0.18, green: 0.78, blue: 0.45)
         case "yellow": return Color(red: 0.95, green: 0.80, blue: 0.20)
         case "orange": return Color(red: 0.99, green: 0.58, blue: 0.15)

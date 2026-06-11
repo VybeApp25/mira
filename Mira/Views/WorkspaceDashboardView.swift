@@ -16,7 +16,7 @@ struct WorkspaceDashboardView: View {
     @State private var causalInsights: [CausalInsight] = []
     @State private var generatingReview = false
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

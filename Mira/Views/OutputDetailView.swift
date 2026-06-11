@@ -3,7 +3,7 @@ import AppKit
 
 private let detailBg    = Color(red: 0.08, green: 0.08, blue: 0.10)
 private let detailSurf  = Color(red: 0.12, green: 0.12, blue: 0.14)
-private let detailAccent = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let detailAccent = DS.Colors.accent
 private let detailGreen  = Color(red: 0.20, green: 0.84, blue: 0.29)
 private let detailAmber  = Color(red: 1.0,  green: 0.78, blue: 0.20)
 private let detailRed    = Color(red: 1.0,  green: 0.35, blue: 0.35)

@@ -30,7 +30,7 @@ enum SharpieColor {
     var color: Color {
         switch self {
         case .orange: return Color(red: 1.0,  green: 0.42, blue: 0.21)
-        case .blue:   return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .blue:   return DS.Colors.accent
         case .red:    return Color(red: 1.0,  green: 0.25, blue: 0.25)
         case .green:  return Color(red: 0.20, green: 0.84, blue: 0.29)
         }

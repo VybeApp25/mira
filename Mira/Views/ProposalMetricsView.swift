@@ -11,7 +11,7 @@ struct ProposalMetricsView: View {
     @ObservedObject private var engine        = ProjectEngine.shared
     @ObservedObject private var proposalStore = ProposalStore.shared
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
     private let muted    = Color.white.opacity(0.18)

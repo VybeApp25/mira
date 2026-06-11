@@ -164,8 +164,8 @@ struct StreamingMarkdownView: View {
 
     private let codeBackground = Color(red: 0.10, green: 0.10, blue: 0.14)
     private let codeBorder     = Color.white.opacity(0.08)
-    private let quoteBorder    = Color(red: 0.29, green: 0.62, blue: 1.0).opacity(0.50)
-    private let bulletDot      = Color(red: 0.29, green: 0.62, blue: 1.0).opacity(0.60)
+    private let quoteBorder    = DS.Colors.accent.opacity(0.50)
+    private let bulletDot      = DS.Colors.accent.opacity(0.60)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

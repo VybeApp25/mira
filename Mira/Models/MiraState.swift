@@ -48,7 +48,7 @@ class MiraState: ObservableObject {
     /// Short description of what the cursor is hovering over. Set by HoverInsightManager; auto-clears after 5 s.
     @Published var hoverSummary: String?
 
-    var cursorColor: Color { Color(red: 0.29, green: 0.62, blue: 1.0) }
+    var cursorColor: Color { DS.Colors.accent }
 
     // Connected Composio apps
     var connectedApps: Set<String> {

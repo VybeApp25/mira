@@ -9,7 +9,7 @@ struct ThreadsTabView: View {
 
     @ObservedObject private var store = ConversationStore.shared
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     private var groupedEntries: [(label: String, entries: [ConversationStore.Entry])] {
         let cal = Calendar.current

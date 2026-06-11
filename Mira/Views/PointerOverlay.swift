@@ -4,7 +4,7 @@ struct PointerOverlay: View {
     let point: CGPoint
     let label: String
     let screenSize: CGSize
-    var color: Color = Color(red: 0.29, green: 0.62, blue: 1.0)
+    var color: Color = DS.Colors.accent
 
     @State private var ring: CGFloat = 1.0
 

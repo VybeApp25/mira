@@ -28,7 +28,7 @@ private struct TimelineEvent: Identifiable {
 
 private struct LivePulseDot: View {
     @State private var pulsing = false
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
     var body: some View {
         Circle()
             .fill(accent)
@@ -51,7 +51,7 @@ struct ProjectsTabView: View {
     @State private var showNewForm = false
     @State private var newGoal     = ""
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         ZStack {
@@ -182,7 +182,7 @@ struct ProjectsTabView: View {
 
 private struct ProjectRowView: View {
     let project: MiraProject
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
     private var depBlocked: Bool { ProjectEngine.shared.isBlockedByDependency(project.id) }
@@ -293,7 +293,7 @@ private struct ProjectDetailView: View {
     @State private var depKind: DependencyKind = .blocks
     @State private var depNote = ""
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
 
@@ -1107,7 +1107,7 @@ private struct PersonaBadge: View {
 
     private var personaColor: Color {
         switch persona {
-        case .developer:  return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .developer:  return DS.Colors.accent
         case .tester:     return Color(red: 0.20, green: 0.84, blue: 0.60)
         case .researcher: return Color(red: 0.76, green: 0.60, blue: 1.0)
         case .writer:     return Color(red: 1.0,  green: 0.75, blue: 0.20)
@@ -1162,7 +1162,7 @@ private struct SessionDetailView: View {
     let project: MiraProject
     let onBack:  () -> Void
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1298,7 +1298,7 @@ private struct SessionDetailView: View {
 
 private struct ProposalRowView: View {
     let proposal: ProposalMetadata
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
     private let amber  = Color(red: 1.0,  green: 0.75, blue: 0.20)
 
     var body: some View {
@@ -1431,7 +1431,7 @@ private struct ApprovedProposalRowView: View {
         switch s {
         case .unknown:  return .white.opacity(0.30)
         case .improved: return successG
-        case .neutral:  return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .neutral:  return DS.Colors.accent
         case .worsened: return Color(red: 1.0, green: 0.40, blue: 0.40)
         }
     }
@@ -1466,7 +1466,7 @@ private struct ProposalDetailView: View {
     @State private var oNote:        String               = ""
     @State private var oSubmitted:   Bool                 = false
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
 
@@ -1646,7 +1646,7 @@ private struct ProposalDetailView: View {
     private func confidenceColor(_ level: ReviewConfidence) -> Color {
         switch level {
         case .low:    return Color(red: 1.0, green: 0.75, blue: 0.20)   // amber
-        case .medium: return Color(red: 0.29, green: 0.62, blue: 1.0)   // accent blue
+        case .medium: return DS.Colors.accent   // accent blue
         case .high:   return Color(red: 0.20, green: 0.84, blue: 0.60)  // successG
         }
     }
@@ -1924,7 +1924,7 @@ private struct CompletionSummaryView: View {
     let project: MiraProject
     let onBack:  () -> Void
 
-    private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent   = DS.Colors.accent
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let columns  = [GridItem(.flexible()), GridItem(.flexible())]
 

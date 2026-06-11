@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case chat, home, agents, briefing, projects, reliability, threads, crons, computerUse, skills, triggers }
+enum IslandTab: Equatable { case home, agents, settings, crons }
 
 // MARK: - Main island view
 
@@ -61,13 +61,7 @@ struct MiraIslandView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Default to briefing on first expansion of the day; Chat every other time
-    @State private var selectedTab: IslandTab = {
-        let last   = UserDefaults.standard.object(forKey: "mira_last_briefing") as? Date
-        let isNew  = last.map { !Calendar.current.isDateInToday($0) } ?? true
-        return isNew ? .briefing : .chat
-    }()
-    @State private var showSettings    = false
+    @State private var selectedTab: IslandTab = .home
     @StateObject private var pillState = PillStateModel()
     // Agent flight burst — pulsing ring that fires on job launch
     @State private var showBurst       = false
@@ -109,16 +103,16 @@ struct MiraIslandView: View {
             pill
         }
         .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
-            if let tab = notif.object as? IslandTab {
+            if let tab = notif.object as? IslandTab, [IslandTab.home, .agents].contains(tab) {
                 withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
+            } else if let str = notif.userInfo?["tab"] as? String {
+                if str == "agents" { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents } }
+                else               { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   } }
             }
         }
         // Opt out of the macOS safe-area inset (menu bar height ≈ 33pt).
         // Without this the pill is pushed ~33pt below the notch, leaving a gap.
         .ignoresSafeArea()
-        .sheet(isPresented: $showSettings) {
-            SettingsView(state: miraState)
-        }
         // Sync existing RealtimeState → PillStateModel (debounced)
         .onChange(of: miraState.realtimeState) { _, new in
             if case .error = new { pillState.postEvent(.error) }
@@ -165,10 +159,10 @@ struct MiraIslandView: View {
     private var pill: some View {
         ZStack {
             if transparentPanes {
-                Color.black.opacity(0.55)
+                DS.Colors.background.opacity(0.75)
                     .background(.ultraThinMaterial)
             } else {
-                Color.black
+                DS.Colors.background
             }
             if isExpanded {
                 expandedContent
@@ -282,7 +276,7 @@ struct MiraIslandView: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 4).padding(.vertical, 2)
-                        .background(Color(red: 0.29, green: 0.62, blue: 1.0))
+                        .background(DS.Colors.accent)
                         .clipShape(Capsule())
                         .transition(.opacity)
                 } else if pointTo.isActive {
@@ -308,7 +302,7 @@ struct MiraIslandView: View {
 
     private var collapsedAccent: Color {
         switch pillState.mode {
-        case .listening: return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .listening: return DS.Colors.accent
         case .thinking:  return miraViolet
         case .working:   return miraViolet
         case .speaking:  return miraTeale
@@ -347,7 +341,7 @@ struct MiraIslandView: View {
     @ViewBuilder
     private var continuationBanner: some View {
         if let project = engine.pendingContinuation {
-            let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+            let accent = DS.Colors.accent
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     ZStack {
@@ -381,7 +375,7 @@ struct MiraIslandView: View {
                     Button {
                         let prompt = ProjectEngine.shared.buildResumePrompt(for: project)
                         engine.dismissContinuation()
-                        selectedTab = .chat
+                        selectedTab = .home
                         NotificationCenter.default.post(
                             name: .miraChipPromptSelected,
                             object: nil,
@@ -445,7 +439,7 @@ struct MiraIslandView: View {
                 chipService: chipService,
                 onChipTapped: { prompt in
                     // Fix 3: route chip prompt into the chat tab
-                    selectedTab = .chat
+                    selectedTab = .home
                     animController.clearHUD()
                     NotificationCenter.default.post(
                         name: .miraChipPromptSelected,
@@ -501,14 +495,14 @@ struct MiraIslandView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .background(DS.Colors.background)
     }
 
     private func hoverSummaryBar(_ text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "eye.fill")
                 .font(.system(size: 10))
-                .foregroundColor(Color(red: 0.29, green: 0.62, blue: 1.0).opacity(0.6))
+                .foregroundColor(DS.Colors.accent.opacity(0.6))
             Text(text)
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.78))
@@ -534,34 +528,13 @@ struct MiraIslandView: View {
 
     private var navBar: some View {
         HStack(spacing: 4) {
-            // Left group — primary tabs
-            navTab(icon: "message.fill",        label: "Chat",     tab: .chat)
-            navTab(icon: "folder.fill",         label: "Projects", tab: .projects)
-            navTab(icon: "sparkles",            label: "Today",    tab: .briefing)
-            navTab(icon: "house.fill",          label: "Home",     tab: .home)
-            navTab(icon: "cpu",                 label: "Agents",   tab: .agents)
-            navTab(icon: "bubble.left.and.bubble.right.fill", label: "Threads", tab: .threads)
-            navTab(icon: "chart.bar.fill",      label: "Stats",    tab: .reliability)
-            navTab(icon: "clock.fill",          label: "Crons",    tab: .crons)
-            navTab(icon: "desktopcomputer",    label: "Control",  tab: .computerUse)
-            navTab(icon: "sparkles",           label: "Skills",   tab: .skills)
-            navTab(icon: "arrow.down.circle.fill", label: "Triggers", tab: .triggers)
+            navTab(icon: "house.fill",    label: "Home",     tab: .home)
+            navTab(icon: "cpu.fill",      label: "Agents",   tab: .agents)
+            navTab(icon: "clock.fill",    label: "Crons",    tab: .crons)
+            navTab(icon: "gearshape.fill",label: "Settings", tab: .settings)
 
             Spacer()
 
-            // Right group — HUD controls + status + utilities
-            if voice.isListening {
-                HStack(spacing: 3) {
-                    Circle().fill(Color.red).frame(width: 5, height: 5)
-                    Text(voice.liveTranscript.isEmpty ? "Listening" : voice.liveTranscript)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.45))
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 8)
-            }
-
-            // Stop — shown whenever HUD has an active route
             if hudVM.state.isActive {
                 Button { hudVM.send(.cancelRequested) } label: {
                     Image(systemName: "stop.fill")
@@ -574,38 +547,20 @@ struct MiraIslandView: View {
                 .accessibilityLabel("Stop agent")
             }
 
-            // Mute toggle
-            Button { hudVM.send(.muteToggled(hudVM.state != .muted)) } label: {
-                Image(systemName: hudVM.state == .muted ? "mic.slash.fill" : "mic")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(hudVM.state == .muted
-                        ? Color(red: 1.0, green: 0.35, blue: 0.35)
-                        : .white.opacity(0.30))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(hudVM.state == .muted ? "Unmute microphone" : "Mute microphone")
-
             if !miraState.isPro {
                 Text("\(miraState.dailyUsageCount)/\(MiraState.freeLimit)")
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.25))
-                    .padding(.trailing, 4)
-                    .accessibilityLabel("Usage: \(miraState.dailyUsageCount) of \(MiraState.freeLimit) daily requests")
+                    .padding(.trailing, 2)
             }
-
-            utilBtn(icon: "gearshape") { showSettings = true }
-                .accessibilityLabel("Open settings")
         }
         .padding(.horizontal, 10)
         .frame(height: 38)
     }
 
-    /// Renders as "icon + label" pill when selected, plain icon button when not.
     private func navTab(icon: String, label: String, tab: IslandTab) -> some View {
         let selected = selectedTab == tab
-        let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
+        let accent   = DS.Colors.accent
         return Button {
             withAnimation(reduceMotion
                 ? .easeInOut(duration: 0.10)
@@ -631,48 +586,21 @@ struct MiraIslandView: View {
         .buttonStyle(PressScaleButtonStyle())
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityHint("Switch to \(label) tab")
     }
 
-    private func utilBtn(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.35))
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 
     // MARK: - Tab content
 
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
-        case .briefing:
-            BriefingView()
-        case .chat:
+        case .home:
             IslandChatView(
                 miraState: miraState,
                 overlay:   overlay,
                 capture:   capture,
                 voice:     voice,
                 wakeWord:  wakeWord
-            )
-        case .home:
-            HomeTabView(miraState: miraState)
-        case .projects:
-            CombinedProjectsView(
-                animController: animController,
-                onResume: { prompt in
-                    selectedTab = .chat
-                    NotificationCenter.default.post(
-                        name: .miraChipPromptSelected,
-                        object: nil,
-                        userInfo: ["prompt": prompt]
-                    )
-                }
             )
         case .agents:
             AgentsTabView(
@@ -682,80 +610,15 @@ struct MiraIslandView: View {
                 capture:   capture,
                 voice:     voice
             )
-        case .reliability:
-            ReliabilityDashboardView()
         case .crons:
             CronsTabView()
-        case .computerUse:
-            ComputerUseTabView(miraState: miraState)
-        case .skills:
-            SkillsTabView()
-        case .triggers:
-            TriggersTabView()
-        case .threads:
-            ThreadsTabView(onResume: { prompt in
-                selectedTab = .chat
-                NotificationCenter.default.post(
-                    name: .miraChipPromptSelected,
-                    object: nil,
-                    userInfo: ["prompt": prompt]
-                )
-            })
+        case .settings:
+            SettingsView(state: miraState)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
 
-// MARK: - Combined Projects View (Library + Dev Projects)
-
-private struct CombinedProjectsView: View {
-    @ObservedObject var animController: AnimationController
-    var onResume: (String) -> Void
-
-    @State private var mode: ProjectsMode = .library
-
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
-
-    enum ProjectsMode { case library, devProjects, workspace }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Segmented control
-            HStack(spacing: 0) {
-                modeButton("Library",   mode: .library)
-                modeButton("Projects",  mode: .devProjects)
-                modeButton("Dashboard", mode: .workspace)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 7)
-
-            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 0.5)
-
-            switch mode {
-            case .library:
-                AgentOutputsView()
-            case .devProjects:
-                ProjectsTabView(animController: animController, onResume: onResume)
-            case .workspace:
-                WorkspaceDashboardView()
-            }
-        }
-    }
-
-    private func modeButton(_ title: String, mode: ProjectsMode) -> some View {
-        let selected = self.mode == mode
-        return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { self.mode = mode }
-        } label: {
-            Text(title)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                .foregroundColor(selected ? .white.opacity(0.90) : .white.opacity(0.38))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 5)
-                .background(selected ? Color.white.opacity(0.10) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-    }
-}
 
 // MARK: - Live audio bars
 
@@ -849,7 +712,7 @@ private struct CollapsedConnectingDot: View {
     @State private var opacity: Double = 0.3
     var body: some View {
         Circle()
-            .fill(Color(red: 0.29, green: 0.62, blue: 1.0))
+            .fill(DS.Colors.accent)
             .frame(width: 6, height: 6)
             .opacity(opacity)
             .onAppear {
@@ -873,7 +736,7 @@ private struct NotchAmbientGlow: View {
     private var glowColor: Color {
         switch pillMode {
         case .idle, .speaking: return miraTeale
-        case .listening, .working: return Color(red: 0.29, green: 0.62, blue: 1.0)
+        case .listening, .working: return DS.Colors.accent
         case .thinking: return miraViolet
         }
     }

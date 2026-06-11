@@ -5,7 +5,7 @@ import EventKit
 
 private let cardBG = Color(red: 0.11, green: 0.11, blue: 0.14)
 private let cardR: CGFloat = 16
-private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+private let accent = DS.Colors.accent
 
 // MARK: - Home tab — three side-by-side cards + workspace review strip
 
@@ -573,7 +573,7 @@ private let useCases: [UseCase] = [
             color: Color(red: 0.93, green: 0.26, blue: 0.21)),
     UseCase(icon: "magnifyingglass",      title: "Search web",
             prompt: "Search the web for: ",
-            color: Color(red: 0.29, green: 0.62, blue: 1.0)),
+            color: DS.Colors.accent),
     UseCase(icon: "text.bubble.fill",     title: "Summarize",
             prompt: "Summarize what's on my screen right now",
             color: Color(red: 0.44, green: 0.12, blue: 0.59)),

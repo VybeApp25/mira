@@ -20,7 +20,7 @@ struct ResponseCardView: View {
     @State private var selectedIndex: Int  = 0
     @State private var expanded: Bool      = false
 
-    private let accent  = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent  = DS.Colors.accent
     private let surface = Color(red: 0.11, green: 0.11, blue: 0.15)
     private let border  = Color.white.opacity(0.09)
 
@@ -267,7 +267,7 @@ private struct ArtifactThumbnail: View {
     let isSelected: Bool
     let onTap:      () -> Void
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
 
     var body: some View {
         Button(action: onTap) {

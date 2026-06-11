@@ -9,7 +9,7 @@ struct ReliabilityDashboardView: View {
     @ObservedObject private var jobStore  = AgentJobStore.shared
     @ObservedObject private var telemetry = TelemetryService.shared
 
-    private let accent = Color(red: 0.29, green: 0.62, blue: 1.0)
+    private let accent = DS.Colors.accent
     private let green  = Color(red: 0.30, green: 0.85, blue: 0.55)
     private let amber  = Color(red: 0.90, green: 0.65, blue: 0.20)
     private let red    = Color(red: 1.00, green: 0.42, blue: 0.42)
