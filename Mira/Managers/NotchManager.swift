@@ -83,6 +83,7 @@ final class NotchManager {
         BackgroundScheduler.shared.start()
         MiraState.shared = miraState
         CronScheduler.shared.start()
+        ExternalTriggerRunner.shared.rebuildWatchers()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer
         _ = CursorBubbleService.shared      // cursor speech bubble (lazy init)
         _ = ResponseCardService.shared      // artifact card overlay (lazy init)
