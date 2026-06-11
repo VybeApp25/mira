@@ -66,6 +66,8 @@ struct IslandChatView: View {
     @State private var errorText:             String?            = nil
     @State private var streamingMsgId:        UUID?              = nil
     @State private var isCodeMode:            Bool               = false   // Claude Code bridge
+    @State private var hasPlayedReceiveChime: Bool               = false   // one-time per response
+    @State private var autoDismissWork:       DispatchWorkItem?  = nil
 
     // Use the app-lifetime singleton — mirrors HeyClicky's always-on architecture.
     // @ObservedObject (not @StateObject) because the session outlives this view.
@@ -122,33 +124,47 @@ struct IslandChatView: View {
             AudioCueService.shared.play(.enter)
         }
         .onDisappear {
+            autoDismissWork?.cancel()
+            autoDismissWork = nil
             AudioCueService.shared.playTextClose()
-            // Keep always-on session alive when island closes — HeyClicky never stops
-            // the session just because the notch UI is hidden.
             if !realtime.isAlwaysOnActive { realtime.stop() }
             miraState.realtimeState = .idle
         }
-        // Pause wake word while realtime session is live; NotchManager restarts it on collapse.
-        // Also mirror state into MiraState so the collapsed pill can show thinking/speaking.
         .onChange(of: realtime.state) { _, newState in
             miraState.realtimeState = newState
             switch newState {
             case .idle:
-                break
+                // PTT mode: voice session ended — auto-collapse after 1.2s
+                if !realtime.isAlwaysOnActive {
+                    scheduleAutoDismiss(after: 1.2)
+                }
             case .connecting:
+                autoDismissWork?.cancel()
+                autoDismissWork = nil
+                hasPlayedReceiveChime = false
                 wakeWord.pause()
+                AudioCueService.shared.playVoiceStart()
             case .speaking:
-                // Add streaming placeholder when AI starts speaking
+                autoDismissWork?.cancel()
+                autoDismissWork = nil
                 if streamingMsgId == nil {
                     var msg = ChatMessage(role: .mira, text: "")
                     streamingMsgId = msg.id
                     messages.append(msg)
                 }
+                // One-time receive chime per response — matches HeyClicky's
+                // hasPlayedTextReceiveChimeForCurrentResponse guard
+                if !hasPlayedReceiveChime {
+                    hasPlayedReceiveChime = true
+                    AudioCueService.shared.playTextReceive()
+                }
+            case .recording:
+                autoDismissWork?.cancel()
+                autoDismissWork = nil
             default:
                 break
             }
         }
-        // Live-update the streaming message as AI transcript chunks arrive
         .onChange(of: realtime.aiDraft) { _, draft in
             guard !draft.isEmpty,
                   let id  = streamingMsgId,
@@ -159,7 +175,7 @@ struct IslandChatView: View {
             startVoice()
         }
         .onReceive(NotificationCenter.default.publisher(for: .miraActivateText)) { _ in
-            // Text mode — text field gets focus on next click
+            AudioCueService.shared.playTextOpen()
         }
         // .miraVoiceChanged no longer used — GA API removed voice as a session parameter
         // Fix 3: chip tap from the HUD overlay routes here
@@ -388,7 +404,9 @@ struct IslandChatView: View {
     // MARK: - Input bar (matches mockup: wide field + 3 icon buttons)
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 0) {
+            voiceShortcutHintRow
+            HStack(spacing: 8) {
             // Text field
             ZStack(alignment: .leading) {
                 if input.isEmpty {
@@ -461,6 +479,22 @@ struct IslandChatView: View {
         .padding(.vertical, 9)
         .background(Color.white.opacity(0.03))
         .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.07)), alignment: .top)
+        } // closes VStack content
+    }
+
+    // HeyClicky-style shortcut hint shown in idle state below the input field
+    private var voiceShortcutHintRow: some View {
+        let voiceLabel = ShortcutStore.shared.voice.displayString
+        return HStack(spacing: 6) {
+            KeyCapChip(label: voiceLabel)
+            Text("Hold to talk  ·  release to send")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.22))
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
     private func inputIconButton(icon: String, tint: Color? = nil, disabled: Bool = false,
@@ -569,11 +603,21 @@ struct IslandChatView: View {
     }
 
     private func startVoice() {
-        // Always-on: session already running — nothing to do.
+        autoDismissWork?.cancel()
+        autoDismissWork = nil
+        hasPlayedReceiveChime = false
         guard !realtime.isAlwaysOnActive else { return }
-        // Fallback for non-always-on launch
         guard case .idle = realtime.state else { return }
         realtime.connect(openAIKey: AppSecrets.openAIKey)
+    }
+
+    private func scheduleAutoDismiss(after delay: TimeInterval) {
+        autoDismissWork?.cancel()
+        let work = DispatchWorkItem {
+            NotificationCenter.default.post(name: .miraRequestCollapse, object: nil)
+        }
+        autoDismissWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     // MARK: - Actions
@@ -590,10 +634,12 @@ struct IslandChatView: View {
             return
         }
 
-        input             = ""
-        errorText         = nil
-        pendingAction     = nil
-        pendingPermission = nil
+        input                 = ""
+        errorText             = nil
+        pendingAction         = nil
+        pendingPermission     = nil
+        hasPlayedReceiveChime = false
+        autoDismissWork?.cancel(); autoDismissWork = nil
         messages.append(ChatMessage(role: .user, text: prompt))
         AudioCueService.shared.playTextSend()
         isLoading         = true
@@ -669,16 +715,18 @@ struct IslandChatView: View {
         default:
             if let reply = result.reply {
                 messages.append(ChatMessage(role: .mira, text: reply))
-                AudioCueService.shared.playTextReceive()
-                // Surface compact replies in the cursor companion so the island
-                // doesn't need to stay open for short conversational responses.
+                if !hasPlayedReceiveChime {
+                    hasPlayedReceiveChime = true
+                    AudioCueService.shared.playTextReceive()
+                }
                 if reply.count < 280 {
                     CursorCompanionManager.shared.send(.chatReply(reply))
                 }
-                // Detect file artifacts in the reply and append a preview card.
                 if let info = detectArtifact(in: reply) {
                     messages.append(ChatMessage(role: .mira, widget: .artifact(info)))
                 }
+                // Auto-dismiss after text response — matches HeyClicky's notchTextResponseAutoDismiss
+                scheduleAutoDismiss(after: 8.0)
             }
             if let target = result.guidanceTarget, target.confidence >= 0.60 {
                 overlay.showGuidance(GuidanceFrame(timestamp: .now, targets: [target]))
@@ -1007,6 +1055,25 @@ private struct SpeakingEqualizerBars: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - KeyCap chip (HeyClicky-style shortcut hint)
+
+private struct KeyCapChip: View {
+    let label: String
+    var body: some View {
+        Text(label)
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white.opacity(0.45))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            )
     }
 }
 

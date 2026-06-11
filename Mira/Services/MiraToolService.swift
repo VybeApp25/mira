@@ -568,6 +568,43 @@ enum MiraToolService {
                 "required": ["skill", "args"]
             ] as [String: Any]
         ],
+        // ── Higher-model escalation (mirrors HeyClicky's higher-model route) ──────
+        [
+            "type": "function",
+            "name": "deep_reasoning",
+            "description": """
+                Escalate this query to a more capable reasoning model (Claude Opus) for hard problems. \
+                Use when the question requires multi-step reasoning, complex code analysis, long-form writing, \
+                or when you are uncertain about the correct answer. \
+                Returns the full text answer which you should read aloud to the user.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "query": ["type": "string",
+                               "description": "The full question or task to send to the higher-capability model"]
+                ],
+                "required": ["query"]
+            ] as [String: Any]
+        ],
+        // ── Agent spawn from voice (mirrors HeyClicky's sessions_spawn) ───────────
+        [
+            "type": "function",
+            "name": "spawn_agent",
+            "description": """
+                Launch a background coding or research agent for tasks that take more than a few seconds. \
+                Use for: writing code, building features, doing research, creating files, running multi-step tasks. \
+                The agent runs in the background — tell the user you've launched it and they'll see progress in the Agents tab.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "task": ["type": "string",
+                              "description": "Full description of what the agent should do"]
+                ],
+                "required": ["task"]
+            ] as [String: Any]
+        ],
     ]
 
     // MARK: - Execution router
@@ -604,6 +641,8 @@ enum MiraToolService {
         case "run_python_skill":      return await runPythonSkill(args)
         case "run_coding_agent":      return await runCodingAgent(args)
         case "ask_gpt":               return await askGPT(args)
+        case "deep_reasoning":        return await deepReasoning(args)
+        case "spawn_agent":           return await spawnAgentFromVoice(args)
         default:                      return "Unknown tool: \(name)"
         }
     }
@@ -1273,5 +1312,50 @@ enum MiraToolService {
                 }
             }
         }
+    }
+
+    // MARK: - deep_reasoning (higher-model escalation, mirrors HeyClicky's higher-model route)
+
+    private static func deepReasoning(_ args: [String: Any]) async -> String {
+        guard let query = args["query"] as? String, !query.isEmpty else {
+            return "deep_reasoning requires a 'query'."
+        }
+        let key = MiraState.shared?.effectiveAPIKey ?? AppSecrets.anthropicAPIKey
+        guard !key.isEmpty else {
+            return "Anthropic key not configured."
+        }
+        let service = ClaudeService(apiKey: key)
+        do {
+            let reply = try await service.ask(
+                prompt: query,
+                system: "You are a highly capable AI assistant. Answer clearly and concisely. No markdown, no bullet points — just clean prose.",
+                modelOverride: "claude-opus-4-8",
+                maxTokensOverride: 1024
+            )
+            return reply.isEmpty ? "No response from deep reasoning model." : reply
+        } catch {
+            return "Deep reasoning failed: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - spawn_agent (background agent from voice, mirrors HeyClicky's sessions_spawn)
+
+    @MainActor
+    private static func spawnAgentFromVoice(_ args: [String: Any]) async -> String {
+        guard let task = args["task"] as? String, !task.isEmpty else {
+            return "spawn_agent requires a 'task' description."
+        }
+        let key = MiraState.shared?.effectiveAPIKey ?? AppSecrets.anthropicAPIKey
+        guard !key.isEmpty else {
+            return "No API key available to spawn agent."
+        }
+        let job = AgentJobStore.shared.submitJob(
+            prompt:    task,
+            apiKey:    key,
+            buildMode: .pro
+        )
+        NotificationCenter.default.post(name: .miraAgentFlightLaunched, object: nil,
+                                        userInfo: ["jobId": job.id.uuidString])
+        return "Agent launched (job \(job.id.uuidString.prefix(8))). Check the Agents tab for live progress."
     }
 }

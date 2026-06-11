@@ -115,6 +115,10 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { _ in
             RealtimeVoiceService.shared.endPushToTalk()
         }
+        // Auto-collapse requested (post-PTT or post-text-response dismiss)
+        NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
+            self?.animController.collapse()
+        }
     }
 
     private func expandForShortcut() {

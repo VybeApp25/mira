@@ -11,6 +11,7 @@ enum MiraSound: String, CaseIterable {
     case agentClose          = "agent-close"
     // Interaction
     case enter               = "enter"
+    case textOpen            = "clicky-text-open"
     case textSend            = "clicky-text-send"
     case textReceive         = "clicky-text-receive"
     case textClose           = "clicky-text-close"
@@ -118,9 +119,11 @@ final class AudioCueService {
     func playAgentComplete()       { play(.agentDone) }
     func playAgentClose()          { play(.agentClose) }
     func playAgentBlocked()        { play(.skillDown) }
+    func playTextOpen()            { play(.textOpen) }
     func playTextSend()            { play(.textSend) }
     func playTextReceive()         { play(.textReceive) }
     func playTextClose()           { play(.textClose) }
+    func playVoiceStart()          { play(.ff) }
     func playClarification()       { play(.question) }
     func playConnectionQuestion()  { play(.connectionQuestion) }
 
@@ -149,6 +152,7 @@ final class AudioCueService {
         case .agentDone:          return "Hero"
         case .agentClose:         return "Pop"
         case .enter:              return "Ping"
+        case .textOpen:           return "Ping"
         case .textSend:           return "Tink"
         case .textReceive:        return "Pop"
         case .textClose:          return "Pop"
