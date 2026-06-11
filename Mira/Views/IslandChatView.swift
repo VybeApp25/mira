@@ -134,10 +134,7 @@ struct IslandChatView: View {
             miraState.realtimeState = newState
             switch newState {
             case .idle:
-                // PTT mode: voice session ended — auto-collapse after 1.2s
-                if !realtime.isAlwaysOnActive {
-                    scheduleAutoDismiss(after: 1.2)
-                }
+                streamingMsgId = nil
             case .connecting:
                 autoDismissWork?.cancel()
                 autoDismissWork = nil
@@ -433,33 +430,6 @@ struct IslandChatView: View {
             .background(Color.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            // Realtime voice mic button — activates GPT-4o Realtime
-            inputIconButton(
-                icon: realtime.state == .idle ? "waveform.circle" : "waveform.circle.fill",
-                tint: realtime.state == .idle ? nil : .red,
-                a11yLabel: realtime.state == .idle ? "Start voice session" : "End voice session"
-            ) { toggleRealtime() }
-
-            // AssemblyAI dictate — streams mic to AssemblyAI; populates text field live
-            inputIconButton(
-                icon: dictate.isStreaming ? "mic.circle.fill" : "mic.circle",
-                tint: dictate.isStreaming ? .orange : nil,
-                a11yLabel: dictate.isStreaming ? "Stop dictating" : "Dictate with AssemblyAI"
-            ) { toggleDictate() }
-
-            // Claude Code toggle — routes submission through ClaudeCodeBridge
-            if ClaudeCodeBridge.shared.isAvailable {
-                inputIconButton(
-                    icon: "chevron.left.forwardslash.chevron.right",
-                    tint: isCodeMode ? miraTeale : nil,
-                    a11yLabel: isCodeMode ? "Switch to chat mode" : "Switch to code mode"
-                ) {
-                    withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
-                        isCodeMode.toggle()
-                    }
-                }
-            }
-
             #if DEBUG
             inputIconButton(icon: "viewfinder.circle", a11yLabel: "Test overlay") { overlay.showTest() }
             #endif
@@ -468,11 +438,7 @@ struct IslandChatView: View {
                             tint: canSend ? accent : nil,
                             disabled: !canSend,
                             a11yLabel: "Send message") {
-                if isCodeMode {
-                    Task { await submitWithCode() }
-                } else {
-                    Task { await submit() }
-                }
+                Task { await submit() }
             }
         }
         .padding(.horizontal, 12)
@@ -482,15 +448,32 @@ struct IslandChatView: View {
         } // closes VStack content
     }
 
-    // HeyClicky-style shortcut hint shown in idle state below the input field
+    // HeyClicky-style shortcut hint + always-on toggle
     private var voiceShortcutHintRow: some View {
         let voiceLabel = ShortcutStore.shared.voice.displayString
+        let alwaysOn   = realtime.isAlwaysOnActive
         return HStack(spacing: 6) {
             KeyCapChip(label: voiceLabel)
-            Text("Hold to talk  ·  release to send")
+            Text("Hold to talk · release to send")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.22))
             Spacer()
+            // Always-on toggle — tap to keep mic open between turns (no hotkey needed)
+            Button {
+                NotificationCenter.default.post(name: .miraToggleAlwaysOn, object: nil)
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: alwaysOn ? "infinity.circle.fill" : "infinity.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(alwaysOn ? accent : .white.opacity(0.22))
+                    if alwaysOn {
+                        Text("Always on")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(accent)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)

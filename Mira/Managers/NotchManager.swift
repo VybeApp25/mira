@@ -119,6 +119,18 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
             self?.animController.collapse()
         }
+        // Always-on toggle — tap the ∞ button in the shortcut hint row to enable/disable
+        NotificationCenter.default.addObserver(forName: .miraToggleAlwaysOn, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            if RealtimeVoiceService.shared.isAlwaysOnActive {
+                RealtimeVoiceService.shared.disconnectAlwaysOn()
+                NSLog("[Mira] always-on voice disabled")
+            } else {
+                self.expandForShortcut()
+                RealtimeVoiceService.shared.connectAlwaysOn()
+                NSLog("[Mira] always-on voice enabled")
+            }
+        }
     }
 
     private func expandForShortcut() {

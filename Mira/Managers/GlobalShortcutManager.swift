@@ -19,6 +19,7 @@ extension Notification.Name {
     static let miraPointFollowUp          = Notification.Name("miraPointFollowUp")
     static let miraAgentFlightLaunched    = Notification.Name("miraAgentFlightLaunched")
     static let miraRequestCollapse        = Notification.Name("miraRequestCollapse")
+    static let miraToggleAlwaysOn         = Notification.Name("miraToggleAlwaysOn")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)

@@ -130,18 +130,21 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     // MARK: Private — PTT (mirrors HeyClicky's pushToTalkTailCommitTask)
 
-    private var pttActive:   Bool                = false
-    private var pttTailTask: Task<Void, Never>?
+    private var pttActive:        Bool               = false
+    private var pttTailTask:      Task<Void, Never>?
+    // True after session.updated — gates the PTT commit so audio is never sent to an unready socket
+    private var sessionHealthy:   Bool               = false
+    // Keeps the WebSocket warm for 30s after a PTT response so next PTT skips cold-start
+    private var idleTeardownTask: Task<Void, Never>?
 
     // MARK: - Public API
 
-    /// Start always-on listening — call once on app launch from NotchManager/AppDelegate.
-    /// Mirrors HeyClicky's beginAlwaysOnListening().
+    /// Start always-on listening.
     func connectAlwaysOn() {
         guard !isAlwaysOn else { return }
+        if webSocket != nil { teardown() }   // close any warm PTT session first
         isAlwaysOn       = true
         isAlwaysOnActive = true
-        openAIKey        = AppSecrets.openAIKey
         shouldReconnect  = true
         retryCount       = 0
         state            = .connecting
@@ -184,19 +187,22 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     /// Called when PTT hotkey is pressed down.
     func beginPushToTalk() {
-        // Cancel any pending tail from a previous PTT
-        pttTailTask?.cancel(); pttTailTask = nil
+        pttTailTask?.cancel();      pttTailTask = nil
+        idleTeardownTask?.cancel(); idleTeardownTask = nil
         pttActive = true
-        NSLog("[MiraRealtime] PTT begin: active=%@ socket=%@",
-              pttActive ? "YES" : "NO",
-              webSocket != nil ? "live" : "nil")
 
-        if webSocket != nil {
-            // Reuse healthy always-on session (mic already streaming)
+        if webSocket != nil && sessionHealthy {
+            // Warm session — mic was stopped during idle; restart it and clear any stale buffer
             NSLog("[MiraRealtime] PTT begin: reusing healthy session")
+            if !captureEngine.isRunning { startCapture() }
+            emit(["type": "input_audio_buffer.clear"])
+            state = .recording
+        } else if webSocket != nil {
+            // Socket exists but not yet healthy — already in flight; health-poll will gate commit
+            NSLog("[MiraRealtime] PTT begin: session opening, health poll will gate commit")
         } else {
-            // Open fresh session for PTT-only mode
-            openAIKey       = AppSecrets.openAIKey
+            // Cold start — open a fresh session
+            NSLog("[MiraRealtime] PTT begin: opening fresh session")
             shouldReconnect = true
             retryCount      = 0
             state           = .connecting
@@ -204,21 +210,38 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
     }
 
-    /// Called when PTT hotkey is released — 400ms tail then manual commit.
+    /// Called when PTT hotkey is released — 400ms tail, health poll, then manual commit.
     func endPushToTalk() {
         guard pttActive else { return }
         pttActive = false
-        NSLog("[MiraRealtime] PTT end: scheduling 400ms tail, then commit (healthy=%@)",
-              webSocket != nil ? "true" : "false")
+        NSLog("[MiraRealtime] PTT end: scheduling 400ms tail (healthy=%@)",
+              sessionHealthy ? "true" : "false")
         pttTailTask = Task {
-            // 400ms tail — captures trailing syllables (matches HeyClicky's tail window)
+            // 400ms tail — captures trailing syllables (matches HeyClicky's 400ms tail window)
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else {
                 NSLog("[MiraRealtime] PTT end tail cancelled")
                 return
             }
+            // Poll until session is healthy — mirrors HeyClicky's health-poll-before-commit.
+            // Without this, the commit races with the WebSocket handshake and is silently dropped.
+            let deadline = Date().addingTimeInterval(4.0)
+            while true {
+                let healthy = await MainActor.run { self.sessionHealthy }
+                if healthy { break }
+                if Date() > deadline {
+                    NSLog("[MiraRealtime] PTT end: gave up waiting (health poll timeout)")
+                    return
+                }
+                guard !Task.isCancelled else {
+                    NSLog("[MiraRealtime] PTT end tail cancelled during health-poll")
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            guard !Task.isCancelled else { return }
             await MainActor.run {
-                NSLog("[MiraRealtime] commitAudioAndRequestResponse")
+                NSLog("[MiraRealtime] PTT end: session healthy — committing")
                 AudioCueService.shared.playTextSend()
                 self.emit(["type": "input_audio_buffer.commit"])
                 self.emit(["type": "response.create"])
@@ -327,7 +350,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         // ── Step 2: config accepted — start mic, signal ready ────────────────────
         case "session.updated":
             guard shouldReconnect else { teardown(); return }
-            retryCount = 0
+            retryCount     = 0
+            sessionHealthy = true
             if !captureEngine.isRunning { startCapture() }
             if isAlwaysOn {
                 NSLog("[MiraRealtime] always-on listening active")
@@ -397,9 +421,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                             self.state   = .recording
                             self.aiDraft = ""
                         } else {
-                            // PTT mode: close session — next interaction starts fresh on key-down.
-                            NSLog("[MiraRealtime] PTT response complete — closing session")
-                            self.stop()
+                            // PTT mode: keep session warm for 30s so next PTT skips cold-start.
+                            // Stop mic to prevent server_vad from auto-committing ambient audio.
+                            NSLog("[MiraRealtime] PTT response complete — warm idle (30s window)")
+                            self.stopMicCapture()
+                            self.aiDraft = ""
+                            self.state   = .idle
+                            self.scheduleIdleTeardown()
                         }
                     }
                 }
@@ -700,16 +728,36 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     // MARK: - Teardown
 
+    private func stopMicCapture() {
+        guard captureEngine.isRunning else { return }
+        captureEngine.inputNode.removeTap(onBus: 0)
+        captureEngine.stop()
+        inputConverter = nil
+    }
+
+    private func scheduleIdleTeardown() {
+        idleTeardownTask?.cancel()
+        idleTeardownTask = Task {
+            try? await Task.sleep(nanoseconds: 30_000_000_000)  // 30s warm window
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !self.isAlwaysOn else { return }
+                NSLog("[MiraRealtime] idle teardown — closing warm session")
+                self.stop()
+            }
+        }
+    }
+
     private func teardown() {
+        sessionHealthy = false
+        idleTeardownTask?.cancel()
+        idleTeardownTask = nil
+
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket  = nil
         urlSession = nil
 
-        if captureEngine.isRunning {
-            captureEngine.inputNode.removeTap(onBus: 0)
-            captureEngine.stop()
-        }
-        inputConverter = nil
+        stopMicCapture()
 
         playerNode.stop()
         if playEngine.isRunning { playEngine.stop() }
