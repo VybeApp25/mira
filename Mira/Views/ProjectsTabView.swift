@@ -185,6 +185,7 @@ private struct ProjectRowView: View {
     private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
     private let amber    = Color(red: 1.0,  green: 0.75, blue: 0.20)
+    private var depBlocked: Bool { ProjectEngine.shared.isBlockedByDependency(project.id) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -197,10 +198,17 @@ private struct ProjectRowView: View {
                         .foregroundColor(statusColor)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(project.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(project.status == .completed ? .white.opacity(0.38) : .white.opacity(0.90))
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(project.name)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(project.status == .completed ? .white.opacity(0.38) : .white.opacity(0.90))
+                            .lineLimit(1)
+                        if depBlocked {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(amber.opacity(0.75))
+                        }
+                    }
                     Text(rowSubtitle)
                         .font(.system(size: 10))
                         .foregroundColor(project.status == .blocked ? amber.opacity(0.85) : statusColor.opacity(0.70))
@@ -279,6 +287,11 @@ private struct ProjectDetailView: View {
     @State private var selectedSession: ProjectSession? = nil
     @State private var selectedProposal: ProposalMetadata? = nil
     @State private var showCompletionSummary = false
+    // Phase 16 — dependency management
+    @State private var showAddDep = false
+    @State private var depTargetId: UUID? = nil
+    @State private var depKind: DependencyKind = .blocks
+    @State private var depNote = ""
 
     private let accent   = Color(red: 0.29, green: 0.62, blue: 1.0)
     private let successG = Color(red: 0.20, green: 0.84, blue: 0.60)
@@ -376,6 +389,8 @@ private struct ProjectDetailView: View {
                                         Rectangle().fill(Color.white.opacity(0.04)).frame(height: 0.5)
                                     }
                                 }
+
+                                dependencySection
 
                                 let completedSessions = localProject.sessions
                                     .filter { !$0.isActive }
@@ -555,6 +570,180 @@ private struct ProjectDetailView: View {
             Spacer()
         }
         .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
+    }
+
+    // MARK: - Dependencies (Phase 16)
+
+    private var dependencySection: some View {
+        let upstream   = engine.upstreamProjects(for: localProject.id)
+        let downstream = engine.downstreamProjects(for: localProject.id)
+        let candidates = engine.projects.filter { $0.id != localProject.id && $0.status != .archived }
+        return VStack(alignment: .leading, spacing: 0) {
+            // Section header
+            HStack(spacing: 6) {
+                Text("Dependencies")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.28))
+                    .tracking(0.5)
+                let total = upstream.count + downstream.count
+                if total > 0 {
+                    Text("\(total)")
+                        .font(.system(size: 9))
+                        .foregroundColor(accent.opacity(0.65))
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(accent.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showAddDep.toggle() }
+                    if !showAddDep { depNote = ""; depTargetId = nil; depKind = .blocks }
+                } label: {
+                    Image(systemName: showAddDep ? "xmark" : "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.28))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 4)
+
+            // Upstream: this depends on
+            if !upstream.isEmpty {
+                Text("Depends on")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white.opacity(0.22))
+                    .padding(.horizontal, 12).padding(.bottom, 3)
+                ForEach(upstream, id: \.dep.id) { pair in
+                    depRow(name: pair.project.name, kind: pair.dep.kind,
+                           status: pair.project.status, note: pair.dep.note,
+                           depId: pair.dep.id, isUpstream: true)
+                    Rectangle().fill(Color.white.opacity(0.04)).frame(height: 0.5)
+                }
+            }
+
+            // Downstream: depends on this
+            if !downstream.isEmpty {
+                Text("Used by")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white.opacity(0.22))
+                    .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 3)
+                ForEach(downstream, id: \.dep.id) { pair in
+                    depRow(name: pair.project.name, kind: pair.dep.kind,
+                           status: pair.project.status, note: pair.dep.note,
+                           depId: pair.dep.id, isUpstream: false)
+                    Rectangle().fill(Color.white.opacity(0.04)).frame(height: 0.5)
+                }
+            }
+
+            // Add form
+            if showAddDep {
+                VStack(alignment: .leading, spacing: 6) {
+                    if candidates.isEmpty {
+                        Text("No other projects to link")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.30))
+                    } else {
+                        Picker("Project", selection: $depTargetId) {
+                            Text("Select project…").tag(Optional<UUID>.none)
+                            ForEach(candidates) { p in
+                                Text(p.name).tag(Optional(p.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.system(size: 11))
+                        .tint(.white.opacity(0.65))
+
+                        Picker("Kind", selection: $depKind) {
+                            ForEach(DependencyKind.allCases, id: \.self) { k in
+                                Label(k.label, systemImage: k.icon).tag(k)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.system(size: 11))
+                        .tint(.white.opacity(0.65))
+
+                        TextField("Note (optional)", text: $depNote)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white)
+                            .tint(accent)
+
+                        HStack {
+                            Spacer()
+                            Button("Add") {
+                                guard let targetId = depTargetId else { return }
+                                engine.addDependency(from: localProject.id, to: targetId,
+                                                     kind: depKind, note: depNote.isEmpty ? nil : depNote)
+                                withAnimation { showAddDep = false }
+                                depNote = ""; depTargetId = nil; depKind = .blocks
+                            }
+                            .disabled(depTargetId == nil)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(depTargetId == nil ? .white.opacity(0.20) : accent)
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color.white.opacity(0.04))
+                .overlay(Rectangle().frame(height: 0.5).foregroundColor(.white.opacity(0.08)), alignment: .top)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: showAddDep)
+    }
+
+    private func depRow(name: String, kind: DependencyKind, status: ProjectStatus,
+                        note: String?, depId: UUID, isUpstream: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: kind.icon)
+                .font(.system(size: 9))
+                .foregroundColor(depKindColor(kind))
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.80))
+                    .lineLimit(1)
+                if let n = note {
+                    Text(n)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.30))
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
+            Text(kind.label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(depKindColor(kind))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(depKindColor(kind).opacity(0.14))
+                .clipShape(Capsule())
+            if isUpstream {
+                Button {
+                    engine.removeDependency(id: depId, from: localProject.id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.22))
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+    }
+
+    private func depKindColor(_ kind: DependencyKind) -> Color {
+        switch kind {
+        case .blocks:   return amber
+        case .requires: return Color(red: 1.0, green: 0.50, blue: 0.20)
+        case .informs:  return accent
+        case .succeeds: return Color(red: 0.20, green: 0.84, blue: 0.60)
+        }
     }
 
     // MARK: - Session history

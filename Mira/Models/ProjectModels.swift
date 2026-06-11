@@ -115,6 +115,7 @@ struct MiraProject: Identifiable, Codable {
     var lastResumePrompt: String?               // Auto-generated context for resuming
     var activeAgentThreadId: String?            // Non-nil while an agent is running
     var activeSessionId: UUID?                  // Non-nil during an active work session
+    var dependencies: [ProjectDependency]       // Phase 16: outgoing dependency edges
 
     let createdAt:    Date
     var lastActiveAt: Date
@@ -193,6 +194,43 @@ enum ProjectStatus: String, Codable, CaseIterable {
         case .archived:   return "archivebox.fill"
         }
     }
+}
+
+// MARK: - DependencyKind
+
+enum DependencyKind: String, Codable, CaseIterable {
+    case blocks   = "blocks"
+    case requires = "requires"
+    case informs  = "informs"
+    case succeeds = "succeeds"
+
+    var label: String {
+        switch self {
+        case .blocks:   return "Blocks"
+        case .requires: return "Requires"
+        case .informs:  return "Informs"
+        case .succeeds: return "Succeeds"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .blocks:   return "lock.fill"
+        case .requires: return "link"
+        case .informs:  return "arrow.right"
+        case .succeeds: return "arrow.right.circle"
+        }
+    }
+}
+
+// MARK: - ProjectDependency
+
+struct ProjectDependency: Identifiable, Codable {
+    let id:          UUID
+    let toProjectId: UUID
+    let kind:        DependencyKind
+    let note:        String?
+    let createdAt:   Date
 }
 
 // MARK: - CompletionCriterion
@@ -343,7 +381,7 @@ extension MiraProject {
     private enum CodingKeys: String, CodingKey {
         case id, name, goal, status, criteria, checkpoints, sessions, decisions
         case filesModified, lastResumePrompt, activeAgentThreadId, activeSessionId
-        case createdAt, lastActiveAt, completedAt
+        case createdAt, lastActiveAt, completedAt, dependencies
     }
 
     init(from decoder: Decoder) throws {
@@ -360,6 +398,7 @@ extension MiraProject {
         lastResumePrompt    = try c.decodeIfPresent(String.self,         forKey: .lastResumePrompt)
         activeAgentThreadId = try c.decodeIfPresent(String.self,         forKey: .activeAgentThreadId)
         activeSessionId     = try c.decodeIfPresent(UUID.self,           forKey: .activeSessionId)
+        dependencies        = (try? c.decode([ProjectDependency].self,   forKey: .dependencies)) ?? []
         createdAt           = try c.decode(Date.self,                    forKey: .createdAt)
         lastActiveAt        = try c.decode(Date.self,                    forKey: .lastActiveAt)
         completedAt         = try c.decodeIfPresent(Date.self,           forKey: .completedAt)
@@ -379,6 +418,7 @@ extension MiraProject {
         try c.encodeIfPresent(lastResumePrompt,    forKey: .lastResumePrompt)
         try c.encodeIfPresent(activeAgentThreadId, forKey: .activeAgentThreadId)
         try c.encodeIfPresent(activeSessionId,     forKey: .activeSessionId)
+        try c.encode(dependencies,    forKey: .dependencies)
         try c.encode(createdAt,       forKey: .createdAt)
         try c.encode(lastActiveAt,    forKey: .lastActiveAt)
         try c.encodeIfPresent(completedAt, forKey: .completedAt)

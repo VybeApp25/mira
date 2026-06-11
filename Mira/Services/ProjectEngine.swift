@@ -64,6 +64,7 @@ final class ProjectEngine: ObservableObject {
             lastResumePrompt:    nil,
             activeAgentThreadId: nil,
             activeSessionId:     nil,
+            dependencies:        [],
             createdAt:           Date(),
             lastActiveAt:        Date(),
             completedAt:         nil
@@ -606,6 +607,67 @@ final class ProjectEngine: ObservableObject {
 
     func project(id: UUID) -> MiraProject? {
         projects.first { $0.id == id }
+    }
+
+    // MARK: - Dependencies (Phase 16)
+
+    @discardableResult
+    func addDependency(from projectId: UUID, to dependsOnId: UUID,
+                       kind: DependencyKind, note: String? = nil) -> Bool {
+        guard projectId != dependsOnId,
+              let idx = indexOf(projectId),
+              project(id: dependsOnId) != nil else { return false }
+        guard !wouldCreateCycle(from: projectId, to: dependsOnId) else { return false }
+        let dep = ProjectDependency(id: UUID(), toProjectId: dependsOnId,
+                                    kind: kind, note: note, createdAt: Date())
+        projects[idx].dependencies.append(dep)
+        persist()
+        return true
+    }
+
+    func removeDependency(id depId: UUID, from projectId: UUID) {
+        guard let idx = indexOf(projectId) else { return }
+        projects[idx].dependencies.removeAll { $0.id == depId }
+        persist()
+    }
+
+    func upstreamProjects(for projectId: UUID) -> [(dep: ProjectDependency, project: MiraProject)] {
+        guard let proj = project(id: projectId) else { return [] }
+        return proj.dependencies.compactMap { dep in
+            guard let p = project(id: dep.toProjectId) else { return nil }
+            return (dep, p)
+        }
+    }
+
+    func downstreamProjects(for projectId: UUID) -> [(dep: ProjectDependency, project: MiraProject)] {
+        projects.compactMap { p in
+            guard let dep = p.dependencies.first(where: { $0.toProjectId == projectId }) else { return nil }
+            return (dep, p)
+        }
+    }
+
+    func isBlockedByDependency(_ projectId: UUID) -> Bool {
+        guard let proj = project(id: projectId) else { return false }
+        return proj.dependencies
+            .filter { $0.kind == .blocks }
+            .contains { dep in
+                project(id: dep.toProjectId)?.status != .completed
+            }
+    }
+
+    private func wouldCreateCycle(from startId: UUID, to targetId: UUID) -> Bool {
+        var visited = Set<UUID>()
+        var queue = [targetId]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            if current == startId { return true }
+            if visited.contains(current) { continue }
+            visited.insert(current)
+            if let proj = project(id: current) {
+                queue.append(contentsOf: proj.dependencies.map { $0.toProjectId })
+            }
+        }
+        return false
     }
 
     // MARK: - File Tracking (called by agent tools)
