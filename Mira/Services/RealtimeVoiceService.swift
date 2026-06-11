@@ -262,7 +262,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
         req.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        req.addValue("realtime=v1",         forHTTPHeaderField: "OpenAI-Beta")
 
         NSLog("[MiraRealtime] WebSocket session opened model=%@", model)
         urlSession = URLSession(configuration: .default)
@@ -546,6 +545,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - Audio capture (mic → PCM16 → WebSocket)
 
     private func startCapture() {
+        pauseMusicPlayers()
         captureEngine = AVAudioEngine()
         let node      = captureEngine.inputNode
         let hwFmt     = node.outputFormat(forBus: 0)
@@ -733,6 +733,30 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         captureEngine.inputNode.removeTap(onBus: 0)
         captureEngine.stop()
         inputConverter = nil
+        resumeMusicPlayers()
+    }
+
+    // Pause Spotify and Music during mic capture so they don't bleed into the recording.
+    // Resume is best-effort — if the user manually stopped the music we leave it stopped.
+    private var musicWasPaused = false
+
+    private func pauseMusicPlayers() {
+        musicWasPaused = false
+        for app in ["Spotify", "Music"] {
+            let src = "tell application \"\(app)\" to if it is running then if player state is playing then pause"
+            if NSAppleScript(source: src)?.executeAndReturnError(nil) != nil {
+                musicWasPaused = true
+            }
+        }
+    }
+
+    private func resumeMusicPlayers() {
+        guard musicWasPaused else { return }
+        musicWasPaused = false
+        for app in ["Spotify", "Music"] {
+            let src = "tell application \"\(app)\" to if it is running then play"
+            NSAppleScript(source: src)?.executeAndReturnError(nil)
+        }
     }
 
     private func scheduleIdleTeardown() {
