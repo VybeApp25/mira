@@ -229,17 +229,54 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - WebSocket lifecycle
 
     private func openSocket() {
-        let model = "gpt-4o-realtime-preview"
+        Task { await openSocketAsync() }
+    }
+
+    private func openSocketAsync() async {
+        let model     = "gpt-4o-realtime-preview"
+        let authToken = await fetchEphemeralToken() ?? AppSecrets.openAIKey
+
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
-        req.addValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
-        req.addValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
+        req.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        req.addValue("realtime=v1",         forHTTPHeaderField: "OpenAI-Beta")
 
         NSLog("[MiraRealtime] WebSocket session opened model=%@", model)
         urlSession = URLSession(configuration: .default)
         webSocket  = urlSession?.webSocketTask(with: req)
         webSocket?.resume()
         pump()
+    }
+
+    // Mints a short-lived ephemeral token via the Supabase edge function so the
+    // raw OpenAI key never travels over the WebSocket connection (matches HeyClicky's
+    // /agent/session-token backend pattern). Falls back to raw key on any failure.
+    private func fetchEphemeralToken() async -> String? {
+        let endpoint = "\(AppSecrets.supabaseURL)/functions/v1/mint-realtime-token"
+        guard let url = URL(string: endpoint) else { return nil }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["voice": MiraVoice.saved.rawValue]
+        )
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = json["token"] as? String, !token.isEmpty else {
+                NSLog("[MiraRealtime] mint-token: bad response, using fallback")
+                return nil
+            }
+            NSLog("[MiraRealtime] ephemeral token minted OK")
+            return token
+        } catch {
+            NSLog("[MiraRealtime] mint-token failed: %@, using fallback", error.localizedDescription)
+            return nil
+        }
     }
 
     private func pump() {
