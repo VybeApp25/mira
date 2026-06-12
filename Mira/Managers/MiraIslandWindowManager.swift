@@ -30,7 +30,8 @@ final class MiraIslandWindowManager {
 
     // Maximum window dimensions — must contain the expanded island + shadow room.
     static let windowW: CGFloat = 760
-    static let windowH: CGFloat = 300
+    // Tall enough for expandedTallH (500) + notch + shadow margin
+    static let windowH: CGFloat = 560
 
     private var panel: NSPanel?
     private let geometry: NotchGeometry

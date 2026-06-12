@@ -646,7 +646,12 @@ enum MiraPrompts {
     append <point x=N y=N> at the very end of your response (after all spoken words), \
     where x and y are the UI element's position as fractions of screen width/height from the top-left (0.0–1.0). \
     Example: "Click the red button in the top-right corner <point x=0.91 y=0.04>". \
-    Only use this tag when referencing a specific on-screen element location — never for abstract answers.
+    Only use this tag when referencing a specific on-screen element location — never for abstract answers. \
+    ABOUT YOURSELF: You are the Mira app — a notch island at the top of the screen. \
+    Your own options live in Mira's Settings tab (the gear icon in the expanded island): \
+    voice selection with previews, accent color, microphone, shortcuts, always-on listening, and integrations. \
+    When asked how to change your voice, your color, or your settings, point to Mira's Settings — \
+    never System Settings, which does not control you.
     """
 
     static let vision = """

@@ -91400,10 +91400,16 @@ var VercelProvider = class extends BaseAgenticProvider {
 var SUPPORTED_TOOLKITS = [
   "gmail",
   "googlecalendar",
+  "googledrive",
+  "googledocs",
+  "googlesheets",
   "notion",
   "slack",
   "github",
-  "linear"
+  "linear",
+  "airtable",
+  "vercel",
+  "netlify"
 ];
 var CONFIRM_BEFORE_RUN = /* @__PURE__ */ new Set([
   // Gmail
@@ -91501,9 +91507,26 @@ async function executeConfirmed(toolName, params, userId) {
   const session = await composio.create(userId);
   return session.executeAction(toolName, params);
 }
+var authConfigCache = /* @__PURE__ */ new Map();
+async function authConfigIdFor(composio, toolkit) {
+  const slug = toolkit.toLowerCase();
+  const cached2 = authConfigCache.get(slug);
+  if (cached2) return cached2;
+  const existing = await composio.authConfigs.list({ toolkit: slug });
+  let id = (existing.items ?? []).map((c) => c.id)[0];
+  if (!id) {
+    const created = await composio.authConfigs.create(slug, {
+      type: "use_composio_managed_auth"
+    });
+    id = created.id;
+  }
+  authConfigCache.set(slug, id);
+  return id;
+}
 async function getConnectUrl(app2, userId) {
   const composio = makeComposio();
-  const conn = await composio.connectedAccounts.initiate(userId, app2.toUpperCase());
+  const authConfigId = await authConfigIdFor(composio, app2);
+  const conn = await composio.connectedAccounts.link(userId, authConfigId);
   return conn.redirectUrl ?? "";
 }
 async function getConnectedApps(userId) {

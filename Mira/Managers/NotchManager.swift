@@ -124,6 +124,13 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.animController.collapse() }
         }
+        // Tab switched to one with a different panel height — refresh the hover zone
+        NotificationCenter.default.addObserver(forName: .miraIslandHeightChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.animController.state == .expanded else { return }
+                self.hoverManager.update(activationRect: self.expandedZone())
+            }
+        }
         // Always-on toggle — tap the ∞ button in the shortcut hint row to enable/disable
         NotificationCenter.default.addObserver(forName: .miraToggleAlwaysOn, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -272,7 +279,7 @@ final class NotchManager {
         let padV: CGFloat = 50   // vertical below the panel bottom
         let s = geometry.screen
         let w = AnimationController.expandedW + padH * 2
-        let h = AnimationController.expandedH + geometry.notchHeight + padV
+        let h = animController.currentExpandedH + geometry.notchHeight + padV
         return CGRect(
             x:      s.frame.midX - w / 2,
             y:      s.frame.maxY - h,

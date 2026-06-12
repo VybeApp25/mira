@@ -22,13 +22,21 @@ export interface PendingAction {
 }
 
 // Integrations Mira exposes — must match toolkit slugs in Composio
+// AND the list shown in IntegrationsView.swift, or users can connect an
+// app the agent can't actually use.
 export const SUPPORTED_TOOLKITS = [
   "gmail",
   "googlecalendar",
+  "googledrive",
+  "googledocs",
+  "googlesheets",
   "notion",
   "slack",
   "github",
   "linear",
+  "airtable",
+  "vercel",
+  "netlify",
 ];
 
 // Write/external actions that always need user confirmation before executing
@@ -150,9 +158,40 @@ export async function executeConfirmed(
   return (session as any).executeAction(toolName, params);
 }
 
+// initiate() requires an auth config id (ac_xxx), not a toolkit slug — passing
+// a slug returns Auth_Config_NotFound. Resolve (or lazily create) a
+// Composio-managed auth config per toolkit, cached for the process lifetime.
+const authConfigCache = new Map<string, string>();
+
+async function authConfigIdFor(
+  composio: ReturnType<typeof makeComposio>,
+  toolkit: string
+): Promise<string> {
+  const slug = toolkit.toLowerCase();
+  const cached = authConfigCache.get(slug);
+  if (cached) return cached;
+
+  const existing = await composio.authConfigs.list({ toolkit: slug });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let id = (existing.items ?? []).map((c: any) => c.id as string)[0];
+
+  if (!id) {
+    const created = await composio.authConfigs.create(slug, {
+      type: "use_composio_managed_auth",
+    });
+    id = created.id;
+  }
+
+  authConfigCache.set(slug, id);
+  return id;
+}
+
 export async function getConnectUrl(app: string, userId: string): Promise<string> {
   const composio = makeComposio();
-  const conn = await composio.connectedAccounts.initiate(userId, app.toUpperCase());
+  const authConfigId = await authConfigIdFor(composio, app);
+  // link(), not initiate() — Composio retired initiate() for managed OAuth
+  // configs (changelog 2026-04-24); initiate() now 400s for these.
+  const conn = await composio.connectedAccounts.link(userId, authConfigId);
   return (conn as { redirectUrl?: string }).redirectUrl ?? "";
 }
 

@@ -9,6 +9,9 @@ struct Integration: Identifiable {
     let color: Color
     let tagline: String
     let category: Category
+    // Brands with dark monochrome marks (GitHub, Vercel, Notion) need a light
+    // badge or the logo disappears on Mira's dark background.
+    var lightBadge: Bool = false
 
     enum Category: String { case deploy = "Deploy", productivity = "Productivity", dev = "Dev" }
 }
@@ -16,10 +19,10 @@ struct Integration: Identifiable {
 private let integrations: [Integration] = [
     Integration(id: "github",         name: "GitHub",           icon: "chevron.left.forwardslash.chevron.right",
                 color: Color(red: 0.90, green: 0.90, blue: 0.90),
-                tagline: "Issues, PRs, code review",          category: .dev),
+                tagline: "Issues, PRs, code review",          category: .dev, lightBadge: true),
     Integration(id: "vercel",         name: "Vercel",           icon: "triangle.fill",
                 color: Color(red: 0.90, green: 0.90, blue: 0.90),
-                tagline: "Deploy websites instantly",         category: .deploy),
+                tagline: "Deploy websites instantly",         category: .deploy, lightBadge: true),
     Integration(id: "netlify",        name: "Netlify",          icon: "bolt.fill",
                 color: Color(red: 0.06, green: 0.83, blue: 0.68),
                 tagline: "Deploy and host websites",          category: .deploy),
@@ -40,7 +43,7 @@ private let integrations: [Integration] = [
                 tagline: "Read and update spreadsheets",      category: .productivity),
     Integration(id: "notion",         name: "Notion",           icon: "doc.text.fill",
                 color: Color(red: 0.85, green: 0.85, blue: 0.85),
-                tagline: "Read and write pages",              category: .productivity),
+                tagline: "Read and write pages",              category: .productivity, lightBadge: true),
     Integration(id: "slack",          name: "Slack",            icon: "bubble.left.fill",
                 color: Color(red: 0.44, green: 0.12, blue: 0.59),
                 tagline: "Send messages to channels",         category: .productivity),
@@ -272,14 +275,23 @@ struct IntegrationsView: View {
         let isDisconnecting = disconnecting == item.id
 
         return HStack(spacing: 11) {
-            // App icon badge
+            // App icon badge — official brand logo from the asset catalog
+            // (integration-<slug>), SF Symbol fallback for slugs without one.
             ZStack {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(item.color.opacity(0.12))
+                    .fill(item.lightBadge ? Color.white.opacity(0.92) : item.color.opacity(0.12))
                     .frame(width: 36, height: 36)
-                Image(systemName: item.icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(item.color)
+                if NSImage(named: "integration-\(item.id)") != nil {
+                    Image("integration-\(item.id)")
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                } else {
+                    Image(systemName: item.icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(item.color)
+                }
             }
 
             // Name + tagline

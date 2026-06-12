@@ -85,7 +85,12 @@ struct MiraIslandView: View {
         let hasSupplementaryContent = !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive
         return geometry.notchWidth + (hasSupplementaryContent ? 110 : 54)
     }
-    private var pillH: CGFloat { isExpanded ? AnimationController.expandedH : geometry.notchHeight }
+    // Settings/agents/crons are content-dense — give them the tall panel.
+    private var expandedHeight: CGFloat {
+        selectedTab == .home ? AnimationController.expandedH
+                             : AnimationController.expandedTallH
+    }
+    private var pillH: CGFloat { isExpanded ? expandedHeight : geometry.notchHeight }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
     private var botR:  CGFloat { isExpanded ? AnimationController.expandedBotR : AnimationController.collapsedBotR }
 
@@ -109,6 +114,12 @@ struct MiraIslandView: View {
                 if str == "agents" { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents } }
                 else               { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   } }
             }
+        }
+        // Keep the hover zone in sync with the per-tab panel height — without
+        // this, moving the cursor into the lower half of a tall tab collapses it.
+        .onChange(of: selectedTab) { _, _ in
+            animController.currentExpandedH = expandedHeight
+            NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
         }
         // Opt out of the macOS safe-area inset (menu bar height ≈ 33pt).
         // Without this the pill is pushed ~33pt below the notch, leaving a gap.

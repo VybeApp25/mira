@@ -87,7 +87,8 @@ final class OverlayWindowManager {
 
     func finishBubble() {
         bubbleHideTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 7_000_000_000)
+            // HeyClicky fades the cursor bubble ~4–5s after the reply finishes
+            try? await Task.sleep(nanoseconds: 4_500_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
@@ -257,20 +258,23 @@ struct OverlayContentView: View {
 struct BlueCursorView: View {
     let state: MiraCursorState
 
-    private let blue = Color(red: 0.18, green: 0.56, blue: 1.0)
+    // Follows the user's accent choice — changing the accent in Settings
+    // recolors the cursor live.
+    @ObservedObject private var accentService = AccentColorService.shared
+    private var accent: Color { accentService.color }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Arrow — 32×32, tip at (3, 3)
             BlueArrowShape()
-                .fill(blue)
+                .fill(accent)
                 .frame(width: 32, height: 32)
                 .overlay(
                     BlueArrowShape()
                         .stroke(Color.white.opacity(0.28), lineWidth: 0.8)
                         .frame(width: 32, height: 32)
                 )
-                .shadow(color: blue.opacity(0.65), radius: 8, x: 0, y: 0)
+                .shadow(color: accent.opacity(0.65), radius: 8, x: 0, y: 0)
 
             // State indicator sits at the base of the arrow shaft
             stateIndicator
@@ -285,11 +289,11 @@ struct BlueCursorView: View {
         case .arrow:
             EmptyView()
         case .thinking:
-            BlueCursorSpinnerView(color: blue)
+            BlueCursorSpinnerView(color: accent)
         case .stop:
-            BlueCursorStopView(color: blue)
+            BlueCursorStopView(color: accent)
         case .listening:
-            BlueCursorWaveformView(color: blue)
+            BlueCursorWaveformView(color: accent)
         }
     }
 }
