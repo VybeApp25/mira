@@ -69,9 +69,17 @@ final class ComputerUseService {
     }
 
     func doubleClick(x: Int, y: Int) {
+        multiClick(x: x, y: y, count: 2)
+    }
+
+    func tripleClick(x: Int, y: Int) {
+        multiClick(x: x, y: y, count: 3)
+    }
+
+    private func multiClick(x: Int, y: Int, count: Int64) {
         let pt  = CGPoint(x: x, y: y)
         let src = CGEventSource(stateID: .hidSystemState)
-        for cs: Int64 in [1, 2] {
+        for cs in 1...count {
             let d = CGEvent(mouseEventSource: src, mouseType: .leftMouseDown, mouseCursorPosition: pt, mouseButton: .left)
             let u = CGEvent(mouseEventSource: src, mouseType: .leftMouseUp,   mouseCursorPosition: pt, mouseButton: .left)
             d?.setIntegerValueField(.mouseEventClickState, value: cs)

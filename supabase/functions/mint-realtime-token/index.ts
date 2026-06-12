@@ -24,15 +24,23 @@ Deno.serve(async (req: Request) => {
     if (body.voice) voice = body.voice;
   } catch (_) { /* no body is fine */ }
 
-  const model = "gpt-4o-realtime-preview";
+  const model = "gpt-realtime";
 
-  const openaiRes = await fetch("https://api.openai.com/v1/realtime/sessions", {
+  // GA endpoint — /v1/realtime/sessions (beta) was retired with the
+  // gpt-4o-realtime-preview models. Response shape: { value, expires_at, session }.
+  const openaiRes = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model, voice }),
+    body: JSON.stringify({
+      session: {
+        type: "realtime",
+        model,
+        audio: { output: { voice } },
+      },
+    }),
   });
 
   const payload = await openaiRes.json();
@@ -44,8 +52,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const token  = payload.client_secret?.value ?? "";
-  const expiry = payload.client_secret?.expires_at ?? 0;
+  const token  = payload.value ?? "";
+  const expiry = payload.expires_at ?? 0;
 
   return new Response(
     JSON.stringify({ token, expires_at: expiry, model }),

@@ -7,6 +7,10 @@
 //
 // Pipeline: AVAudioEngine mic → PCM16 @ 24 kHz → base64 → WebSocket
 //           WebSocket → PCM16 → Float32 → AVAudioPlayerNode → speakers
+//
+// Speaks the GA Realtime API (model gpt-realtime): session.update carries
+// session.type="realtime" with nested audio.input/audio.output config, and
+// the server emits response.output_audio.* events.
 
 import Foundation
 @preconcurrency import AVFoundation
@@ -96,7 +100,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private var captureEngine   = AVAudioEngine()
     private var inputConverter: AVAudioConverter?
-    private let captureRate:    Double = 16_000   // OpenAI Realtime expects PCM16 at 16 kHz
+    private let captureRate:    Double = 24_000   // GA Realtime audio/pcm is 24 kHz only
 
     // MARK: Private — Audio playback (API → speakers)
 
@@ -256,7 +260,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     private func openSocketAsync() async {
-        let model     = "gpt-4o-realtime-preview"
+        let model     = "gpt-realtime"
         let authToken = await fetchEphemeralToken() ?? AppSecrets.openAIKey
 
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
@@ -281,6 +285,9 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         req.httpMethod = "POST"
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        // verify_jwt requires a Bearer token — without it the function 401s
+        // and every session silently falls back to the raw OpenAI key.
+        req.addValue("Bearer \(AppSecrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         req.httpBody = try? JSONSerialization.data(
             withJSONObject: ["voice": MiraVoice.saved.rawValue]
         )
@@ -302,9 +309,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     private func pump() {
-        webSocket?.receive { [weak self] result in
+        guard let socket = webSocket else { return }
+        socket.receive { [weak self, weak socket] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // Ignore callbacks from sockets that teardown()/reconnect already
+                // replaced — only the live socket may drive state or reconnection.
+                guard let socket, socket === self.webSocket else { return }
                 switch result {
                 case .success(let msg):
                     self.dispatch(msg)
@@ -312,8 +323,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                 case .failure(let err):
                     NSLog("[MiraRealtime] receive failed: %@", err.localizedDescription)
                     guard self.shouldReconnect else { break }
-                    if case .error    = self.state { break }
-                    if case .connecting = self.state { break }
+                    if case .error = self.state { break }
                     self.scheduleReconnect()
                 }
             }
@@ -331,7 +341,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type = json["type"] as? String else { return }
+              let type = json["type"] as? String else {
+            NSLog("[MiraRealtime] unparseable frame: %@", String(text.prefix(200)))
+            return
+        }
+        // Audio/transcript deltas arrive many times per second — don't log those.
+        if !type.hasSuffix(".delta") {
+            NSLog("[MiraRealtime] ← %@", type)
+        }
         handle(type: type, event: json)
     }
 
@@ -468,7 +485,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let code   = errObj?["code"]    as? String ?? "?"
             let msg    = errObj?["message"] as? String ?? "Unknown error"
             NSLog("[MiraRealtime] server error — code=%@ msg=%@", code, msg)
-            state = .error(msg)
+            // Benign races — cancelling a response that already finished, or
+            // committing an empty buffer — don't invalidate the session.
+            // Going to .error here would kill always-on listening for nothing.
+            let benign = code == "response_cancel_not_active"
+                      || code == "input_audio_buffer_commit_empty"
+                      || msg.contains("no active response")
+                      || msg.contains("buffer too small")
+            if !benign { state = .error(msg) }
 
         default:
             break
@@ -521,19 +545,30 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         let contextBlock = ContextService.shared.buildPromptBlock()
         let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
 
-        var session: [String: Any] = ["instructions": instructions]
+        // GA Realtime requires session.type on every session.update —
+        // omitting it returns missing_required_parameter and the update is dropped.
+        var session: [String: Any] = [
+            "type":         "realtime",
+            "instructions": instructions
+        ]
 
         if includeFullConfig {
-            session["modalities"]    = ["text", "audio"]
-            session["voice"]         = MiraVoice.saved.rawValue
-            session["input_audio_format"]        = "pcm16"
-            session["output_audio_format"]       = "pcm16"
-            session["input_audio_transcription"] = ["model": "whisper-1"] as [String: Any]
-            session["turn_detection"] = [
-                "type":               "server_vad",
-                "threshold":          0.5,
-                "prefix_padding_ms":  300,
-                "silence_duration_ms": 500
+            session["output_modalities"] = ["audio"]
+            session["audio"] = [
+                "input": [
+                    "format":        ["type": "audio/pcm", "rate": 24_000] as [String: Any],
+                    "transcription": ["model": "whisper-1"] as [String: Any],
+                    "turn_detection": [
+                        "type":                "server_vad",
+                        "threshold":           0.5,
+                        "prefix_padding_ms":   300,
+                        "silence_duration_ms": 500
+                    ] as [String: Any]
+                ] as [String: Any],
+                "output": [
+                    "format": ["type": "audio/pcm", "rate": 24_000] as [String: Any],
+                    "voice":  MiraVoice.saved.rawValue
+                ] as [String: Any]
             ] as [String: Any]
             session["tools"]       = MiraToolService.definitions
             session["tool_choice"] = "auto"
@@ -819,7 +854,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func emit(_ dict: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let str  = String(data: data, encoding: .utf8) else { return }
-        webSocket?.send(.string(str)) { _ in }
+              let str  = String(data: data, encoding: .utf8) else {
+            // A non-JSON-serializable value (Date, enum, …) anywhere in the
+            // payload throws — swallowing it would silently kill the handshake.
+            NSLog("[MiraRealtime] emit DROPPED — payload not JSON-serializable (type=%@)",
+                  dict["type"] as? String ?? "?")
+            return
+        }
+        webSocket?.send(.string(str)) { error in
+            if let error {
+                NSLog("[MiraRealtime] send failed: %@", error.localizedDescription)
+            }
+        }
     }
 }

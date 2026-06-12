@@ -635,6 +635,9 @@ struct IslandChatView: View {
         hasPlayedReceiveChime = false
         autoDismissWork?.cancel(); autoDismissWork = nil
         messages.append(ChatMessage(role: .user, text: prompt))
+        // Persist — the view is destroyed on island collapse, so anything not
+        // in ConversationStore is gone the next time the island expands.
+        ConversationStore.shared.save(role: "user", text: prompt)
         AudioCueService.shared.playTextSend()
         isLoading         = true
 
@@ -746,6 +749,7 @@ struct IslandChatView: View {
                 } else {
                     messages.append(ChatMessage(role: .mira, text: reply))
                 }
+                ConversationStore.shared.save(role: "mira", text: reply)
                 if !hasPlayedReceiveChime {
                     hasPlayedReceiveChime = true
                     AudioCueService.shared.playTextReceive()
@@ -757,6 +761,13 @@ struct IslandChatView: View {
                     messages.append(ChatMessage(role: .mira, widget: .artifact(info)))
                 }
                 scheduleAutoDismiss(after: 8.0)
+            }
+            else if let id = placeholderID,
+                    let idx = messages.firstIndex(where: { $0.id == id }),
+                    messages[idx].text.isEmpty {
+                // No text reply for this route — drop the unused placeholder
+                // so an empty bubble doesn't linger in the thread.
+                messages.remove(at: idx)
             }
             if let target = result.guidanceTarget, target.confidence >= 0.60 {
                 overlay.showGuidance(GuidanceFrame(timestamp: .now, targets: [target]))

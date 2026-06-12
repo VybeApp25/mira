@@ -92,43 +92,50 @@ final class NotchManager {
         wireHoverDetection()
         wireShortcutUpdates()
         // Expand island when a shortcut fires via StatusBarController's menu key equivalents
+        // All observers use queue: .main, so MainActor.assumeIsolated is sound —
+        // it gives the closures static MainActor isolation instead of crossing
+        // the actor boundary unchecked.
         NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            let alreadyExpanded = self.animController.state == .expanded
-            self.expandForShortcut()
-            if !alreadyExpanded {
-                // IslandChatView is inside `if isExpanded` — it wasn't in the hierarchy yet.
-                // Re-post after SwiftUI renders expandedContent so the view catches the notification.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                    NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let alreadyExpanded = self.animController.state == .expanded
+                self.expandForShortcut()
+                if !alreadyExpanded {
+                    // IslandChatView is inside `if isExpanded` — it wasn't in the hierarchy yet.
+                    // Re-post after SwiftUI renders expandedContent so the view catches the notification.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                        NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
+                    }
                 }
             }
         }
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
-            self?.expandForShortcut()
+            MainActor.assumeIsolated { self?.expandForShortcut() }
         }
 
         // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor
         NotificationCenter.default.addObserver(forName: .miraPushToTalkBegan, object: nil, queue: .main) { _ in
-            RealtimeVoiceService.shared.beginPushToTalk()
+            MainActor.assumeIsolated { RealtimeVoiceService.shared.beginPushToTalk() }
         }
         NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { _ in
-            RealtimeVoiceService.shared.endPushToTalk()
+            MainActor.assumeIsolated { RealtimeVoiceService.shared.endPushToTalk() }
         }
         // Auto-collapse requested (post-PTT or post-text-response dismiss)
         NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
-            self?.animController.collapse()
+            MainActor.assumeIsolated { self?.animController.collapse() }
         }
         // Always-on toggle — tap the ∞ button in the shortcut hint row to enable/disable
         NotificationCenter.default.addObserver(forName: .miraToggleAlwaysOn, object: nil, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            if RealtimeVoiceService.shared.isAlwaysOnActive {
-                RealtimeVoiceService.shared.disconnectAlwaysOn()
-                NSLog("[Mira] always-on voice disabled")
-            } else {
-                self.expandForShortcut()
-                RealtimeVoiceService.shared.connectAlwaysOn()
-                NSLog("[Mira] always-on voice enabled")
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if RealtimeVoiceService.shared.isAlwaysOnActive {
+                    RealtimeVoiceService.shared.disconnectAlwaysOn()
+                    NSLog("[Mira] always-on voice disabled")
+                } else {
+                    self.expandForShortcut()
+                    RealtimeVoiceService.shared.connectAlwaysOn()
+                    NSLog("[Mira] always-on voice enabled")
+                }
             }
         }
     }
@@ -221,7 +228,9 @@ final class NotchManager {
     private func wireShortcutUpdates() {
         NotificationCenter.default.addObserver(
             forName: .miraShortcutsChanged, object: nil, queue: .main
-        ) { [weak self] _ in self?.shortcutManager.update() }
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.shortcutManager.update() }
+        }
     }
 
     private func wireHoverDetection() {
@@ -234,10 +243,12 @@ final class NotchManager {
         NotificationCenter.default.addObserver(
             forName: .miraScreenCompanionChanged, object: nil, queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            if !HoverPreferences.shared.screenCompanionEnabled {
-                tooltipController.hide()
-                insightManager?.cancel()
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if !HoverPreferences.shared.screenCompanionEnabled {
+                    self.tooltipController.hide()
+                    self.insightManager?.cancel()
+                }
             }
         }
     }

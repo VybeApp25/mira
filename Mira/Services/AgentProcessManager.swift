@@ -13,10 +13,14 @@ final class AgentProcessManager {
 
     @Published private(set) var isRunning = false
 
-    private var process:       Process?
-    private var shouldRestart  = false
-    private var nodePath:      String?
-    private var scriptPath:    String?
+    private var process:        Process?
+    private var shouldRestart   = false
+    private var nodePath:       String?
+    private var scriptPath:     String?
+    private var restartAttempts = 0
+    private var lastLaunchDate  = Date.distantPast
+
+    private static let agentPort = 4242
 
     // MARK: - Public API
 
@@ -49,6 +53,11 @@ final class AgentProcessManager {
     private func launch() {
         guard let node = nodePath, let script = scriptPath else { return }
 
+        // A sidecar orphaned by a previous Mira run (e.g. the installed app's
+        // GUI died but its node child survived) keeps the port bound, so every
+        // fresh launch exits immediately and we restart-loop forever.
+        reapOrphanSidecar()
+
         let proc = Process()
         proc.launchPath = node
         proc.arguments  = [script]
@@ -65,22 +74,70 @@ final class AgentProcessManager {
             Task { @MainActor [weak self] in
                 guard let self, self.shouldRestart else { return }
                 self.isRunning = false
-                NSLog("[Mira] AgentProcessManager: process exited (code %d) — restarting in 2s",
-                      p.terminationStatus)
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                // A long uptime means this was a real crash, not a launch
+                // failure — reset the rapid-exit counter.
+                if Date().timeIntervalSince(self.lastLaunchDate) > 60 {
+                    self.restartAttempts = 0
+                }
+                self.restartAttempts += 1
+                guard self.restartAttempts <= 5 else {
+                    NSLog("[Mira] AgentProcessManager: 5 rapid exits — giving up. Check port %d and server.js.",
+                          Self.agentPort)
+                    return
+                }
+                let delay = min(pow(2.0, Double(self.restartAttempts)), 30.0)
+                NSLog("[Mira] AgentProcessManager: process exited (code %d) — restart %d/5 in %.0fs",
+                      p.terminationStatus, self.restartAttempts, delay)
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 self.launch()
             }
         }
 
         do {
             try proc.run()
-            process   = proc
-            isRunning = true
+            process        = proc
+            isRunning      = true
+            lastLaunchDate = Date()
             NSLog("[Mira] AgentProcessManager: started (pid %d) using %@",
                   proc.processIdentifier, node)
         } catch {
             NSLog("[Mira] AgentProcessManager: launch failed — %@", error.localizedDescription)
         }
+    }
+
+    /// Kills any *Mira* sidecar left listening on the agent port by a previous
+    /// run. Only PIDs whose command line contains Mira's server.js are touched —
+    /// an unrelated app on the port is logged, never killed.
+    private func reapOrphanSidecar() {
+        guard let pids = shellOutput("/usr/sbin/lsof", ["-ti", ":\(Self.agentPort)"]) else { return }
+        var reaped = false
+        for line in pids.split(separator: "\n") {
+            guard let pid = Int32(line.trimmingCharacters(in: .whitespaces)),
+                  pid != process?.processIdentifier else { continue }
+            let cmd = shellOutput("/bin/ps", ["-p", "\(pid)", "-o", "command="]) ?? ""
+            if cmd.contains("server.js") && cmd.contains("Mira") {
+                NSLog("[Mira] AgentProcessManager: reaping orphan sidecar pid %d", pid)
+                kill(pid, SIGTERM)
+                reaped = true
+            } else if !cmd.isEmpty {
+                NSLog("[Mira] AgentProcessManager: port %d held by non-Mira process: %@",
+                      Self.agentPort, cmd)
+            }
+        }
+        if reaped { usleep(400_000) }   // let the kernel release the port
+    }
+
+    private func shellOutput(_ path: String, _ args: [String]) -> String? {
+        let proc = Process()
+        proc.launchPath = path
+        proc.arguments  = args
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError  = FileHandle.nullDevice
+        do { try proc.run() } catch { return nil }
+        proc.waitUntilExit()
+        return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Find node

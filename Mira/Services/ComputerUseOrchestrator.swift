@@ -9,7 +9,7 @@ struct CUAStep: Identifiable {
     var screenshot: NSImage? = nil
 }
 
-// Drives a multi-turn Claude computer_20241022 session.
+// Drives a multi-turn Claude computer_20251124 session.
 // Sends the full conversation to /v1/messages, executes every tool_use block
 // via ComputerUseService, then loops until Claude returns end_turn.
 @MainActor
@@ -181,6 +181,11 @@ final class ComputerUseOrchestrator: ObservableObject {
             cua.doubleClick(x: coord.count > 0 ? coord[0] : 0, y: coord.count > 1 ? coord[1] : 0)
             return ([ok], CUAStep(action: action, details: "Double-click at (\(coord[0]), \(coord[1]))"))
 
+        case "triple_click":
+            let coord = input["coordinate"] as? [Int] ?? [0, 0]
+            cua.tripleClick(x: coord.count > 0 ? coord[0] : 0, y: coord.count > 1 ? coord[1] : 0)
+            return ([ok], CUAStep(action: action, details: "Triple-click at (\(coord[0]), \(coord[1]))"))
+
         case "left_click_drag":
             let s = input["start_coordinate"] as? [Int] ?? [0, 0]
             let e = input["coordinate"]       as? [Int] ?? [0, 0]
@@ -242,8 +247,10 @@ final class ComputerUseOrchestrator: ObservableObject {
             "model":      "claude-sonnet-4-6",
             "max_tokens": 4096,
             "system":     system,
+            // claude-sonnet-4-6 only supports computer_20251124 — older tool
+            // versions (20241022/20250124) are rejected with invalid_request_error.
             "tools": [[
-                "type":              "computer_20241022",
+                "type":              "computer_20251124",
                 "name":              "computer",
                 "display_width_px":  width,
                 "display_height_px": height
@@ -259,7 +266,7 @@ final class ComputerUseOrchestrator: ObservableObject {
         req.setValue(apiKey,                    forHTTPHeaderField: "x-api-key")
         req.setValue("2023-06-01",              forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",        forHTTPHeaderField: "content-type")
-        req.setValue("computer-use-2024-10-22", forHTTPHeaderField: "anthropic-beta")
+        req.setValue("computer-use-2025-11-24", forHTTPHeaderField: "anthropic-beta")
         req.httpBody = data
 
         guard let (respData, resp) = try? await URLSession.shared.data(for: req),

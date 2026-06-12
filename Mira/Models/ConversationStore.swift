@@ -24,6 +24,9 @@ final class ConversationStore: ObservableObject {
     // MARK: - Public API
 
     func save(role: String, text: String) {
+        // Streaming finalize + transcript-done can both report the same
+        // message — an identical consecutive entry is always a double-save.
+        if let last = entries.last, last.role == role, last.text == text { return }
         let entry = Entry(id: UUID(), role: role, text: text, timestamp: Date())
         entries.append(entry)
         if entries.count > maxCount {
