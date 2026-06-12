@@ -624,7 +624,7 @@ struct MiraIslandView: View {
         case .crons:
             CronsTabView()
         case .settings:
-            SettingsView(state: miraState)
+            SettingsView(state: miraState, embedded: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

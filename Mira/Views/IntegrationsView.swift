@@ -61,6 +61,9 @@ struct IntegrationsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var status:       [String: Bool] = [:]
+    // Apps with a connected account whose token is no longer healthy
+    // (EXPIRED / FAILED / revoked) — shown with an amber Reconnect action.
+    @State private var needsReconnect: Set<String> = []
     @State private var loading               = false
     @State private var connecting:   String? = nil
     @State private var disconnecting: String? = nil
@@ -334,20 +337,23 @@ struct IntegrationsView: View {
                     .buttonStyle(.plain)
                 }
             } else {
-                Button("Connect") {
+                let stale = needsReconnect.contains(item.id)
+                let amber = Color(red: 1.0, green: 0.72, blue: 0.25)
+                Button(stale ? "Reconnect" : "Connect") {
                     Task { await connect(item) }
                 }
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(accent)
+                .foregroundColor(stale ? amber : accent)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 5)
-                .background(accent.opacity(0.10))
+                .background((stale ? amber : accent).opacity(0.10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(accent.opacity(0.25), lineWidth: 1)
+                        .stroke((stale ? amber : accent).opacity(0.25), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .buttonStyle(.plain)
+                .help(stale ? "Connection expired — sign in again to keep using this app" : "")
             }
         }
         .padding(.horizontal, 11)
@@ -372,6 +378,12 @@ struct IntegrationsView: View {
             for id in integrations.map(\.id) { map[id] = connected.contains(id) }
             status = map
             IntegrationContextService.shared.update(connected: Set(connected))
+
+            // Health pass: accounts that exist but aren't ACTIVE need a re-auth.
+            let statuses = (try? await AgentService.shared.connectionStatuses()) ?? []
+            needsReconnect = Set(
+                statuses.filter { !$0.isHealthy && $0.status != "INITIATED" }.map(\.slug)
+            ).subtracting(connected)
         } catch {
             errorMsg = "Could not load connections — is the agent service running?"
         }

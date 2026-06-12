@@ -205,6 +205,25 @@ export async function getConnectedApps(userId: string): Promise<string[]> {
   return (result.items ?? []).map((a: any) => (a.toolkit?.slug ?? "").toLowerCase()).filter(Boolean);
 }
 
+export interface ConnectionStatus {
+  slug: string;
+  status: string; // ACTIVE | EXPIRED | FAILED | INITIATED | ...
+}
+
+// All connected accounts with their health — lets the UI flag expired/revoked
+// tokens with a Reconnect action instead of failing mid-conversation.
+export async function getConnectionStatuses(userId: string): Promise<ConnectionStatus[]> {
+  const composio = makeComposio();
+  const result = await composio.connectedAccounts.list({ userIds: [userId] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (result.items ?? [])
+    .map((a: any) => ({
+      slug: (a.toolkit?.slug ?? "").toLowerCase(),
+      status: String(a.status ?? "UNKNOWN").toUpperCase(),
+    }))
+    .filter((c: ConnectionStatus) => c.slug.length > 0);
+}
+
 function describe(tool: string, input: Record<string, unknown>): string {
   switch (tool) {
     case "GMAIL_SEND_EMAIL":

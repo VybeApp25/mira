@@ -4,6 +4,10 @@ import AVFoundation
 
 struct SettingsView: View {
     @ObservedObject var state: MiraState
+    // true when shown as the island's Settings tab: fill the tab area instead
+    // of the fixed 360×760 sheet size (which center-clips inside the island
+    // and pushes the nav bar off-screen), and make Done return to Home.
+    var embedded: Bool = false
     @ObservedObject private var memory   = MemoryStore.shared
     @ObservedObject private var shortcuts = ShortcutStore.shared
     @Environment(\.dismiss) var dismiss
@@ -93,7 +97,10 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(width: 360, height: 760)
+        .frame(
+            width:  embedded ? nil : 360,
+            height: embedded ? nil : 760
+        )
         .onAppear {
             keyInput = state.userAPIKey
             hoverCategories = HoverPreferences.shared.categories
@@ -115,10 +122,17 @@ struct SettingsView: View {
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            Button("Done") { dismiss() }
-                .foregroundColor(accent)
-                .buttonStyle(.plain)
-                .font(.system(size: 14, weight: .medium))
+            Button("Done") {
+                if embedded {
+                    // dismiss() is a no-op outside a sheet — go back to Home
+                    NotificationCenter.default.post(name: .miraTabSelected, object: IslandTab.home)
+                } else {
+                    dismiss()
+                }
+            }
+            .foregroundColor(accent)
+            .buttonStyle(.plain)
+            .font(.system(size: 14, weight: .medium))
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { runAgent, executeConfirmed, getConnectUrl, getConnectedApps } from "./agent";
+import { runAgent, executeConfirmed, getConnectUrl, getConnectedApps, getConnectionStatuses } from "./agent";
 
 const app = express();
 app.use(express.json());
@@ -69,6 +69,21 @@ app.get("/connect/:app", async (req, res) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  }
+});
+
+// Per-account health: slug + status (ACTIVE / EXPIRED / FAILED / ...)
+app.get("/connections/status", async (req, res) => {
+  const { userId } = req.query as { userId?: string };
+  if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
+
+  try {
+    const statuses = await getConnectionStatuses(userId);
+    res.json({ statuses });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/connections/status]", msg);
+    res.status(500).json({ error: msg, statuses: [] });
   }
 });
 

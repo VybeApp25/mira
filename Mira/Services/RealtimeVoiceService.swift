@@ -118,6 +118,20 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private var aiTranscript: String = ""
 
+    // MARK: Private — Conversation continuity / screen context
+
+    // True once persisted history has been replayed into this session —
+    // session.updated fires on every per-turn instruction refresh, so the
+    // injection must only happen once per socket.
+    private var historyInjected = false
+
+    /// Screen snapshot per voice turn (HeyClicky-style live screen awareness).
+    /// Disable with `defaults write … mira_voice_screen_context -bool NO`.
+    private var screenContextEnabled: Bool {
+        UserDefaults.standard.object(forKey: "mira_voice_screen_context") == nil
+            || UserDefaults.standard.bool(forKey: "mira_voice_screen_context")
+    }
+
     // MARK: Private — Session
 
     private var openAIKey       = ""
@@ -200,6 +214,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             NSLog("[MiraRealtime] PTT begin: reusing healthy session")
             if !captureEngine.isRunning { startCapture() }
             emit(["type": "input_audio_buffer.clear"])
+            sendScreenSnapshot()
             state = .recording
         } else if webSocket != nil {
             // Socket exists but not yet healthy — already in flight; health-poll will gate commit
@@ -369,6 +384,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             retryCount     = 0
             sessionHealthy = true
             if !captureEngine.isRunning { startCapture() }
+            if !historyInjected {
+                historyInjected = true
+                injectConversationHistory()
+                // Cold-start turn (PTT cold open / first always-on turn) has no
+                // speech_started yet — attach the screen for the first question.
+                sendScreenSnapshot()
+            }
             if isAlwaysOn {
                 NSLog("[MiraRealtime] always-on listening active")
             }
@@ -388,6 +410,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             userDraft = ""
             state     = .recording
             refreshContextInstructions()
+            sendScreenSnapshot()
 
         // ── Server VAD: user stopped speaking — server will auto-commit ──────────
         case "input_audio_buffer.speech_stopped":
@@ -409,6 +432,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             aiTranscript = ""
             aiDraft      = ""
             state        = .thinking
+            // Live captions at the cursor while Mira speaks (HeyClicky parity)
+            CursorBubbleService.shared.showStreaming()
 
         case "response.output_audio.delta":
             if let delta = event["delta"] as? String {
@@ -453,11 +478,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let delta = event["delta"] as? String ?? ""
             aiTranscript += delta
             aiDraft = Self.stripPointTag(from: aiTranscript)
+            // Point tags only ever appear at the very end — keep them out of
+            // the caption by never streaming past the first '<'.
+            if !delta.contains("<"), !aiTranscript.contains("<point") {
+                CursorBubbleService.shared.append(token: delta)
+            }
 
         case "response.output_audio_transcript.done":
             let (cleanText, pt) = Self.extractPointTag(from: aiTranscript)
             if !cleanText.isEmpty { onAIMessage?(cleanText) }
             if let pt { PointToService.shared.point(toNormalized: pt) }
+            CursorBubbleService.shared.finishStreaming()
 
         // ── Tool call assembly ────────────────────────────────────────────────────
         case "response.output_item.added":
@@ -539,6 +570,63 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     /// so context (screen, clipboard, focused app) is always current.
     private func refreshContextInstructions() {
         emit(buildSessionUpdate(includeFullConfig: false))
+    }
+
+    // MARK: - Conversation continuity
+
+    /// Replays recent persisted history into the fresh Realtime session so
+    /// "what did we just talk about?" works across PTT/always-on sessions.
+    private func injectConversationHistory() {
+        let entries = ConversationStore.shared.entries.suffix(10)
+        guard !entries.isEmpty else { return }
+        for e in entries {
+            let isUser = e.role == "user"
+            emit([
+                "type": "conversation.item.create",
+                "item": [
+                    "type": "message",
+                    "role": isUser ? "user" : "assistant",
+                    "content": [[
+                        "type": isUser ? "input_text" : "output_text",
+                        "text": String(e.text.prefix(600))
+                    ]] as [[String: Any]]
+                ] as [String: Any]
+            ])
+        }
+        NSLog("[MiraRealtime] injected %d history items", entries.count)
+    }
+
+    // MARK: - Live screen context
+
+    /// Captures the cursor's screen and attaches it to the current turn as an
+    /// input_image item — gives the model HeyClicky-style live screen awareness.
+    private func sendScreenSnapshot() {
+        guard screenContextEnabled else { return }
+        Task { [weak self] in
+            do {
+                let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
+                guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first
+                else { return }
+                await MainActor.run { [weak self] in
+                    guard let self, self.sessionHealthy else { return }
+                    self.emit([
+                        "type": "conversation.item.create",
+                        "item": [
+                            "type": "message",
+                            "role": "user",
+                            "content": [[
+                                "type": "input_image",
+                                "image_url": "data:image/jpeg;base64,\(primary.imageData.base64EncodedString())"
+                            ]] as [[String: Any]]
+                        ] as [String: Any]
+                    ])
+                    NSLog("[MiraRealtime] screen snapshot attached (%d KB)",
+                          primary.imageData.count / 1024)
+                }
+            } catch {
+                // Screen context is best-effort — the voice turn proceeds without it.
+            }
+        }
     }
 
     private func buildSessionUpdate(includeFullConfig: Bool) -> [String: Any] {
@@ -808,7 +896,8 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     private func teardown() {
-        sessionHealthy = false
+        sessionHealthy  = false
+        historyInjected = false
         idleTeardownTask?.cancel()
         idleTeardownTask = nil
 

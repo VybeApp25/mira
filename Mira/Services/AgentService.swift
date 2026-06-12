@@ -96,6 +96,25 @@ class AgentService: ObservableObject {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.connected ?? []
     }
 
+    struct ConnectionStatus: Decodable {
+        let slug:   String
+        let status: String   // ACTIVE | EXPIRED | FAILED | INITIATED | ...
+        var isHealthy: Bool { status == "ACTIVE" }
+    }
+
+    /// Per-account health for every connected app (any status, not just ACTIVE) —
+    /// lets the UI surface expired/revoked tokens with a Reconnect action.
+    func connectionStatuses() async throws -> [ConnectionStatus] {
+        guard var comps = URLComponents(url: base.appendingPathComponent("connections/status"), resolvingAgainstBaseURL: false) else {
+            throw AgentError.badURL
+        }
+        comps.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        guard let url = comps.url else { throw AgentError.badURL }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        struct Resp: Decodable { let statuses: [ConnectionStatus] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.statuses ?? []
+    }
+
     func disconnect(_ app: String) async throws {
         var req = try post("/disconnect/\(app)", body: ["userId": userId])
         req.timeoutInterval = 15

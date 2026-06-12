@@ -26,7 +26,7 @@ final class AnimationController: ObservableObject {
     static let expandedH:  CGFloat = 252
     // Content-dense tabs (settings, agents, crons) get a taller panel —
     // 252pt showed ~190pt of a 1400-line settings page through a scroll slot.
-    static let expandedTallH: CGFloat = 500
+    static let expandedTallH: CGFloat = 420
 
     // Height of the currently displayed expanded panel. MiraIslandView keeps
     // this in sync with the active tab; NotchManager reads it for the hover

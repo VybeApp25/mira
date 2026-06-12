@@ -91537,6 +91537,14 @@ async function getConnectedApps(userId) {
   });
   return (result.items ?? []).map((a) => (a.toolkit?.slug ?? "").toLowerCase()).filter(Boolean);
 }
+async function getConnectionStatuses(userId) {
+  const composio = makeComposio();
+  const result = await composio.connectedAccounts.list({ userIds: [userId] });
+  return (result.items ?? []).map((a) => ({
+    slug: (a.toolkit?.slug ?? "").toLowerCase(),
+    status: String(a.status ?? "UNKNOWN").toUpperCase()
+  })).filter((c) => c.slug.length > 0);
+}
 function describe(tool2, input) {
   switch (tool2) {
     case "GMAIL_SEND_EMAIL":
@@ -91625,6 +91633,21 @@ app.get("/connect/:app", async (req, res) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  }
+});
+app.get("/connections/status", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    res.status(400).json({ error: "Missing userId" });
+    return;
+  }
+  try {
+    const statuses = await getConnectionStatuses(userId);
+    res.json({ statuses });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/connections/status]", msg);
+    res.status(500).json({ error: msg, statuses: [] });
   }
 });
 app.get("/connections", async (req, res) => {
