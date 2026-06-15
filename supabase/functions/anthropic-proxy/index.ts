@@ -60,12 +60,40 @@ Deno.serve(async (req: Request) => {
     body: JSON.stringify(body),
   });
 
-  // 5a) Streaming: pass the SSE body straight through. Precise per-stream token
-  //     metering needs teeing the stream; for now charge a conservative estimate
-  //     (most Mira calls are non-streaming and metered exactly below).
+  // 5a) Streaming: tee the SSE body so we can meter the REAL token usage Anthropic
+  //     reports inline — input_tokens in `message_start`, cumulative output_tokens
+  //     in `message_delta` — instead of estimating from the request body (which
+  //     would count a base64 screenshot as ~hundreds of thousands of tokens and
+  //     blow the user's quota). Bytes pass through unchanged.
   if (isStream && upstream.ok && upstream.body) {
-    meter(user.userId, "anthropic", estimateInputTokens(body), body.max_tokens);
-    return new Response(upstream.body, {
+    let inTok = 0, outTok = 0;
+    const decoder = new TextDecoder();
+    let buf = "";
+    const meterTee = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+        buf += decoder.decode(chunk, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line.startsWith("data:")) continue;
+          try {
+            const evt = JSON.parse(line.slice(5).trim());
+            if (evt.type === "message_start") {
+              inTok  = evt.message?.usage?.input_tokens  ?? inTok;
+              outTok = evt.message?.usage?.output_tokens ?? outTok;
+            } else if (evt.type === "message_delta") {
+              outTok = evt.usage?.output_tokens ?? outTok;
+            }
+          } catch (_) { /* non-JSON / partial line — ignore */ }
+        }
+      },
+      async flush() {
+        await meter(user.userId, "anthropic", inTok, outTok);
+      },
+    });
+    return new Response(upstream.body.pipeThrough(meterTee), {
       status: upstream.status,
       headers: { ...CORS, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
     });
@@ -85,10 +113,3 @@ Deno.serve(async (req: Request) => {
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 });
-
-// Rough input-token estimate (~4 chars/token) for streaming requests, where we
-// can't read the usage block without consuming the stream.
-function estimateInputTokens(body: { messages?: unknown; system?: unknown }): number {
-  const blob = JSON.stringify(body.messages ?? "") + JSON.stringify(body.system ?? "");
-  return Math.ceil(blob.length / 4);
-}

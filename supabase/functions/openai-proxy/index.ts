@@ -71,6 +71,23 @@ Deno.serve(async (req: Request) => {
   });
 });
 
+// Streaming input estimate over TEXT ONLY. OpenAI doesn't return usage on a
+// stream (without stream_options), so we estimate — but must never count a
+// base64 image data URL, which would read as hundreds of thousands of tokens
+// and blow the user's quota. Skip image parts; charge a flat allowance instead.
 function estimateInputTokens(body: { messages?: unknown }): number {
-  return Math.ceil(JSON.stringify(body.messages ?? "").length / 4);
+  const msgs = Array.isArray(body.messages) ? body.messages : [];
+  let chars = 0;
+  for (const m of msgs as Array<{ content?: unknown }>) {
+    const c = m?.content;
+    if (typeof c === "string") {
+      chars += c.length;
+    } else if (Array.isArray(c)) {
+      for (const part of c as Array<{ type?: string; text?: string }>) {
+        if (part?.type === "text" && typeof part.text === "string") chars += part.text.length;
+        else if (part?.type === "image_url") chars += 1024 * 4; // ~1024-token flat image allowance
+      }
+    }
+  }
+  return Math.ceil(chars / 4);
 }
