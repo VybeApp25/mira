@@ -248,6 +248,7 @@ final class TeachingEngine: ObservableObject {
                 ])
                 recordGrounding(step, grounded: true,
                                 source: String(describing: source), confidence: confidence)
+                await guideCursorIfEnabled(to: normalized, step: step)
             default:
                 // Couldn't ground confidently — be honest, don't draw a guess.
                 AnnotationCanvasService.shared.clear()
@@ -259,6 +260,24 @@ final class TeachingEngine: ObservableObject {
         } catch {
             AnnotationCanvasService.shared.clear()
             recordGrounding(step, grounded: false, source: "error", confidence: 0)
+        }
+    }
+
+    /// Opt-in (Settings → Screen & Guidance → "Guide my cursor"). On a *confident*
+    /// grounding, gently glides the real pointer to the target so it's already there
+    /// when the user reaches for it. Mira NEVER clicks — the human still performs the
+    /// action and Mira observes the result, so the "claimed but unobserved → forbidden"
+    /// invariant holds. Skipped when automation is detected (don't chase a hijacked
+    /// cursor) and only ever on the confident annotate path (never a guess).
+    private func guideCursorIfEnabled(to normalized: CGPoint, step: TeachingStep) async {
+        guard UserDefaults.standard.bool(forKey: "mira_guide_cursor") else { return }
+        guard !automatedInputDetected else { return }
+        let cu = ComputerUseService.shared
+        let x  = Int(normalized.x * CGFloat(cu.displayWidth))
+        let y  = Int(normalized.y * CGFloat(cu.displayHeight))
+        await cu.glideMouse(toX: x, toY: y)
+        if let skillId = skill?.id {
+            TelemetryService.shared.track(.stepCursorGuided(skillId: skillId, stepId: step.id))
         }
     }
 

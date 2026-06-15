@@ -60,6 +60,9 @@ enum TelemetryEvent {
     // forbidden). `grounded=false` is the ask-path fallback. Also the honest
     // signal for the "Unverified" badge and the instructed→attempted funnel.
     case stepGrounded(skillId: String, stepId: String, grounded: Bool, source: String, confidence: Double)
+    // Opt-in "guide my cursor": Mira glided the pointer to a grounded target.
+    // Recorded so a pointer move is never an unobserved action (Mira never clicks).
+    case stepCursorGuided(skillId: String, stepId: String)
     case stepCompleted(skillId: String, stepId: String, groundedBy: String)
     // A "Done"/"Skip" tap was ignored because its backing event was synthesized
     // and posted by another process, not a genuine human action. Recorded so the
@@ -97,6 +100,7 @@ enum TelemetryEvent {
         case .lessonStarted:              return "lesson_started"
         case .stepInstructed:             return "step_instructed"
         case .stepGrounded:               return "step_grounded"
+        case .stepCursorGuided:           return "step_cursor_guided"
         case .stepCompleted:              return "step_completed"
         case .stepConfirmRejected:        return "step_confirm_rejected"
         case .stepFailed:                 return "step_failed"
@@ -199,6 +203,9 @@ enum TelemetryEvent {
         case .stepGrounded(let skillId, let stepId, let grounded, let source, let confidence):
             return ["skillId": skillId, "stepId": stepId, "grounded": grounded ? "true" : "false",
                     "source": source, "confidence": String(format: "%.2f", confidence)]
+
+        case .stepCursorGuided(let skillId, let stepId):
+            return ["skillId": skillId, "stepId": stepId]
 
         case .stepCompleted(let skillId, let stepId, let groundedBy):
             return ["skillId": skillId, "stepId": stepId, "groundedBy": groundedBy]

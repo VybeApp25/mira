@@ -104,6 +104,23 @@ final class ComputerUseService {
             .post(tap: .cghidEventTap)
     }
 
+    /// Smoothly glide the cursor from its current spot to (x, y) WITHOUT clicking.
+    /// Used by the teaching system to *guide* the user's pointer to a grounded
+    /// target — Mira points, the human still performs the action. Posts only
+    /// `.mouseMoved` events; never a button-down, so it can't operate anything.
+    func glideMouse(toX: Int, toY: Int, steps: Int = 14, totalSeconds: Double = 0.28) async {
+        let from = cursorPosition()
+        let dx = Double(toX - from.x), dy = Double(toY - from.y)
+        let n   = max(1, steps)
+        let per = UInt64((totalSeconds / Double(n)) * 1_000_000_000)
+        for i in 1...n {
+            let t = Double(i) / Double(n)
+            let e = 1 - pow(1 - t, 3)   // ease-out: decelerate onto the target
+            moveMouse(x: from.x + Int(dx * e), y: from.y + Int(dy * e))
+            try? await Task.sleep(nanoseconds: per)
+        }
+    }
+
     func cursorPosition() -> (x: Int, y: Int) {
         let loc = NSEvent.mouseLocation
         let h   = NSScreen.main?.frame.height ?? 900

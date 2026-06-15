@@ -32,6 +32,7 @@ struct SettingsView: View {
     @State private var previewPlayer: AVAudioPlayer? = nil
     @State private var previewingVoice: MiraVoice? = nil
     @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
+    @AppStorage("mira_guide_cursor")       private var guideCursorEnabled = false
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
@@ -82,6 +83,7 @@ struct SettingsView: View {
                         settingsGroup("Screen & Guidance", icon: "rectangle.dashed") {
                             screenCompanionSection
                             pointFollowUpSection
+                            guideCursorSection
                         }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
@@ -1001,6 +1003,38 @@ struct SettingsView: View {
                     .foregroundColor(.white.opacity(0.25))
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // MARK: - Guide Cursor section
+
+    @ViewBuilder
+    private var guideCursorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Lessons", systemImage: "graduationcap")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Guide my cursor to each step")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("During a lesson, Mira glides your pointer to the highlighted control. It never clicks — you still do that.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $guideCursorEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
