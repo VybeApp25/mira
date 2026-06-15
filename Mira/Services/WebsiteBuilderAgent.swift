@@ -871,10 +871,10 @@ enum WebsiteBuilderAgent {
             messages: [Message(role: "user", content: contentBlocks)]
         )
 
-        let url = URL(string: "https://api.anthropic.com/v1/messages")!
+        let url = MiraBackend.anthropicMessagesURL
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.timeoutInterval = 60

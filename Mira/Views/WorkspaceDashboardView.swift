@@ -35,8 +35,8 @@ struct WorkspaceDashboardView: View {
             .padding(.vertical, 10)
         }
         .onAppear { compute() }
-        .onChange(of: outputStore.entries.count) { _ in compute() }
-        .onChange(of: jobStore.jobs.count) { _ in compute() }
+        .onChange(of: outputStore.entries.count) { compute() }
+        .onChange(of: jobStore.jobs.count) { compute() }
     }
 
     // MARK: - Stats Row

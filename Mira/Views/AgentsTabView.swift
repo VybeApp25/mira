@@ -70,7 +70,7 @@ struct AgentsTabView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundColor(.white)
-                    .onChange(of: input) { newValue in
+                    .onChange(of: input) { _, newValue in
                         detectedType = AgentJobType.detect(from: newValue)
                     }
                     .onSubmit { submitJob() }
@@ -106,7 +106,7 @@ struct AgentsTabView: View {
     }
 
     private var canSubmit: Bool {
-        guard !input.isEmpty && !miraState.effectiveAPIKey.isEmpty else { return false }
+        guard !input.isEmpty && miraState.isSignedIn else { return false }
         if detectedType == .websiteBuilder && websiteMode.requiresReferences {
             return !referenceImagePaths.isEmpty
         }
@@ -351,7 +351,7 @@ struct AgentsTabView: View {
                         } header: {
                             sectionHeader("Completed", count: completed.count, color: .white.opacity(0.3))
                         }
-                        .onChange(of: completed.count) { _ in
+                        .onChange(of: completed.count) {
                             knownCompletedIds = Set(completed.map(\.id))
                         }
                     }
@@ -429,7 +429,7 @@ struct AgentsTabView: View {
 
     private func submitJob() {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, !miraState.effectiveAPIKey.isEmpty else { return }
+        guard !prompt.isEmpty, miraState.isSignedIn else { return }
         let isWebsite = detectedType == .websiteBuilder
         let mode = isWebsite ? websiteMode : nil
         let refs = isWebsite ? referenceImagePaths : []

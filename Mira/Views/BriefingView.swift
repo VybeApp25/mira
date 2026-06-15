@@ -229,7 +229,7 @@ struct BriefingView: View {
     private func loadCalendar() async {
         let store  = EKEventStore()
         let status = EKEventStore.authorizationStatus(for: .event)
-        if status.rawValue != 3 && status != .authorized {
+        if status != .fullAccess {   // macOS 14 replaced the deprecated .authorized
             calAuth = false
             return
         }

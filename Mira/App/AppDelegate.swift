@@ -16,6 +16,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         ScreenCaptureService.requestAccessIfNeeded()
+
+        // Restore the signed-in session eagerly. SupabaseService.init → loadSession
+        // populates the static cachedAccessToken (via the session didSet), which
+        // MiraBackend and MiraState.isSignedIn read for every proxy call. Without
+        // this, a restored session stays invisible until some view first touches
+        // SupabaseService.shared, so proxy calls fail as "not signed in" right
+        // after launch. Instantiating AccountService.shared also restores authState.
+        _ = AccountService.shared
+
         AgentProcessManager.shared.start()
 
         // ChimeWarmer — prime audio hardware pipeline for zero-latency first chime
@@ -28,6 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         PostHogService.shared.capture("app_launched")
         _ = AppContextService.shared       // start frontmost-app observer
         _ = SidecarSuggestionService.shared // start dwell tracker
+        SkillCatalog.shared.refresh()      // seed built-in skill bundles + scan
 
         let manager = NotchManager()
         manager.setup()

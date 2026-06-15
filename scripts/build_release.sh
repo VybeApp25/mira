@@ -23,12 +23,13 @@ APPLE_ID="${APPLE_ID:?Set APPLE_ID env var}"
 NOTARIZATION_PASSWORD="${NOTARIZATION_PASSWORD:?Set NOTARIZATION_PASSWORD env var}"
 
 # ── Version from Info.plist ──────────────────────────────────────────────────
-VERSION=$(xcodebuild -project Mira.xcodeproj -scheme $SCHEME -configuration Release \
-  -showBuildSettings 2>/dev/null | grep 'MARKETING_VERSION' | awk '{print $3}')
-BUILD=$(xcodebuild -project Mira.xcodeproj -scheme $SCHEME -configuration Release \
-  -showBuildSettings 2>/dev/null | grep 'CURRENT_PROJECT_VERSION' | awk '{print $3}')
+# Read the version directly from Info.plist — the project sets
+# CFBundleShortVersionString/CFBundleVersion there, not via the
+# MARKETING_VERSION/CURRENT_PROJECT_VERSION build settings (which are empty).
+VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Mira/Info.plist)
+BUILD=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' Mira/Info.plist)
 TEAM=$(xcodebuild -project Mira.xcodeproj -scheme $SCHEME -configuration Release \
-  -showBuildSettings 2>/dev/null | grep 'DEVELOPMENT_TEAM' | awk '{print $3}')
+  -showBuildSettings 2>/dev/null | grep ' DEVELOPMENT_TEAM' | awk '{print $3}')
 
 if [[ "$TEAM" == "YOUR_TEAM_ID_HERE" ]]; then
   echo "ERROR: Fill in DEVELOPMENT_TEAM in project.yml (Release config) before releasing."

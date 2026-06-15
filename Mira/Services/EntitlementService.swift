@@ -80,11 +80,6 @@ final class EntitlementService: ObservableObject {
         persist()
     }
 
-    // DEV helpers — remove before ship or gate behind a debug flag
-    func devUnlockPro()   { updatePlan(.pro)  }
-    func devUnlockUltra() { updatePlan(.ultra) }
-    func devResetFree()   { updatePlan(.free)  }
-
     private func persist() {
         UserDefaults.standard.set(plan.rawValue, forKey: planKey)
         // Keep legacy key in sync so old isPro checks still work

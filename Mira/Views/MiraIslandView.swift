@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, agents, settings, crons }
+enum IslandTab: Equatable { case home, agents, learn, settings, crons }
 
 // MARK: - Main island view
 
@@ -539,10 +539,11 @@ struct MiraIslandView: View {
 
     private var navBar: some View {
         HStack(spacing: 4) {
-            navTab(icon: "house.fill",    label: "Home",     tab: .home)
-            navTab(icon: "cpu.fill",      label: "Agents",   tab: .agents)
-            navTab(icon: "clock.fill",    label: "Crons",    tab: .crons)
-            navTab(icon: "gearshape.fill",label: "Settings", tab: .settings)
+            navTab(icon: "house.fill",         label: "Home",     tab: .home)
+            navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
+            navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
+            navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
+            navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
 
             Spacer()
 
@@ -621,6 +622,9 @@ struct MiraIslandView: View {
                 capture:   capture,
                 voice:     voice
             )
+        case .learn:
+            LessonsTabView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .crons:
             CronsTabView()
         case .settings:

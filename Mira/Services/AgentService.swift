@@ -49,10 +49,15 @@ class AgentService: ObservableObject {
 
     private let base = URL(string: "http://127.0.0.1:4242")!
 
-    // Composio entity ID — "default" matches the entity used by the Composio web dashboard.
-    // Override in Settings if you use a custom entity on your Composio account.
+    // Composio entity ID — the per-user identity Composio isolates connected
+    // accounts (Gmail/Slack/…) under. This MUST be unique per user, or everyone
+    // shares one entity and can see each other's connections. We use the signed-in
+    // Supabase user id; only signed-out/dev falls back to a manual override or
+    // "default". NOTE: changing identity changes the entity, so accounts connected
+    // under a prior entity (e.g. the old shared "default") need reconnecting.
     var userId: String {
-        UserDefaults.standard.string(forKey: "mira_composio_entity") ?? "default"
+        if let uid = SupabaseService.shared.session?.userId, !uid.isEmpty { return uid }
+        return UserDefaults.standard.string(forKey: "mira_composio_entity") ?? "default"
     }
 
     var isRunning: Bool = false
@@ -62,18 +67,21 @@ class AgentService: ObservableObject {
         return (try? await URLSession.shared.data(for: req)) != nil
     }
 
-    func run(prompt: String, claudeApiKey: String) async throws -> AgentResponse {
+    /// `accessToken` is the signed-in user's Supabase JWT. The sidecar reaches
+    /// Anthropic through Mira's anthropic-proxy edge function using this token —
+    /// no provider key is sent (or shipped in the client) anymore.
+    func run(prompt: String, accessToken: String) async throws -> AgentResponse {
         var req = try post("/agent/run", body: [
             "prompt": prompt,
             "userId": userId,
-            "claudeApiKey": claudeApiKey,
+            "accessToken": accessToken,
         ])
         req.timeoutInterval = 60
         let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder().decode(AgentResponse.self, from: data)
     }
 
-    func confirm(action: PendingAction, claudeApiKey: String) async throws -> String {
+    func confirm(action: PendingAction) async throws -> String {
         let paramsDict = action.params.mapValues { $0.value }
         let req = try post("/agent/confirm", body: [
             "toolName": action.toolName,

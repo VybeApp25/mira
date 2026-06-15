@@ -257,8 +257,8 @@ struct MiraPanel: View {
         guard !prompt.isEmpty, !state.isLoading else { return }
 
         guard state.canUse else {
-            state.errorMessage = state.effectiveAPIKey.isEmpty
-                ? MiraError.noKey.localizedDescription
+            state.errorMessage = !state.isSignedIn
+                ? MiraError.notSignedIn.localizedDescription
                 : MiraError.limitReached.localizedDescription
             return
         }
@@ -273,7 +273,7 @@ struct MiraPanel: View {
         do {
             if agentServiceOnline {
                 // Route to agent service (Composio tools + Claude)
-                let result = try await agent.run(prompt: prompt, claudeApiKey: state.effectiveAPIKey)
+                let result = try await agent.run(prompt: prompt, accessToken: SupabaseService.cachedAccessToken)
                 if let pending = result.requiresConfirmation {
                     pendingAction = pending
                 } else {
@@ -304,7 +304,7 @@ struct MiraPanel: View {
         pendingAction = nil
         state.isLoading = true
         do {
-            let result = try await agent.confirm(action: action, claudeApiKey: state.effectiveAPIKey)
+            let result = try await agent.confirm(action: action)
             response = result
         } catch {
             state.errorMessage = error.localizedDescription

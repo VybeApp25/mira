@@ -536,8 +536,23 @@ final class AgentJobStore: ObservableObject {
 
     private func update(_ id: UUID, mutation: (inout AgentJob) -> Void) {
         guard let idx = jobs.firstIndex(where: { $0.id == id }) else { return }
+        let wasTerminal = jobs[idx].status.isTerminal
         mutation(&jobs[idx])
+        // When a job first reaches a terminal state, fade its floating chip out
+        // after a grace period so the stack doesn't accumulate stale cards.
+        if !wasTerminal, jobs[idx].status.isTerminal {
+            scheduleHUDAutoDismiss(jobs[idx].id)
+        }
         save()
+    }
+
+    /// Auto-hide a terminal job's floating chip after a grace period. The job stays
+    /// in history; only the chip in the right-side HUD stack is dismissed.
+    private func scheduleHUDAutoDismiss(_ id: UUID, after seconds: Double = 12) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            self?.hideFromHUD(id: id)
+        }
     }
 
     private func postNotification(for job: AgentJob) {
@@ -711,5 +726,9 @@ final class AgentJobStore: ObservableObject {
             }
             return recovered
         }
+        // Prior-session jobs are all terminal after recovery — start the floating
+        // HUD clean instead of resurfacing last session's stale "Done" cards.
+        // They remain in history (Agents tab); only the floating chips are hidden.
+        hudHidden = Set(jobs.filter { $0.status.isTerminal }.map(\.id))
     }
 }

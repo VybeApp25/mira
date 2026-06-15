@@ -5,7 +5,8 @@ class ClaudeService {
     private let apiKey: String
     private let model = "claude-haiku-4-5-20251001"
     private let guidanceModel = "claude-sonnet-4-6"
-    private let baseURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    // Routes to the backend proxy when enabled, else directly to Anthropic.
+    private var baseURL: URL { MiraBackend.anthropicMessagesURL }
 
     // Shared flag so multiple ClaudeService instances only warm once per process.
     private static var tlsWarmedUp = false
@@ -130,7 +131,7 @@ class ClaudeService {
 
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -232,7 +233,7 @@ class ClaudeService {
         )
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey,          forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",    forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -278,7 +279,7 @@ class ClaudeService {
         )
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey,              forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",  forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -353,7 +354,7 @@ class ClaudeService {
         )
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey,              forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",  forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -433,7 +434,7 @@ class ClaudeService {
 
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -762,12 +763,14 @@ enum MiraPrompts {
 enum MiraError: LocalizedError {
     case api(String)
     case noKey
+    case notSignedIn
     case limitReached
 
     var errorDescription: String? {
         switch self {
         case .api(let m): return "API error: \(m)"
         case .noKey: return "Add your Claude API key in Settings."
+        case .notSignedIn: return "Sign in to use Mira."
         case .limitReached: return "Daily limit reached — upgrade to Pro for unlimited use."
         }
     }

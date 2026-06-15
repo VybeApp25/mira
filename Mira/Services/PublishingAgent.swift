@@ -118,7 +118,7 @@ enum PublishingAgent {
 
         let response: AgentResponse
         do {
-            response = try await AgentService.shared.run(prompt: deployPrompt, claudeApiKey: apiKey)
+            response = try await AgentService.shared.run(prompt: deployPrompt, accessToken: SupabaseService.cachedAccessToken)
             await store.appendLog(id: jobId, stepIndex: stepIdx, message: "Composio action executed")
         } catch {
             await store.failJob(id: jobId, error: "Deployment failed: \(error.localizedDescription)\n\nCheck that the Agent service is running and \(target.displayName) is connected.")

@@ -1,22 +1,28 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// mint-realtime-token — mints a short-lived OpenAI Realtime client secret so the
+// raw OpenAI key never reaches the client. Hardened: requires a verified Supabase
+// JWT (a real, meterable user) before minting — previously this was open to anyone
+// with the public anon key. Voice is free-tier, so all plans are allowed, but the
+// caller must be authenticated. See docs/architecture/backend_secrets_proxy.md.
+//
+// Deploy:  supabase functions deploy mint-realtime-token
+// Secret:  supabase secrets set OPENAI_API_KEY=sk-…
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { CORS, json, requireUser, requireEntitlement, meter } from "../_shared/auth.ts";
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "OPENAI_API_KEY secret not set" }),
-      { status: 500, headers: { ...CORS, "Content-Type": "application/json" } }
-    );
-  }
+  if (!OPENAI_API_KEY) return json({ error: "OPENAI_API_KEY secret not set" }, 500);
+
+  // Identity from the verified JWT (not the anon key). Voice mode is free-tier,
+  // so every plan is allowed — but the caller must be a real, signed-in user.
+  let user;
+  try {
+    user = await requireUser(req);
+    requireEntitlement(user.plan, ["free", "pro", "ultra"]);
+  } catch (r) { return r as Response; }
 
   let voice = "alloy";
   try {
@@ -26,8 +32,6 @@ Deno.serve(async (req: Request) => {
 
   const model = "gpt-realtime";
 
-  // GA endpoint — /v1/realtime/sessions (beta) was retired with the
-  // gpt-4o-realtime-preview models. Response shape: { value, expires_at, session }.
   const openaiRes = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -35,16 +39,11 @@ Deno.serve(async (req: Request) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      session: {
-        type: "realtime",
-        model,
-        audio: { output: { voice } },
-      },
+      session: { type: "realtime", model, audio: { output: { voice } } },
     }),
   });
 
   const payload = await openaiRes.json();
-
   if (!openaiRes.ok) {
     return new Response(JSON.stringify({ error: payload }), {
       status: openaiRes.status,
@@ -52,11 +51,12 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const token  = payload.value ?? "";
-  const expiry = payload.expires_at ?? 0;
+  // Record a session start (token-level metering for realtime audio is out of
+  // scope; one "request" per minted session is enough for rate-limiting).
+  meter(user.userId, "openai-realtime", 0, 0);
 
   return new Response(
-    JSON.stringify({ token, expires_at: expiry, model }),
-    { headers: { ...CORS, "Content-Type": "application/json" } }
+    JSON.stringify({ token: payload.value ?? "", expires_at: payload.expires_at ?? 0, model }),
+    { headers: { ...CORS, "Content-Type": "application/json" } },
   );
 });

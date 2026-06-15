@@ -11,6 +11,7 @@
 | [architecture_principles.md](architecture_principles.md) | Core invariants, phase history, epistemic status, four locked invariants, three correctness tests, verification regime |
 | [phase14_governance.md](phase14_governance.md) | Phase 14 implementation plan — moving governance from UI lifecycle to journal-derived authority |
 | [attack_harness.md](attack_harness.md) | 17-cell adversarial validation matrix; required preflight before Phase 14 delegation touches live filesystem writes |
+| [teaching_system.md](teaching_system.md) | Live annotation + tutoring subsystem spec — honesty invariant ("claimed but unobserved → forbidden"), annotation canvas, element grounding, teaching engine, learner model, Claude-style Skill bundles; milestone gates (SPEC, not built) |
 
 ---
 

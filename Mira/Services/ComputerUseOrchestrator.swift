@@ -23,7 +23,7 @@ final class ComputerUseOrchestrator: ObservableObject {
     @Published private(set) var latestScreenshot: NSImage?
 
     private var stopRequested = false
-    private let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private var apiURL: URL { MiraBackend.anthropicMessagesURL }
 
     // MARK: - Public
 
@@ -131,7 +131,7 @@ final class ComputerUseOrchestrator: ObservableObject {
             return
         }
         req.httpMethod = "POST"
-        req.setValue(apiKey,           forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",     forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = data
@@ -263,7 +263,7 @@ final class ComputerUseOrchestrator: ObservableObject {
         var req = URLRequest(url: apiURL)
         req.httpMethod  = "POST"
         req.timeoutInterval = 180
-        req.setValue(apiKey,                    forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",              forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",        forHTTPHeaderField: "content-type")
         req.setValue("computer-use-2025-11-24", forHTTPHeaderField: "anthropic-beta")

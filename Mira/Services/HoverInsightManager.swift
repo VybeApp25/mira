@@ -30,7 +30,7 @@ final class HoverInsightManager {
     // MARK: - Entry point
 
     func handleDwell(at pos: CGPoint, optionHeld: Bool) {
-        guard !miraState.effectiveAPIKey.isEmpty else { return }
+        guard miraState.isSignedIn else { return }
         analysisTask?.cancel()
         analysisTask = Task { @MainActor in
             guard !Task.isCancelled else { return }

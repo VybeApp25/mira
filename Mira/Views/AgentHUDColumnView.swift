@@ -29,6 +29,7 @@ struct AgentHUDColumnView: View {
                 ForEach(activeJobs) { job in
                     FloatingAgentChipView(job: job)
                         .id(job.id)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
 
                 // Recent terminal jobs below
@@ -45,6 +46,7 @@ struct AgentHUDColumnView: View {
                         FloatingAgentChipView(job: job)
                             .id(job.id)
                             .opacity(0.85)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
             }

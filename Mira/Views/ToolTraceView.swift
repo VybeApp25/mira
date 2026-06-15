@@ -204,7 +204,7 @@ private struct TraceRow: View {
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.40))
                         .frame(width: 70, alignment: .trailing)
-                    Text("\(value)")
+                    Text(verbatim: "\(value)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.65))
                         .lineLimit(3)

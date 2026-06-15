@@ -6,7 +6,9 @@ import { VercelProvider } from "@composio/vercel";
 export interface AgentRequest {
   prompt: string;
   userId: string;
-  claudeApiKey: string;
+  // Signed-in user's Supabase JWT. Anthropic is reached through Mira's
+  // anthropic-proxy edge function with this token — no provider key here.
+  accessToken: string;
 }
 
 export interface AgentResponse {
@@ -103,7 +105,19 @@ function wrapTools(rawTools: Record<string, any>): Record<string, any> {
 
 export async function runAgent(req: AgentRequest): Promise<AgentResponse> {
   const composio = makeComposio();
-  const anthropic = createAnthropic({ apiKey: req.claudeApiKey });
+
+  // Route Anthropic through Mira's proxy edge function: the @ai-sdk/anthropic
+  // client POSTs to `${baseURL}/messages`, which Supabase routes to the
+  // anthropic-proxy function. The proxy holds the real key and authorizes by the
+  // user's JWT (Authorization: Bearer). `apiKey` is unused by the proxy but the
+  // SDK requires a non-empty value.
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error("SUPABASE_URL not set");
+  const anthropic = createAnthropic({
+    baseURL: `${supabaseUrl}/functions/v1/anthropic-proxy`,
+    apiKey: "proxy",
+    headers: { Authorization: `Bearer ${req.accessToken}` },
+  });
 
   // Load tools filtered to supported toolkits only
   const session = await composio.create(req.userId);

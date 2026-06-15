@@ -112,7 +112,7 @@ struct AgentHUDView: View {
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: hud.updates.count) { _ in
+            .onChange(of: hud.updates.count) {
                 if let last = hud.updates.last {
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo(last.id, anchor: .bottom)

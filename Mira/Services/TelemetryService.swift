@@ -41,6 +41,33 @@ enum TelemetryEvent {
     case outcomeEvaluated(jobId: UUID, predictedImpact: Double, actualImpact: Double, errorDelta: Double)
     case attentionDirectiveIssued(section: String, urgency: Double)
 
+    // Point-and-Ask guidance funnel. `id` correlates the request with its
+    // outcome and any later acted-on click. Transcript content is NEVER stored —
+    // only its length — so evidence collection can't leak what the user said.
+    case guidanceRequested(id: UUID, transcriptChars: Int)
+    case guidanceLocated(id: UUID, nx: Double, ny: Double, display: String)
+    case guidanceNoElement(id: UUID)
+    case guidanceFailed(id: UUID, reason: String)
+    case guidanceActedOn(id: UUID, distancePt: Double, afterSeconds: Double)
+
+    // Teaching engine learning funnel (instructed → completed → retained).
+    // `groundedBy` records HOW completion was established — observation vs the
+    // user saying so — so mastery is never credited to an unobserved step.
+    case lessonStarted(skillId: String, totalSteps: Int)
+    case stepInstructed(skillId: String, stepId: String)
+    // Did the ring actually land? Recorded for EVERY ringed step so a silent
+    // mis-ground is never invisible (meta-invariant: wrong-but-invisible →
+    // forbidden). `grounded=false` is the ask-path fallback. Also the honest
+    // signal for the "Unverified" badge and the instructed→attempted funnel.
+    case stepGrounded(skillId: String, stepId: String, grounded: Bool, source: String, confidence: Double)
+    case stepCompleted(skillId: String, stepId: String, groundedBy: String)
+    // A "Done"/"Skip" tap was ignored because its backing event was synthesized
+    // and posted by another process, not a genuine human action. Recorded so the
+    // honesty guard is never silent (an unrecorded guard is not an invariant).
+    case stepConfirmRejected(skillId: String, stepId: String, reason: String)
+    case stepFailed(skillId: String, stepId: String, reason: String)
+    case lessonCompleted(skillId: String, completedSteps: Int, totalSteps: Int)
+
     // MARK: Serialisation helpers
 
     var name: String {
@@ -62,6 +89,18 @@ enum TelemetryEvent {
         case .causalInsightComputed:      return "causal_insight_computed"
         case .outcomeEvaluated:           return "outcome_evaluated"
         case .attentionDirectiveIssued:   return "attention_directive_issued"
+        case .guidanceRequested:          return "guidance_requested"
+        case .guidanceLocated:            return "guidance_located"
+        case .guidanceNoElement:          return "guidance_no_element"
+        case .guidanceFailed:             return "guidance_failed"
+        case .guidanceActedOn:            return "guidance_acted_on"
+        case .lessonStarted:              return "lesson_started"
+        case .stepInstructed:             return "step_instructed"
+        case .stepGrounded:               return "step_grounded"
+        case .stepCompleted:              return "step_completed"
+        case .stepConfirmRejected:        return "step_confirm_rejected"
+        case .stepFailed:                 return "step_failed"
+        case .lessonCompleted:            return "lesson_completed"
         }
     }
 
@@ -130,6 +169,48 @@ enum TelemetryEvent {
 
         case .attentionDirectiveIssued(let section, let urgency):
             return ["section": section, "urgency": String(format: "%.2f", urgency)]
+
+        case .guidanceRequested(let id, let chars):
+            return ["id": id.uuidString, "transcriptChars": "\(chars)"]
+
+        case .guidanceLocated(let id, let nx, let ny, let display):
+            return ["id": id.uuidString,
+                    "nx": String(format: "%.4f", nx),
+                    "ny": String(format: "%.4f", ny),
+                    "display": display]
+
+        case .guidanceNoElement(let id):
+            return ["id": id.uuidString]
+
+        case .guidanceFailed(let id, let reason):
+            return ["id": id.uuidString, "reason": reason]
+
+        case .guidanceActedOn(let id, let distancePt, let afterSeconds):
+            return ["id": id.uuidString,
+                    "distancePt": String(format: "%.1f", distancePt),
+                    "afterSeconds": String(format: "%.2f", afterSeconds)]
+
+        case .lessonStarted(let skillId, let total):
+            return ["skillId": skillId, "totalSteps": "\(total)"]
+
+        case .stepInstructed(let skillId, let stepId):
+            return ["skillId": skillId, "stepId": stepId]
+
+        case .stepGrounded(let skillId, let stepId, let grounded, let source, let confidence):
+            return ["skillId": skillId, "stepId": stepId, "grounded": grounded ? "true" : "false",
+                    "source": source, "confidence": String(format: "%.2f", confidence)]
+
+        case .stepCompleted(let skillId, let stepId, let groundedBy):
+            return ["skillId": skillId, "stepId": stepId, "groundedBy": groundedBy]
+
+        case .stepConfirmRejected(let skillId, let stepId, let reason):
+            return ["skillId": skillId, "stepId": stepId, "reason": reason]
+
+        case .stepFailed(let skillId, let stepId, let reason):
+            return ["skillId": skillId, "stepId": stepId, "reason": reason]
+
+        case .lessonCompleted(let skillId, let completed, let total):
+            return ["skillId": skillId, "completedSteps": "\(completed)", "totalSteps": "\(total)"]
         }
     }
 

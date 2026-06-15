@@ -53,10 +53,14 @@ struct OnboardingView: View {
     @State private var step          = 0
     @State private var activatedCard: UUID? = nil
     @StateObject private var service = OnboardingService.shared
+    @ObservedObject private var account = AccountService.shared
 
     private var missing: [MiraPermission] { service.missingPermissions() }
-    private var permStep:    Int { 2 }
-    private var doneIndex:   Int { missing.isEmpty ? 2 : 3 }
+    // Flow: 0 welcome · 1 auth (required) · 2 try-it · [3 permissions] · done
+    private let authIndex:  Int = 1
+    private let tryItIndex: Int = 2
+    private var permStep:    Int { 3 }
+    private var doneIndex:   Int { missing.isEmpty ? 3 : 4 }
     private var totalSteps:  Int { doneIndex + 1 }
 
     var body: some View {
@@ -104,9 +108,75 @@ struct OnboardingView: View {
     private var stepContent: some View {
         switch step {
         case 0:           welcomeStep
-        case 1:           tryItStep
+        case authIndex:   authStep
+        case tryItIndex:  tryItStep
         case permStep where !missing.isEmpty: permissionsStep
         default:          doneStep
+        }
+    }
+
+    // MARK: - Auth (required — proxy mode needs a signed-in session)
+
+    private var authStep: some View {
+        Group {
+            if account.isSignedIn {
+                signedInConfirmation
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Sign in to get started")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("Your account unlocks chat, voice, and agents — no API keys to manage.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.40))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+
+                    ScrollView(showsIndicators: false) {
+                        AuthView(compact: true) {
+                            withAnimation { step = tryItIndex }
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 8)
+                    }
+                }
+            }
+        }
+    }
+
+    private var signedInConfirmation: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.11, green: 0.73, blue: 0.33).opacity(0.12))
+                    .frame(width: 64, height: 64)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(Color(red: 0.11, green: 0.73, blue: 0.33))
+            }
+            .padding(.bottom, 18)
+
+            Text("You're signed in")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.bottom, 6)
+
+            if let email = account.currentUser?.email {
+                Text(email)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.50))
+            }
+
+            Spacer()
+
+            nextButton(label: "Continue") { step = tryItIndex }
+                .padding(.horizontal, 36)
+                .padding(.bottom, 20)
         }
     }
 
@@ -153,7 +223,7 @@ struct OnboardingView: View {
 
             Spacer()
 
-            nextButton(label: "Show me how") { step = 1 }
+            nextButton(label: "Get started") { step = authIndex }
                 .padding(.horizontal, 36)
                 .padding(.bottom, 20)
         }

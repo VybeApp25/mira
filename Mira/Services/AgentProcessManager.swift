@@ -62,8 +62,10 @@ final class AgentProcessManager {
         proc.launchPath = node
         proc.arguments  = [script]
         proc.environment = ProcessInfo.processInfo.environment.merging([
-            "COMPOSIO_API_KEY":  AppSecrets.composioAPIKey,
-            "ANTHROPIC_API_KEY": AppSecrets.anthropicAPIKey,
+            "COMPOSIO_API_KEY": AppSecrets.composioAPIKey,
+            // The sidecar reaches Anthropic via the anthropic-proxy edge function
+            // (authorized per-request by the user's JWT) — no provider key here.
+            "SUPABASE_URL": AppSecrets.supabaseURL,
         ]) { _, new in new }
 
         // Silence stdout/stderr — logs only go to Console.app via NSLog from Swift side.

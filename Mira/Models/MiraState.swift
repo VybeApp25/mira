@@ -22,8 +22,15 @@ class MiraState: ObservableObject {
         return AppSecrets.anthropicAPIKey
     }
 
-    // True when a real key is available (bundled key counts, placeholder doesn't).
+    // Signed-in state for proxy mode: the proxy authorizes provider calls with
+    // the user's Supabase JWT, so readiness == having a session, not a key.
+    var isSignedIn: Bool { !SupabaseService.cachedAccessToken.isEmpty }
+
+    // True when Mira can make provider calls. In proxy mode that means a signed-in
+    // session (the real keys live server-side); in legacy mode it means a usable
+    // embedded/user key.
     var hasKey: Bool {
+        if MiraBackend.useProxy { return isSignedIn }
         let key = effectiveAPIKey
         return !key.isEmpty && !key.hasPrefix("PASTE_")
     }

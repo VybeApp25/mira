@@ -5,7 +5,8 @@ import Foundation
 final class OpenAIService {
 
     private let apiKey: String
-    private let baseURL = URL(string: "https://api.openai.com/v1/chat/completions")!
+    // Routes to the backend proxy when enabled, else directly to OpenAI.
+    private var baseURL: URL { MiraBackend.openAIChatURL }
 
     init(apiKey: String) { self.apiKey = apiKey }
 
@@ -36,7 +37,7 @@ final class OpenAIService {
 
         var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        MiraBackend.authorizeOpenAI(&req, directKey: apiKey)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
         req.timeoutInterval = max(60, Double(maxTokens) / 40)

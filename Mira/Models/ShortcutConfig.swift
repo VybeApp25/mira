@@ -29,6 +29,20 @@ struct ShortcutConfig: Codable, Equatable {
         return s + displayKey.uppercased()
     }
 
+    /// A binding is usable only if it has a real key character and at least one modifier.
+    /// Rejects legacy corrupted configs whose displayKey is empty or a non-printable
+    /// control character (caused by recording with `event.characters` under Control).
+    var isValid: Bool {
+        guard carbonMods != 0 else { return false }
+        guard let scalar = displayKey.unicodeScalars.first else { return false }
+        return scalar.value >= 0x20 && scalar.value != 0x7F
+    }
+
+    /// Returns self if valid, otherwise the supplied fallback.
+    func validated(default fallback: ShortcutConfig) -> ShortcutConfig {
+        isValid ? self : fallback
+    }
+
     /// Convert NSEvent.ModifierFlags → Carbon modifier bitmask.
     static func carbonMods(from flags: NSEvent.ModifierFlags) -> UInt32 {
         var m: UInt32 = 0
@@ -50,8 +64,8 @@ final class ShortcutStore: ObservableObject {
     @Published var text:  ShortcutConfig { didSet { persist() } }
 
     private init() {
-        voice = Self.load("mira_shortcut_voice") ?? .defaultVoice
-        text  = Self.load("mira_shortcut_text")  ?? .defaultText
+        voice = Self.load("mira_shortcut_voice")?.validated(default: .defaultVoice) ?? .defaultVoice
+        text  = Self.load("mira_shortcut_text")?.validated(default: .defaultText)  ?? .defaultText
     }
 
     // MARK: - Private

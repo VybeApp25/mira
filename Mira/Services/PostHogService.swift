@@ -19,6 +19,14 @@ final class PostHogService {
 
     private init() {}
 
+    /// User-facing analytics opt-out (Privacy Policy §6). Defaults to enabled;
+    /// when off, NO analytics is sent — including `identify`/PII, since every call
+    /// funnels through `send`.
+    static var analyticsEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "mira_analytics_enabled") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "mira_analytics_enabled") }
+    }
+
     // MARK: - Public API
 
     func capture(_ event: String, properties: [String: String] = [:]) {
@@ -46,6 +54,7 @@ final class PostHogService {
     // MARK: - Send
 
     private func send(event: String, properties: [String: String]) {
+        guard Self.analyticsEnabled else { return }   // honor the analytics opt-out
         guard let url = URL(string: "\(host)/capture/") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"

@@ -22,10 +22,16 @@ struct ReliabilityDashboardView: View {
         )
     }
 
+    // Recomputed from telemetry on every body pass (same as `data`).
+    private var guidance: GuidanceFunnel {
+        GuidanceEvidenceService.shared.funnel()
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
                 successRatesRow
+                guidanceFunnelSection
                 publishFunnelSection
                 errorCategorySection
                 agentActivitySection
@@ -34,6 +40,38 @@ struct ReliabilityDashboardView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+        }
+    }
+
+    // MARK: - Point-and-Ask Guidance Funnel
+
+    private var guidanceFunnelSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionHeader("Point & Ask Accuracy", icon: "scope")
+            HStack(spacing: 0) {
+                funnelStep(count: guidance.requested, label: "Asked",   tint: accent)
+                funnelArrow
+                funnelStep(count: guidance.located,   label: "Pointed", tint: accent)
+                funnelArrow
+                funnelStep(count: guidance.actedOn,   label: "Clicked", tint: green)
+                funnelArrow
+                funnelStep(count: guidance.failed,    label: "Failed",
+                           tint: guidance.failed > 0 ? red : .white.opacity(0.20))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
+
+            HStack(spacing: 6) {
+                rateChip(rate: guidance.locateRate, label: "Locate",  icon: "target",
+                         tint: rateColor(guidance.locateRate))
+                rateChip(rate: guidance.actOnRate,  label: "Acted",   icon: "hand.tap",
+                         tint: rateColor(guidance.actOnRate))
+                rateChip(rate: guidance.noElement + guidance.located + guidance.failed > 0
+                            ? 1 - (guidance.failureRate ?? 0) : nil,
+                         label: "Healthy", icon: "heart",
+                         tint: rateColor(guidance.failureRate.map { 1 - $0 }))
+            }
         }
     }
 

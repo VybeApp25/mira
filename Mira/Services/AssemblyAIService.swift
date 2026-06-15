@@ -50,7 +50,8 @@ final class AssemblyAIService: ObservableObject {
     @Published private(set) var progress: String = ""
 
     private let apiKey  = AppSecrets.assemblyAIKey
-    private let baseURL = "https://api.assemblyai.com"
+    // Path-forwarding proxy when enabled, else AssemblyAI directly.
+    private var baseURL: String { MiraBackend.assemblyAIBaseURL }
 
     private init() {}
 
@@ -111,7 +112,7 @@ final class AssemblyAIService: ObservableObject {
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        MiraBackend.authorizeAssemblyAI(&req, directKey: apiKey)
         req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         req.httpBody = data
 
@@ -142,7 +143,7 @@ final class AssemblyAIService: ObservableObject {
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        MiraBackend.authorizeAssemblyAI(&req, directKey: apiKey)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -164,7 +165,7 @@ final class AssemblyAIService: ObservableObject {
             throw AssemblyAIError.submissionFailed("bad URL")
         }
         var req = URLRequest(url: url)
-        req.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        MiraBackend.authorizeAssemblyAI(&req, directKey: apiKey)
 
         let deadline = Date().addingTimeInterval(300) // 5-minute timeout
         while Date() < deadline {

@@ -231,10 +231,10 @@ struct IslandChatView: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: messages.count) { _ in
+            .onChange(of: messages.count) {
                 withAnimation { proxy.scrollTo(messages.last?.id, anchor: .bottom) }
             }
-            .onChange(of: isLoading) { loading in
+            .onChange(of: isLoading) { _, loading in
                 if loading { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
                 // Mirror to miraState so FloatingButtonService and PillStateModel see the loading state.
                 miraState.isLoading = loading
@@ -622,8 +622,8 @@ struct IslandChatView: View {
         guard !prompt.isEmpty, !isLoading else { return }
 
         guard miraState.canUse else {
-            errorText = miraState.effectiveAPIKey.isEmpty
-                ? MiraError.noKey.localizedDescription
+            errorText = !miraState.isSignedIn
+                ? MiraError.notSignedIn.localizedDescription
                 : MiraError.limitReached.localizedDescription
             return
         }
@@ -649,7 +649,7 @@ struct IslandChatView: View {
             apiKey:  miraState.effectiveAPIKey
         )
 
-        if decision.route == .websiteBuilder && !miraState.effectiveAPIKey.isEmpty {
+        if decision.route == .websiteBuilder && miraState.isSignedIn {
             // Launch inline agent job — shows live status card in chat thread
             let job = AgentJobStore.shared.submitJob(
                 prompt: prompt,
@@ -799,7 +799,7 @@ struct IslandChatView: View {
         pendingAction = nil
         isLoading     = true
         do {
-            let reply = try await AgentService.shared.confirm(action: action, claudeApiKey: miraState.effectiveAPIKey)
+            let reply = try await AgentService.shared.confirm(action: action)
             messages.append(ChatMessage(role: .mira, text: reply))
         } catch { errorText = error.localizedDescription }
         isLoading = false

@@ -59,8 +59,14 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Debug:
+          # Sign Debug builds with the local self-signed "Mira Dev" identity so
+          # the code-signing requirement stays STABLE across rebuilds. Ad-hoc
+          # signing produces a new CDHash every build, which makes TCC treat each
+          # build as a new app and re-prompt for Screen Recording / System Audio.
+          # A stable identity lets TCC bind the grant once and keep it.
           CODE_SIGN_STYLE: Manual
-          CODE_SIGNING_REQUIRED: NO
+          CODE_SIGN_IDENTITY: "Mira Dev"
+          CODE_SIGNING_REQUIRED: YES
           CODE_SIGNING_ALLOWED: YES
           DEVELOPMENT_TEAM: ""
         Release:

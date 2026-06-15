@@ -276,7 +276,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func openSocketAsync() async {
         let model     = "gpt-realtime"
-        let authToken = await fetchEphemeralToken() ?? AppSecrets.openAIKey
+        // Prefer the minted ephemeral token. Fall back to the embedded key ONLY in
+        // direct mode; in proxy mode a mint failure must NOT leak the raw key —
+        // refuse to connect instead.
+        guard let authToken = await fetchEphemeralToken()
+                ?? (MiraBackend.useProxy ? nil : AppSecrets.openAIKey) else {
+            NSLog("[MiraRealtime] no ephemeral token (proxy mode) — not connecting")
+            return
+        }
 
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
         var req = URLRequest(url: url)
@@ -302,7 +309,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         // verify_jwt requires a Bearer token — without it the function 401s
         // and every session silently falls back to the raw OpenAI key.
-        req.addValue("Bearer \(AppSecrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.addValue("Bearer \(MiraBackend.supabaseBearer)", forHTTPHeaderField: "Authorization")
         req.httpBody = try? JSONSerialization.data(
             withJSONObject: ["voice": MiraVoice.saved.rawValue]
         )
@@ -536,26 +543,56 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // is identified, PointToService animates a cursor to it — independent of the
     // AI voice response. Ported from farzaa/clicky CompanionManager (MIT).
     private func triggerElementDetection(for transcript: String) {
+        let guidanceId = UUID()
+        GuidanceEvidenceService.shared.recordRequested(id: guidanceId, transcriptChars: transcript.count)
         Task {
             do {
                 let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
                 // Use the cursor screen, or the first screen as fallback.
-                guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return }
+                guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else {
+                    GuidanceEvidenceService.shared.recordOutcome(
+                        id: guidanceId, detection: .failed(reason: "no_display"),
+                        normalized: nil, display: "")
+                    return
+                }
 
-                let appKitPt = await ElementLocationDetector.shared.detectElementLocation(
+                let display = "\(primary.displayWidthInPoints)x\(primary.displayHeightInPoints)"
+
+                // Route through the grounding gate (Teaching System M1): never draw
+                // on a target we can't ground. The gate decides annotate / ask / nothing.
+                let outcome = await GroundingService.shared.ground(
+                    question:       transcript,
                     screenshotData: primary.imageData,
-                    userQuestion:   transcript,
                     displayFrame:   primary.displayFrame
                 )
-                guard let appKitPt else { return }
 
-                let normalized = ElementLocationDetector.shared.normalizedPoint(
-                    appKitPt,
-                    displayFrame: primary.displayFrame
-                )
-                PointToService.shared.point(toNormalized: normalized)
+                switch outcome {
+                case .grounded(let normalized, let appKit, _, _):
+                    GuidanceEvidenceService.shared.recordOutcome(
+                        id: guidanceId, detection: .located(appKit), normalized: normalized, display: display)
+                    switch gateDecision(for: outcome) {
+                    case .annotate:
+                        PointToService.shared.point(toNormalized: normalized)
+                        AnnotationCanvasService.shared.show(
+                            [.ring(around: normalized, radiusPt: 26)], autoClearAfter: 4)
+                    case .ask, .nothingToShow:
+                        // Below the confidence gate — don't draw on a spot we're unsure of.
+                        break
+                    }
+
+                case .noElement:
+                    GuidanceEvidenceService.shared.recordOutcome(
+                        id: guidanceId, detection: .noElement, normalized: nil, display: display)
+
+                case .uncertain(let reason):
+                    GuidanceEvidenceService.shared.recordOutcome(
+                        id: guidanceId, detection: .failed(reason: reason), normalized: nil, display: display)
+                }
             } catch {
                 // Non-critical — element detection failing doesn't affect voice response.
+                GuidanceEvidenceService.shared.recordOutcome(
+                    id: guidanceId, detection: .failed(reason: "capture"),
+                    normalized: nil, display: "")
             }
         }
     }
@@ -641,17 +678,28 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         ]
 
         if includeFullConfig {
+            // Server VAD belongs ONLY to always-on listening. In push-to-talk the
+            // user's key hold defines the turn, so VAD must be OFF — otherwise the
+            // server auto-commits on silence and on ambient noise, racing the
+            // manual commit-on-release (broken hold/release) and feeding the model
+            // garbage audio it answers in random languages. null disables it.
+            let turnDetection: Any = isAlwaysOn
+                ? ([
+                    "type":                "server_vad",
+                    "threshold":           0.5,
+                    "prefix_padding_ms":   300,
+                    "silence_duration_ms": 500
+                  ] as [String: Any])
+                : NSNull()
+
             session["output_modalities"] = ["audio"]
             session["audio"] = [
                 "input": [
                     "format":        ["type": "audio/pcm", "rate": 24_000] as [String: Any],
-                    "transcription": ["model": "whisper-1"] as [String: Any],
-                    "turn_detection": [
-                        "type":                "server_vad",
-                        "threshold":           0.5,
-                        "prefix_padding_ms":   300,
-                        "silence_duration_ms": 500
-                    ] as [String: Any]
+                    // Pin transcription to English so short/ambiguous audio isn't
+                    // mis-detected into another language (used for element detection).
+                    "transcription": ["model": "whisper-1", "language": "en"] as [String: Any],
+                    "turn_detection": turnDetection
                 ] as [String: Any],
                 "output": [
                     "format": ["type": "audio/pcm", "rate": 24_000] as [String: Any],

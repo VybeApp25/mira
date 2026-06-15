@@ -10,6 +10,7 @@ struct SettingsView: View {
     var embedded: Bool = false
     @ObservedObject private var memory   = MemoryStore.shared
     @ObservedObject private var shortcuts = ShortcutStore.shared
+    @ObservedObject private var account  = AccountService.shared
     @Environment(\.dismiss) var dismiss
     @State private var keyInput      = ""
     @State private var saved         = false
@@ -20,6 +21,7 @@ struct SettingsView: View {
     @State private var showTraces        = false
     @State private var showIntegrations  = false
     @State private var showProposalMetrics = false
+    @State private var showReliability     = false
     @ObservedObject private var updater = UpdateService.shared
     @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
     @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
@@ -32,6 +34,7 @@ struct SettingsView: View {
     @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
+    @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
     @State private var micDevices:     [AVCaptureDevice] = []
     @State private var selectedMicUID: String = UserDefaults.standard.string(forKey: "mira_mic_uid") ?? ""
     @State private var micLevel:       Float  = 0.0
@@ -49,6 +52,10 @@ struct SettingsView: View {
 
     private let accent = DS.Colors.accent
 
+    /// Which settings groups are expanded. Collapsed-by-default keeps the panel
+    /// scannable (6 category headers) instead of one long 17-section scroll.
+    @State private var expandedGroups: Set<String> = ["General"]
+
     var body: some View {
         ZStack {
             Color(red: 0.10, green: 0.10, blue: 0.12).ignoresSafeArea()
@@ -58,40 +65,38 @@ struct SettingsView: View {
                 Divider().background(Color.white.opacity(0.08))
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        keySection
-                        Divider().background(Color.white.opacity(0.08))
-                        openRouterSection
-                        Divider().background(Color.white.opacity(0.08))
-                        accentColorSection
-                        Divider().background(Color.white.opacity(0.08))
-                        connectedAppsButton
-                        Divider().background(Color.white.opacity(0.08))
-                        shortcutsSection
-                        Divider().background(Color.white.opacity(0.08))
-                        screenCompanionSection
-                        Divider().background(Color.white.opacity(0.08))
-                        pointFollowUpSection
-                        Divider().background(Color.white.opacity(0.08))
-                        voiceSection
-                        Divider().background(Color.white.opacity(0.08))
-                        elevenLabsSection
-                        Divider().background(Color.white.opacity(0.08))
-                        microphoneSection
-                        Divider().background(Color.white.opacity(0.08))
-                        appearanceSection
-                        Divider().background(Color.white.opacity(0.08))
-                        memorySection
-                        Divider().background(Color.white.opacity(0.08))
-                        agentFolderSection
-                        Divider().background(Color.white.opacity(0.08))
-                        devToolsSection
-                        Divider().background(Color.white.opacity(0.08))
-                        usageSection
-                        Divider().background(Color.white.opacity(0.08))
-                        updatesSection
-                        Divider().background(Color.white.opacity(0.08))
-                        toolActivityButton
+                    VStack(alignment: .leading, spacing: 10) {
+                        settingsGroup("General", icon: "gearshape.fill") {
+                            accountSection
+                            keySection
+                            openRouterSection
+                            accentColorSection
+                            appearanceSection
+                            updatesSection
+                        }
+                        settingsGroup("Voice & Audio", icon: "waveform") {
+                            voiceSection
+                            elevenLabsSection
+                            microphoneSection
+                        }
+                        settingsGroup("Screen & Guidance", icon: "rectangle.dashed") {
+                            screenCompanionSection
+                            pointFollowUpSection
+                        }
+                        settingsGroup("Shortcuts", icon: "keyboard") {
+                            shortcutsSection
+                        }
+                        settingsGroup("Agents & Memory", icon: "brain.head.profile") {
+                            connectedAppsButton
+                            agentFolderSection
+                            memorySection
+                        }
+                        settingsGroup("Advanced", icon: "wrench.and.screwdriver.fill") {
+                            privacySection
+                            devToolsSection
+                            usageSection
+                            toolActivityButton
+                        }
                     }
                     .padding(18)
                 }
@@ -112,6 +117,57 @@ struct SettingsView: View {
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
         .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
         .sheet(isPresented: $showProposalMetrics) { ProposalMetricsView() }
+        .sheet(isPresented: $showReliability)     { ReliabilityDashboardView() }
+    }
+
+    // MARK: - Collapsible group
+
+    /// A tappable category header that expands to reveal its settings sections.
+    /// Replaces the old flat 17-section scroll with 6 scannable groups.
+    @ViewBuilder
+    private func settingsGroup<Content: View>(_ title: String, icon: String,
+                                              @ViewBuilder _ content: () -> Content) -> some View {
+        let isOpen = expandedGroups.contains(title)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
+                    if isOpen { expandedGroups.remove(title) } else { expandedGroups.insert(title) }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(accent)
+                        .frame(width: 18)
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white.opacity(0.30))
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                }
+                .padding(.vertical, 11)
+                .padding(.horizontal, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isOpen {
+                VStack(alignment: .leading, spacing: 18) {
+                    content()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 4)
+                .padding(.bottom, 16)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.white.opacity(0.035)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(Color.white.opacity(0.06), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - Header
@@ -136,6 +192,50 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+
+    // MARK: - Account section
+
+    @ViewBuilder
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Account", systemImage: "person.crop.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            if account.isSignedIn {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 14))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.currentUser?.displayName ?? "Signed in")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        if let e = account.currentUser?.email {
+                            Text(e)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.40))
+                        }
+                    }
+                    Spacer()
+                    Button("Sign Out") { account.signOut() }
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.45))
+                        .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.20)))
+                .cornerRadius(8)
+            } else {
+                Text("Sign in to use Mira — chat, voice, and agents run through Mira's secure backend.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+                AuthView(compact: true)
+            }
+        }
     }
 
     // MARK: - API key section
@@ -424,7 +524,7 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .tint(accent)
                     .labelsHidden()
-                    .onChange(of: screenCompanionEnabled) { _ in
+                    .onChange(of: screenCompanionEnabled) {
                         NotificationCenter.default.post(name: .miraScreenCompanionChanged, object: nil)
                     }
             }
@@ -620,10 +720,15 @@ struct SettingsView: View {
             guard !mods.isEmpty else { return event }  // require at least one modifier
 
             let carbonMods = ShortcutConfig.carbonMods(from: mods)
-            let key = event.characters?.uppercased() ?? "?"
+            // Use the base character (ignoring modifiers) — Control-modified keys make
+            // `event.characters` return a non-printable control char (Ctrl+V → "\u{16}"),
+            // which would store an invisible displayKey and a broken binding.
+            guard let raw = event.charactersIgnoringModifiers,
+                  let scalar = raw.unicodeScalars.first,
+                  scalar.value >= 0x20, scalar.value != 0x7F else { return event }
             config.wrappedValue = ShortcutConfig(keyCode: UInt32(event.keyCode),
                                                   carbonMods: carbonMods,
-                                                  displayKey: key)
+                                                  displayKey: raw.uppercased())
             stopRecording()
             return nil  // consume
         }
@@ -1191,6 +1296,7 @@ struct SettingsView: View {
     @ObservedObject private var traceStore    = ToolTraceStore.shared
     @ObservedObject private var proposalStore = ProposalStore.shared
     @ObservedObject private var engine        = ProjectEngine.shared
+    @ObservedObject private var telemetry     = TelemetryService.shared
 
     private var toolActivityButton: some View {
         VStack(spacing: 10) {
@@ -1236,6 +1342,22 @@ struct SettingsView: View {
                 }
             }
             .buttonStyle(.plain)
+
+            Button(action: { showReliability = true }) {
+                HStack {
+                    Label("Reliability", systemImage: "scope")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.20))
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Lessons now live in their own "Learn" tab (LessonsTabView), so they
+            // aren't buried at the bottom of this long settings scroll.
         }
     }
 
@@ -1297,7 +1419,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .tint(.white)
-                .onChange(of: selectedMicUID) { uid in
+                .onChange(of: selectedMicUID) { _, uid in
                     UserDefaults.standard.set(uid, forKey: "mira_mic_uid")
                 }
             }
@@ -1375,6 +1497,17 @@ struct SettingsView: View {
                 binding: $catMode
             )
         }
+    }
+
+    // Analytics opt-out (Privacy Policy §6). Off = PostHogService sends nothing,
+    // including identify/PII — the flag is read directly in PostHogService.send.
+    private var privacySection: some View {
+        toggleRow(
+            icon: "chart.bar.xaxis",
+            title: "Share usage analytics",
+            subtitle: "Anonymous product analytics to improve Mira. Turn off to send nothing.",
+            binding: $analyticsEnabled
+        )
     }
 
     private func toggleRow(icon: String, title: String, subtitle: String, binding: Binding<Bool>) -> some View {

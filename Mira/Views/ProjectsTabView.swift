@@ -430,7 +430,7 @@ private struct ProjectDetailView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                        .onChange(of: hud.updates.count) { _ in
+                        .onChange(of: hud.updates.count) {
                             if isLive, let last = hud.updates.last {
                                 withAnimation(.easeOut(duration: 0.2)) {
                                     proxy.scrollTo("live-\(last.id)", anchor: .bottom)

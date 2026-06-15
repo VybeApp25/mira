@@ -376,7 +376,7 @@ private struct TypewriterReplyCard: View {
         }
         .background(bubbleCard(tailOnLeft: tailOnLeft))
         .onAppear { startTypewriter() }
-        .onChange(of: text) { _ in
+        .onChange(of: text) {
             displayed = ""
             done      = false
             startTypewriter()

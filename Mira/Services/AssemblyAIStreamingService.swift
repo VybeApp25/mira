@@ -56,9 +56,30 @@ final class AssemblyAIStreamingService: ObservableObject {
         accumulatedFinals  = []
         sessionReady       = false
 
-        // Open WebSocket — Authorization is raw key, no Bearer prefix.
-        var request = URLRequest(url: wsURL)
-        request.setValue(AppSecrets.assemblyAIKey, forHTTPHeaderField: "Authorization")
+        // Start mic capture first (the throwing part). Frames are held until
+        // sessionReady == true, so capturing before the socket opens is safe.
+        try startCapture()
+        isStreaming = true
+        Task { [weak self] in await self?.openSocket() }
+    }
+
+    /// Opens the streaming WebSocket. Proxy mode mints a short-lived token and
+    /// passes it as a query param (the raw key never leaves the server); direct
+    /// mode authenticates with the embedded key as before.
+    private func openSocket() async {
+        var request: URLRequest
+        if MiraBackend.useProxy {
+            guard let token = await mintStreamingToken() else {
+                NSLog("[AssemblyAI] no streaming token (proxy mode) — stopping")
+                stopStreaming(); return
+            }
+            request = URLRequest(url: URL(string: "\(wsURL.absoluteString)?token=\(token)") ?? wsURL)
+        } else {
+            // Authorization is the raw key, no Bearer prefix.
+            request = URLRequest(url: wsURL)
+            request.setValue(AppSecrets.assemblyAIKey, forHTTPHeaderField: "Authorization")
+        }
+
         urlSession    = URLSession(configuration: .default)
         let task      = urlSession!.webSocketTask(with: request)
         webSocketTask = task
@@ -69,10 +90,22 @@ final class AssemblyAIStreamingService: ObservableObject {
         task.send(.string(cfg)) { _ in }
 
         receiveLoop()
+    }
 
-        // Start mic capture; audio frames are held until sessionReady == true.
-        try startCapture()
-        isStreaming = true
+    /// Mints an AssemblyAI streaming token via the JWT-authenticated edge function.
+    private func mintStreamingToken() async -> String? {
+        var req = URLRequest(url: MiraBackend.assemblyAITokenURL)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.addValue("Bearer \(MiraBackend.supabaseBearer)", forHTTPHeaderField: "Authorization")
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = json["token"] as? String, !token.isEmpty else { return nil }
+            return token
+        } catch { return nil }
     }
 
     func stopStreaming() {

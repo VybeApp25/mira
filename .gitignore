@@ -10,3 +10,6 @@ DerivedData/
 *.d
 Mira/Config/AppSecrets.swift
 AgentService/dist/
+
+# Local xcodebuild output
+build_local/

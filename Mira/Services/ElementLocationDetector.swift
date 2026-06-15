@@ -13,13 +13,29 @@
 import AppKit
 import Foundation
 
+/// Typed result of a Point-and-Ask element detection.
+///
+/// Replaces a bare `CGPoint?`, which collapsed three very different outcomes
+/// into `nil`: a real failure (network/HTTP/resize), the model legitimately
+/// deciding there's nothing to point at, and a found coordinate. The evidence
+/// funnel needs to tell "Mira correctly saw nothing" apart from "Mira broke",
+/// so each is its own case.
+enum GuidanceDetection {
+    /// An element was located, at this AppKit point (global, bottom-left origin).
+    case located(CGPoint)
+    /// The call succeeded but the model said there's no specific element to point to.
+    case noElement
+    /// The detection could not complete. `reason` is a short stable tag for telemetry.
+    case failed(reason: String)
+}
+
 @MainActor
 final class ElementLocationDetector {
 
     static let shared = ElementLocationDetector()
     private init() {}
 
-    private let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private var apiURL: URL { MiraBackend.anthropicMessagesURL }
     private let model  = "claude-sonnet-4-6"
 
     private lazy var session: URLSession = {
@@ -31,13 +47,6 @@ final class ElementLocationDetector {
         cfg.httpCookieStorage = nil
         return URLSession(configuration: cfg)
     }()
-
-    // Anthropic-recommended Computer Use resolutions, ordered by aspect ratio.
-    private static let cuResolutions: [(w: Int, h: Int, ratio: Double)] = [
-        (1024, 768,  1024.0 / 768.0),   // 4:3
-        (1280, 800,  1280.0 / 800.0),   // 16:10 — most MacBooks
-        (1366, 768,  1366.0 / 768.0),   // ~16:9 — external monitors
-    ]
 
     // MARK: - Public
 
@@ -52,42 +61,46 @@ final class ElementLocationDetector {
         screenshotData: Data,
         userQuestion: String,
         displayFrame: CGRect
-    ) async -> CGPoint? {
+    ) async -> GuidanceDetection {
         let displayW = Int(displayFrame.width)
         let displayH = Int(displayFrame.height)
 
-        let res = bestResolution(forDisplayWidth: displayW, displayHeight: displayH)
-
-        guard let resizedData = resizeForComputerUse(
-            imageData: screenshotData,
-            targetWidth: res.w,
-            targetHeight: res.h
-        ) else {
-            NSLog("[ElementDetector] resize failed")
-            return nil
+        // CRITICAL: send the screenshot at its TRUE aspect ratio and declare those
+        // exact dimensions. Forcing it into a fixed bucket (e.g. 1280×800) distorts
+        // the image vertically, and the Computer Use model — trained on undistorted
+        // screenshots — then aims systematically off (consistently too low). Keep
+        // aspect; only downscale if wider than the recommended max.
+        guard let fit = fitForComputerUse(screenshotData) else {
+            NSLog("[ElementDetector] fit failed")
+            return .failed(reason: "resize")
         }
 
-        guard let cuPoint = await callComputerUseAPI(
-            imageData: resizedData,
+        switch await callComputerUseAPI(
+            imageData: fit.data,
             userQuestion: userQuestion,
-            declaredW: res.w,
-            declaredH: res.h
-        ) else {
-            return nil
+            declaredW: fit.w,
+            declaredH: fit.h
+        ) {
+        case .failed(let reason):
+            return .failed(reason: reason)
+
+        case .noElement:
+            return .noElement
+
+        case .coordinate(let cuPoint):
+            // Clamp to valid range — Claude occasionally returns slightly out-of-bounds values.
+            let cx = max(0, min(cuPoint.x, CGFloat(fit.w)))
+            let cy = max(0, min(cuPoint.y, CGFloat(fit.h)))
+
+            // Scale from the (aspect-correct) image space → actual display points.
+            let scaledX = (cx / CGFloat(fit.w)) * CGFloat(displayW)
+            // CU uses top-left origin; AppKit uses bottom-left → flip Y.
+            let scaledY = CGFloat(displayH) - (cy / CGFloat(fit.h)) * CGFloat(displayH)
+
+            // Add display origin offset for multi-display setups.
+            let appKit = CGPoint(x: displayFrame.minX + scaledX, y: displayFrame.minY + scaledY)
+            return .located(appKit)
         }
-
-        // Clamp to valid range — Claude occasionally returns slightly out-of-bounds values.
-        let cx = max(0, min(cuPoint.x, CGFloat(res.w)))
-        let cy = max(0, min(cuPoint.y, CGFloat(res.h)))
-
-        // Scale from Computer Use resolution → actual display point dimensions.
-        let scaledX = (cx / CGFloat(res.w)) * CGFloat(displayW)
-        // CU uses top-left origin; AppKit uses bottom-left → flip Y.
-        let scaledY = CGFloat(displayH) - (cy / CGFloat(res.h)) * CGFloat(displayH)
-
-        // Add display origin offset for multi-display setups.
-        return CGPoint(x: displayFrame.minX + scaledX,
-                       y: displayFrame.minY + scaledY)
     }
 
     /// Converts an AppKit point (display-local, bottom-left origin) to the
@@ -100,11 +113,33 @@ final class ElementLocationDetector {
 
     // MARK: - Private
 
-    private func bestResolution(forDisplayWidth w: Int, displayHeight h: Int) -> (w: Int, h: Int) {
-        let ratio = Double(w) / Double(max(1, h))
-        return Self.cuResolutions
-            .min(by: { abs($0.ratio - ratio) < abs($1.ratio - ratio) })
-            .map { ($0.w, $0.h) } ?? (1280, 800)
+    /// Returns the image to send plus its actual pixel dimensions, preserving
+    /// aspect ratio. If the image is already within the recommended max width it
+    /// is sent UNCHANGED (no distortion); only wider images are downscaled, and
+    /// even then aspect is preserved. The declared dims always equal the image's
+    /// real dims, so the model's coordinate space matches what it sees.
+    private func fitForComputerUse(_ data: Data, maxWidth: Int = 1280) -> (data: Data, w: Int, h: Int)? {
+        guard let (w0, h0) = pixelSize(of: data) else { return nil }
+        if w0 <= maxWidth { return (data, w0, h0) }
+        let th = Int((Double(h0) / Double(w0)) * Double(maxWidth))
+        guard let resized = resizeForComputerUse(imageData: data, targetWidth: maxWidth, targetHeight: th) else {
+            return nil
+        }
+        return (resized, maxWidth, th)
+    }
+
+    /// Actual pixel dimensions of an encoded image (Retina-safe — reads the bitmap
+    /// rep's pixel counts, not NSImage point size).
+    private func pixelSize(of data: Data) -> (w: Int, h: Int)? {
+        guard let rep = NSBitmapImageRep(data: data) else { return nil }
+        return (rep.pixelsWide, rep.pixelsHigh)
+    }
+
+    /// Outcome of one Computer Use API call, before coordinate scaling.
+    private enum CUResult {
+        case coordinate(CGPoint)
+        case noElement
+        case failed(reason: String)
     }
 
     private func callComputerUseAPI(
@@ -112,11 +147,11 @@ final class ElementLocationDetector {
         userQuestion: String,
         declaredW: Int,
         declaredH: Int
-    ) async -> CGPoint? {
+    ) async -> CUResult {
         var req = URLRequest(url: apiURL)
         req.httpMethod = "POST"
         req.timeoutInterval = 15
-        req.setValue(AppSecrets.anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: AppSecrets.anthropicAPIKey)
         req.setValue("2023-06-01",                forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",          forHTTPHeaderField: "Content-Type")
         req.setValue("computer-use-2025-11-24",   forHTTPHeaderField: "anthropic-beta")
@@ -160,16 +195,24 @@ final class ElementLocationDetector {
 
             guard let http = response as? HTTPURLResponse,
                   (200...299).contains(http.statusCode) else {
-                NSLog("[ElementDetector] API error %d", (response as? HTTPURLResponse)?.statusCode ?? -1)
-                return nil
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                NSLog("[ElementDetector] API error %d", code)
+                return .failed(reason: "http_\(code)")
             }
 
-            return parseCoordinate(from: data)
+            // A successful call with no coordinate means the model chose not to
+            // point at anything — a valid outcome, not a failure.
+            if let pt = parseCoordinate(from: data) {
+                return .coordinate(pt)
+            }
+            return .noElement
         } catch {
             NSLog("[ElementDetector] request failed: %@", error.localizedDescription)
-            return nil
+            return .failed(reason: "request")
         }
     }
+
+    // MARK: - Diagnostics
 
     private func parseCoordinate(from data: Data) -> CGPoint? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

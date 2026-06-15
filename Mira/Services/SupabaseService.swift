@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Supabase auth responses
 
-private struct AuthResponse: Codable {
+private struct AuthResponse: Decodable {
     let accessToken:  String
     let tokenType:    String
     let expiresIn:    Int
@@ -18,15 +18,30 @@ private struct AuthResponse: Codable {
     }
 }
 
-struct SupabaseUser: Codable {
+struct SupabaseUser: Decodable {
     let id:    String
     let email: String?
-    let userMetadata: [String: String]?
+    let displayName: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case email
         case userMetadata = "user_metadata"
+    }
+    // user_metadata mixes value types (e.g. email_verified: Bool), so it can't
+    // decode as [String: String]. We only need display_name — pull it out of a
+    // nested container and ignore everything else.
+    private enum MetaKeys: String, CodingKey { case displayName = "display_name" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id    = try c.decode(String.self, forKey: .id)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        if let meta = try? c.nestedContainer(keyedBy: MetaKeys.self, forKey: .userMetadata) {
+            displayName = try? meta.decodeIfPresent(String.self, forKey: .displayName)
+        } else {
+            displayName = nil
+        }
     }
 }
 
@@ -67,7 +82,14 @@ enum SupabaseError: LocalizedError {
 final class SupabaseService: ObservableObject {
     static let shared = SupabaseService()
 
-    @Published private(set) var session: SupabaseSession?
+    @Published private(set) var session: SupabaseSession? {
+        didSet { Self.cachedAccessToken = session?.accessToken ?? "" }
+    }
+
+    // Thread-safe mirror of the current JWT so non-MainActor network call sites
+    // (e.g. MiraBackend) can attach it without an actor hop. Updated on every
+    // session change via the didSet above.
+    nonisolated(unsafe) static var cachedAccessToken: String = ""
 
     private let baseURL = AppSecrets.supabaseURL
     private let anonKey = AppSecrets.supabaseAnonKey
@@ -212,7 +234,7 @@ final class SupabaseService: ObservableObject {
             refreshToken: auth.refreshToken,
             userId:       auth.user.id,
             email:        auth.user.email,
-            displayName:  auth.user.userMetadata?["display_name"],
+            displayName:  auth.user.displayName,
             expiresAt:    Date().addingTimeInterval(TimeInterval(auth.expiresIn))
         )
     }

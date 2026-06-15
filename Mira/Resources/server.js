@@ -91468,7 +91468,13 @@ function wrapTools(rawTools) {
 }
 async function runAgent(req) {
   const composio = makeComposio();
-  const anthropic2 = createAnthropic({ apiKey: req.claudeApiKey });
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error("SUPABASE_URL not set");
+  const anthropic2 = createAnthropic({
+    baseURL: `${supabaseUrl}/functions/v1/anthropic-proxy`,
+    apiKey: "proxy",
+    headers: { Authorization: `Bearer ${req.accessToken}` }
+  });
   const session = await composio.create(req.userId);
   const rawTools = await session.tools({
     toolkitSlugs: SUPPORTED_TOOLKITS
@@ -91589,17 +91595,21 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "mira-agent" });
 });
 app.post("/agent/run", async (req, res) => {
-  const { prompt, userId, claudeApiKey } = req.body;
-  if (!prompt || !userId || !claudeApiKey) {
-    res.status(400).json({ error: "Missing prompt, userId, or claudeApiKey" });
+  const { prompt, userId, accessToken } = req.body;
+  if (!prompt || !userId || !accessToken) {
+    res.status(400).json({ error: "Missing prompt, userId, or accessToken" });
     return;
   }
   if (!process.env.COMPOSIO_API_KEY) {
     res.status(500).json({ error: "COMPOSIO_API_KEY not set in .env" });
     return;
   }
+  if (!process.env.SUPABASE_URL) {
+    res.status(500).json({ error: "SUPABASE_URL not set in .env" });
+    return;
+  }
   try {
-    const result = await runAgent({ prompt, userId, claudeApiKey });
+    const result = await runAgent({ prompt, userId, accessToken });
     res.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

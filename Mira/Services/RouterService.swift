@@ -283,9 +283,9 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             model: "claude-haiku-4-5-20251001", max_tokens: 80, system: system,
             messages: [HaikuMsg(role: "user", content: prompt)]
         )
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        var req = URLRequest(url: MiraBackend.anthropicMessagesURL)
         req.httpMethod = "POST"
-        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -1000,7 +1000,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         let online = await checkAgentHealth()
         if online {
             do {
-                let result = try await AgentService.shared.run(prompt: prompt, claudeApiKey: apiKey)
+                let result = try await AgentService.shared.run(prompt: prompt, accessToken: SupabaseService.cachedAccessToken)
                 if let pending = result.requiresConfirmation { return .confirm(pending) }
                 return .reply(result.reply, route: route)
             } catch { /* fall through */ }

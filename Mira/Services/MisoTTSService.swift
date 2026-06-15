@@ -54,8 +54,10 @@ final class MisoTTSService: ObservableObject {
     private var audioPlayer: AVAudioPlayer?
     private var currentTask: Task<Void, Never>?
 
+    // Bring-your-own-key via Settings (no secret ships in the binary). When
+    // MisoLabs has a hosted API + a miso-proxy edge function, route through that.
     private var apiKey: String {
-        UserDefaults.standard.string(forKey: "mira_miso_key") ?? AppSecrets.misoAPIKey
+        UserDefaults.standard.string(forKey: "mira_miso_key") ?? ""
     }
 
     var isConfigured: Bool { !apiKey.isEmpty }
