@@ -25,6 +25,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // after launch. Instantiating AccountService.shared also restores authState.
         _ = AccountService.shared
 
+        // Keep the access token fresh. It expires ~1h after sign-in and nothing
+        // renewed it before, so all proxy AI (chat/voice/grounding) died an hour
+        // later. Refresh now (covers a token that expired while the app was closed),
+        // and again on every reactivation (covers the machine sleeping past expiry).
+        // The pre-expiry timer in SupabaseService handles the steady-state case.
+        Task { await SupabaseService.shared.ensureFreshToken() }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            Task { await SupabaseService.shared.ensureFreshToken() }
+        }
+
         AgentProcessManager.shared.start()
 
         // ChimeWarmer — prime audio hardware pipeline for zero-latency first chime

@@ -83,7 +83,10 @@ final class SupabaseService: ObservableObject {
     static let shared = SupabaseService()
 
     @Published private(set) var session: SupabaseSession? {
-        didSet { Self.cachedAccessToken = session?.accessToken ?? "" }
+        didSet {
+            Self.cachedAccessToken = session?.accessToken ?? ""
+            scheduleAutoRefresh()
+        }
     }
 
     // Thread-safe mirror of the current JWT so non-MainActor network call sites
@@ -165,6 +168,53 @@ final class SupabaseService: ObservableObject {
         let s = makeSession(from: auth)
         save(s)
         session = s
+    }
+
+    // MARK: - Auto-refresh
+    //
+    // The access token expires ~1h after sign-in, and nothing renewed it before —
+    // so every proxy-gated feature (chat, voice, element grounding) silently 401'd
+    // an hour after sign-in. These keep `cachedAccessToken` fresh transparently for
+    // all call sites: a one-shot timer fires ~2 min before expiry (re-armed by each
+    // refresh via the session didSet → scheduleAutoRefresh), and AppDelegate calls
+    // `ensureFreshToken()` at launch and on app reactivation (covers a token that
+    // expired while the app was closed or the machine slept).
+
+    private var refreshTimer: Timer?
+    private var refreshInFlight: Task<Void, Error>?
+
+    /// Refreshes the token if it's expired or within `buffer` of expiring. No-op
+    /// when signed out or comfortably valid. Concurrent callers share one network
+    /// refresh — rotating the (single-use) refresh token twice would invalidate one.
+    func ensureFreshToken(buffer: TimeInterval = 120) async {
+        guard let s = session, s.expiresAt.timeIntervalSinceNow <= buffer else { return }
+        do { try await singleFlightRefresh() }
+        catch {
+            // A dead/rotated/expired refresh token can't recover — surface as
+            // signed-out instead of 401'ing every call forever.
+            if case SupabaseError.serverError(let code, _) = error, code == 400 || code == 401 {
+                signOut()
+            }
+        }
+    }
+
+    private func singleFlightRefresh() async throws {
+        if let inFlight = refreshInFlight { return try await inFlight.value }
+        let task = Task { try await self.refresh() }
+        refreshInFlight = task
+        defer { refreshInFlight = nil }
+        try await task.value
+    }
+
+    /// Re-arms the pre-expiry refresh timer. Invoked from the session didSet, so
+    /// every sign-in / refresh / launch-restore schedules the next refresh.
+    private func scheduleAutoRefresh() {
+        refreshTimer?.invalidate()
+        guard let s = session else { refreshTimer = nil; return }
+        let fireIn = max(1, s.expiresAt.timeIntervalSinceNow - 120)
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: fireIn, repeats: false) { [weak self] _ in
+            Task { await self?.ensureFreshToken() }
+        }
     }
 
     // MARK: - Sign Out
