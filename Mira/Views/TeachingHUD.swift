@@ -54,6 +54,7 @@ final class TeachingHUD {
 
 private struct TeachingHUDView: View {
     @ObservedObject private var engine = TeachingEngine.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -66,9 +67,7 @@ private struct TeachingHUDView: View {
                     .foregroundColor(.white.opacity(0.85))
                 Spacer()
                 if engine.phase == .running, engine.totalSteps > 0 {
-                    Text("Step \(engine.stepIndex + 1) of \(engine.totalSteps)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                    stepProgress
                 }
             }
 
@@ -126,6 +125,29 @@ private struct TeachingHUDView: View {
                 .fill(Color(red: 0.10, green: 0.11, blue: 0.13).opacity(0.96))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1))
         )
+    }
+
+    // Glanceable step progress: a dot per step (filled through the current one,
+    // hollow ahead). Falls back to text for long lessons so the dots don't crowd.
+    // VoiceOver always reads the "Step X of Y" label regardless of representation.
+    @ViewBuilder private var stepProgress: some View {
+        if engine.totalSteps <= 8 {
+            HStack(spacing: 5) {
+                ForEach(0..<engine.totalSteps, id: \.self) { i in
+                    Circle()
+                        .fill(i <= engine.stepIndex ? miraTeale : Color.white.opacity(0.18))
+                        .frame(width: i == engine.stepIndex ? 7 : 5,
+                               height: i == engine.stepIndex ? 7 : 5)
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: engine.stepIndex)
+            .accessibilityElement()
+            .accessibilityLabel("Step \(engine.stepIndex + 1) of \(engine.totalSteps)")
+        } else {
+            Text("Step \(engine.stepIndex + 1) of \(engine.totalSteps)")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.4))
+        }
     }
 
     private func hudButton(_ title: String, tint: Color, _ action: @escaping () -> Void) -> some View {

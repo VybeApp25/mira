@@ -55,6 +55,7 @@ final class AnnotationCanvasService: ObservableObject {
         setupWindowIfNeeded()
         window?.orderFrontRegardless()
         vm.annotations = annotations
+        vm.shownAt = Date()   // restarts the callout fade-in for this step
 
         autoClear?.cancel()
         if let secs = autoClearAfter {
@@ -103,22 +104,39 @@ final class AnnotationCanvasService: ObservableObject {
 @MainActor
 final class _AnnotationVM: ObservableObject {
     @Published var annotations: [Annotation] = []
+    /// When the current annotation set was shown — drives the callout fade-in.
+    @Published var shownAt: Date = .distantPast
 }
 
 // MARK: - Root
 
 private struct _AnnotationRoot: View {
     @ObservedObject var vm: _AnnotationVM
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let screenSize: CGSize
 
     var body: some View {
-        // A single pulse clock shared by every primitive, so highlights breathe
-        // together rather than flickering independently.
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
-            let pulse = 0.5 + 0.5 * sin(ctx.date.timeIntervalSinceReferenceDate * 2.4)
-            _AnnotationCanvas(annotations: vm.annotations,
-                              screenSize: screenSize,
-                              pulse: CGFloat(pulse))
+        Group {
+            if reduceMotion {
+                // Reduce Motion on: no breathing pulse, no fade — one static frame.
+                _AnnotationCanvas(annotations: vm.annotations,
+                                  screenSize: screenSize,
+                                  pulse: 0,
+                                  calloutFade: 1)
+            } else {
+                // A single pulse clock shared by every primitive, so highlights
+                // breathe together rather than flickering independently. The same
+                // clock drives a brief fade-in for the callout (age since shownAt).
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
+                    let pulse = 0.5 + 0.5 * sin(ctx.date.timeIntervalSinceReferenceDate * 2.4)
+                    let age   = ctx.date.timeIntervalSince(vm.shownAt)
+                    let fade  = max(0, min(1, age / 0.22))
+                    _AnnotationCanvas(annotations: vm.annotations,
+                                      screenSize: screenSize,
+                                      pulse: CGFloat(pulse),
+                                      calloutFade: CGFloat(fade))
+                }
+            }
         }
         .frame(width: screenSize.width, height: screenSize.height)
         .allowsHitTesting(false)
@@ -131,6 +149,7 @@ private struct _AnnotationCanvas: View {
     let annotations: [Annotation]
     let screenSize:  CGSize
     let pulse:       CGFloat   // 0–1 shared breathing clock
+    let calloutFade: CGFloat   // 0–1 callout fade-in (1 when reduce-motion)
 
     private func screenPt(_ n: CGPoint) -> CGPoint {
         CGPoint(x: n.x * screenSize.width, y: n.y * screenSize.height)
@@ -143,7 +162,7 @@ private struct _AnnotationCanvas: View {
                 case .ring(let n, let r):    drawRing(ctx, at: screenPt(n), radius: r)
                 case .arrow(let n, let lbl): drawArrow(ctx, to: screenPt(n), label: lbl)
                 case .badge(let n, let num): drawBadge(ctx, at: screenPt(n), number: num)
-                case .callout(let n, let t): drawCallout(ctx, near: screenPt(n), text: t)
+                case .callout(let n, let t): drawCallout(ctx, near: screenPt(n), text: t, fade: calloutFade)
                 }
             }
         }
@@ -195,7 +214,7 @@ private struct _AnnotationCanvas: View {
 
     // Short instruction pill beside the target. Prefers the right side; flips to
     // the left near the screen edge, and clamps vertically so it stays on screen.
-    private func drawCallout(_ ctx: GraphicsContext, near p: CGPoint, text: String) {
+    private func drawCallout(_ ctx: GraphicsContext, near p: CGPoint, text: String, fade: CGFloat) {
         let maxW:  CGFloat = 230
         let padH:  CGFloat = 11
         let padV:  CGFloat = 8
@@ -224,14 +243,19 @@ private struct _AnnotationCanvas: View {
         let pill = Path(roundedRect: rect, cornerRadius: 10, style: .continuous)
 
         // Soft halo, dark fill, teal hairline — matches the HUD's surface language.
-        var halo = ctx
-        halo.opacity = 0.5
-        halo.addFilter(.shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 2))
-        halo.fill(pill, with: .color(Color(red: 0.07, green: 0.08, blue: 0.10).opacity(0.97)))
-        ctx.fill(pill, with: .color(Color(red: 0.07, green: 0.08, blue: 0.10).opacity(0.97)))
-        ctx.stroke(pill, with: .color(miraTeale.opacity(0.55)), lineWidth: 1)
+        // Everything is drawn through `base`, whose opacity ramps the callout in.
+        var base = ctx
+        base.opacity = fade
 
-        ctx.draw(resolved, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+        let fill = Color(red: 0.07, green: 0.08, blue: 0.10).opacity(0.97)
+        var halo = base
+        halo.opacity = fade * 0.5
+        halo.addFilter(.shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 2))
+        halo.fill(pill, with: .color(fill))
+        base.fill(pill, with: .color(fill))
+        base.stroke(pill, with: .color(miraTeale.opacity(0.55)), lineWidth: 1)
+
+        base.draw(resolved, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
     }
 
     // Filled numbered badge.
