@@ -62,9 +62,9 @@ final class AgentProcessManager {
         proc.launchPath = node
         proc.arguments  = [script]
         proc.environment = ProcessInfo.processInfo.environment.merging([
-            "COMPOSIO_API_KEY": AppSecrets.composioAPIKey,
-            // The sidecar reaches Anthropic via the anthropic-proxy edge function
-            // (authorized per-request by the user's JWT) — no provider key here.
+            // No provider keys here: the sidecar reaches Anthropic and Composio via
+            // the anthropic-proxy / composio-proxy edge functions, authorized
+            // per-request by the user's JWT. Only the (public) Supabase URL is needed.
             "SUPABASE_URL": AppSecrets.supabaseURL,
         ]) { _, new in new }
 

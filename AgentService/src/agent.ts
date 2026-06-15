@@ -77,9 +77,18 @@ For write actions (send email, create event, post message, create issue) the sys
 When reading data (list emails, fetch calendar, search Notion), proceed without confirmation.
 Always summarize what you found or did in plain language — no raw JSON dumps.`;
 
-function makeComposio() {
+// Route the Composio SDK through Mira's composio-proxy edge function: the SDK
+// concatenates `baseURL` + path, so every call hits the proxy, which holds the
+// real key and authorizes by the user's JWT (Authorization: Bearer via
+// defaultHeaders). `apiKey` is unused by the proxy but the SDK requires a
+// non-empty value. No Composio key is shipped in (or extractable from) the client.
+function makeComposio(accessToken: string) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error("SUPABASE_URL not set");
   return new Composio({
-    apiKey: process.env.COMPOSIO_API_KEY!,
+    apiKey: "proxy",
+    baseURL: `${supabaseUrl}/functions/v1/composio-proxy`,
+    defaultHeaders: { Authorization: `Bearer ${accessToken}` },
     provider: new VercelProvider(),
   });
 }
@@ -104,7 +113,7 @@ function wrapTools(rawTools: Record<string, any>): Record<string, any> {
 }
 
 export async function runAgent(req: AgentRequest): Promise<AgentResponse> {
-  const composio = makeComposio();
+  const composio = makeComposio(req.accessToken);
 
   // Route Anthropic through Mira's proxy edge function: the @ai-sdk/anthropic
   // client POSTs to `${baseURL}/messages`, which Supabase routes to the
@@ -164,9 +173,10 @@ export async function runAgent(req: AgentRequest): Promise<AgentResponse> {
 export async function executeConfirmed(
   toolName: string,
   params: Record<string, unknown>,
-  userId: string
+  userId: string,
+  accessToken: string
 ): Promise<unknown> {
-  const composio = makeComposio();
+  const composio = makeComposio(accessToken);
   const session = await composio.create(userId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (session as any).executeAction(toolName, params);
@@ -200,8 +210,8 @@ async function authConfigIdFor(
   return id;
 }
 
-export async function getConnectUrl(app: string, userId: string): Promise<string> {
-  const composio = makeComposio();
+export async function getConnectUrl(app: string, userId: string, accessToken: string): Promise<string> {
+  const composio = makeComposio(accessToken);
   const authConfigId = await authConfigIdFor(composio, app);
   // link(), not initiate() — Composio retired initiate() for managed OAuth
   // configs (changelog 2026-04-24); initiate() now 400s for these.
@@ -209,8 +219,8 @@ export async function getConnectUrl(app: string, userId: string): Promise<string
   return (conn as { redirectUrl?: string }).redirectUrl ?? "";
 }
 
-export async function getConnectedApps(userId: string): Promise<string[]> {
-  const composio = makeComposio();
+export async function getConnectedApps(userId: string, accessToken: string): Promise<string[]> {
+  const composio = makeComposio(accessToken);
   const result = await composio.connectedAccounts.list({
     userIds: [userId],
     statuses: ["ACTIVE"],
@@ -226,8 +236,8 @@ export interface ConnectionStatus {
 
 // All connected accounts with their health — lets the UI flag expired/revoked
 // tokens with a Reconnect action instead of failing mid-conversation.
-export async function getConnectionStatuses(userId: string): Promise<ConnectionStatus[]> {
-  const composio = makeComposio();
+export async function getConnectionStatuses(userId: string, accessToken: string): Promise<ConnectionStatus[]> {
+  const composio = makeComposio(accessToken);
   const result = await composio.connectedAccounts.list({ userIds: [userId] });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (result.items ?? [])

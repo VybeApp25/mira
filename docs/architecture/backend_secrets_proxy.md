@@ -2,6 +2,8 @@
 
 **Status: DESIGN (2026-06-14).** Addresses release blocker #1 ([release audit](../../)): live *secret* API keys (Anthropic, OpenAI, Composio, AssemblyAI, Miso) are compiled into the client and extractable from the shipped binary via `strings`. They must move behind a per-user-authenticated backend before any public distribution.
 
+> **Update (2026-06-15):** Composio is now done too. The Node agent sidecar points the Composio SDK's `baseURL` at a new **`composio-proxy`** edge function (transparent reverse proxy → `backend.composio.dev`, JWT-verified, server-held `x-api-key` injected) and authorizes with the user's JWT via the SDK's `defaultHeaders`. The JWT is plumbed through every sidecar Composio call (`/agent/run`, `/agent/confirm`, `/connect`, `/connections`, `/connections/status`). `AppSecrets.composioAPIKey` is now empty; the key lives only as the `COMPOSIO_API_KEY` Supabase secret (same value, **not** rotated). Verified end-to-end (HTTP 200 from Composio via the proxy with a throwaway user) and confirmed absent from the built binary + bundled `server.js` via `strings`. No rotation-target provider secret remains in the client; only the empty/optional slots (OpenRouter, Miso, Stripe).
+
 ## What already exists (reuse, don't rebuild)
 - **Per-user auth:** `SupabaseService` does real email/password `signIn`/`signUp` → `SupabaseSession.accessToken` (a per-user JWT), with refresh + persistence. The identity layer is done.
 - **Plans/entitlements:** `EntitlementService` models `free / pro / ultra` + an `Entitlement` enum (`runAgents`, `useVoiceMode`, `useScreenGuidance`, …) + `can(_:)`. Today it's **client-side only** (bypassable) — the proxy makes it server-enforced.

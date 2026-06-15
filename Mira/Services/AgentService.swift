@@ -87,6 +87,7 @@ class AgentService: ObservableObject {
             "toolName": action.toolName,
             "userId": userId,
             "params": paramsDict,
+            "accessToken": SupabaseService.cachedAccessToken,
         ])
         let (data, _) = try await URLSession.shared.data(for: req)
         let result = try JSONDecoder().decode(ConfirmResult.self, from: data)
@@ -99,7 +100,7 @@ class AgentService: ObservableObject {
         }
         comps.queryItems = [URLQueryItem(name: "userId", value: userId)]
         guard let url = comps.url else { throw AgentError.badURL }
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.shared.data(for: authedGET(url))
         struct Resp: Decodable { let connected: [String] }
         return (try? JSONDecoder().decode(Resp.self, from: data))?.connected ?? []
     }
@@ -118,7 +119,7 @@ class AgentService: ObservableObject {
         }
         comps.queryItems = [URLQueryItem(name: "userId", value: userId)]
         guard let url = comps.url else { throw AgentError.badURL }
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.shared.data(for: authedGET(url))
         struct Resp: Decodable { let statuses: [ConnectionStatus] }
         return (try? JSONDecoder().decode(Resp.self, from: data))?.statuses ?? []
     }
@@ -138,7 +139,7 @@ class AgentService: ObservableObject {
         }
         comps.queryItems = [URLQueryItem(name: "userId", value: userId)]
         guard let url = comps.url else { throw AgentError.badURL }
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await URLSession.shared.data(for: authedGET(url))
         struct Resp: Decodable { let url: String }
         let resp = try JSONDecoder().decode(Resp.self, from: data)
         guard let connectURL = URL(string: resp.url) else { throw AgentError.badURL }
@@ -151,6 +152,16 @@ class AgentService: ObservableObject {
         guard let url = URL(string: path, relativeTo: base) else { return nil }
         var r = URLRequest(url: url)
         r.httpMethod = method
+        return r
+    }
+
+    /// GET request carrying the signed-in user's Supabase JWT. The sidecar
+    /// forwards it to the composio-proxy edge function, which holds the real
+    /// Composio key — so no provider key ships in the client.
+    private func authedGET(_ url: URL) -> URLRequest {
+        var r = URLRequest(url: url)
+        r.httpMethod = "GET"
+        r.setValue("Bearer \(SupabaseService.cachedAccessToken)", forHTTPHeaderField: "Authorization")
         return r
     }
 

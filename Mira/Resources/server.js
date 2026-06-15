@@ -91444,9 +91444,13 @@ Use tools only when the user explicitly requests an action.
 For write actions (send email, create event, post message, create issue) the system will confirm with the user before executing.
 When reading data (list emails, fetch calendar, search Notion), proceed without confirmation.
 Always summarize what you found or did in plain language \u2014 no raw JSON dumps.`;
-function makeComposio() {
+function makeComposio(accessToken) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  if (!supabaseUrl) throw new Error("SUPABASE_URL not set");
   return new Composio2({
-    apiKey: process.env.COMPOSIO_API_KEY,
+    apiKey: "proxy",
+    baseURL: `${supabaseUrl}/functions/v1/composio-proxy`,
+    defaultHeaders: { Authorization: `Bearer ${accessToken}` },
     provider: new VercelProvider()
   });
 }
@@ -91467,7 +91471,7 @@ function wrapTools(rawTools) {
   );
 }
 async function runAgent(req) {
-  const composio = makeComposio();
+  const composio = makeComposio(req.accessToken);
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl) throw new Error("SUPABASE_URL not set");
   const anthropic2 = createAnthropic({
@@ -91508,8 +91512,8 @@ async function runAgent(req) {
   );
   return { reply: result.text, toolsUsed };
 }
-async function executeConfirmed(toolName, params, userId) {
-  const composio = makeComposio();
+async function executeConfirmed(toolName, params, userId, accessToken) {
+  const composio = makeComposio(accessToken);
   const session = await composio.create(userId);
   return session.executeAction(toolName, params);
 }
@@ -91529,22 +91533,22 @@ async function authConfigIdFor(composio, toolkit) {
   authConfigCache.set(slug, id);
   return id;
 }
-async function getConnectUrl(app2, userId) {
-  const composio = makeComposio();
+async function getConnectUrl(app2, userId, accessToken) {
+  const composio = makeComposio(accessToken);
   const authConfigId = await authConfigIdFor(composio, app2);
   const conn = await composio.connectedAccounts.link(userId, authConfigId);
   return conn.redirectUrl ?? "";
 }
-async function getConnectedApps(userId) {
-  const composio = makeComposio();
+async function getConnectedApps(userId, accessToken) {
+  const composio = makeComposio(accessToken);
   const result = await composio.connectedAccounts.list({
     userIds: [userId],
     statuses: ["ACTIVE"]
   });
   return (result.items ?? []).map((a) => (a.toolkit?.slug ?? "").toLowerCase()).filter(Boolean);
 }
-async function getConnectionStatuses(userId) {
-  const composio = makeComposio();
+async function getConnectionStatuses(userId, accessToken) {
+  const composio = makeComposio(accessToken);
   const result = await composio.connectedAccounts.list({ userIds: [userId] });
   return (result.items ?? []).map((a) => ({
     slug: (a.toolkit?.slug ?? "").toLowerCase(),
@@ -91590,7 +91594,12 @@ function describe(tool2, input) {
 // src/server.ts
 var app = (0, import_express.default)();
 app.use(import_express.default.json());
-var PORT = 4242;
+var PORT = Number(process.env.PORT) || 4242;
+function bearer(req) {
+  const h = req.headers.authorization;
+  if (typeof h === "string" && /^Bearer\s+/i.test(h)) return h.replace(/^Bearer\s+/i, "").trim();
+  return void 0;
+}
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "mira-agent" });
 });
@@ -91598,10 +91607,6 @@ app.post("/agent/run", async (req, res) => {
   const { prompt, userId, accessToken } = req.body;
   if (!prompt || !userId || !accessToken) {
     res.status(400).json({ error: "Missing prompt, userId, or accessToken" });
-    return;
-  }
-  if (!process.env.COMPOSIO_API_KEY) {
-    res.status(500).json({ error: "COMPOSIO_API_KEY not set in .env" });
     return;
   }
   if (!process.env.SUPABASE_URL) {
@@ -91618,13 +91623,13 @@ app.post("/agent/run", async (req, res) => {
   }
 });
 app.post("/agent/confirm", async (req, res) => {
-  const { toolName, params, userId } = req.body;
-  if (!toolName || !userId) {
-    res.status(400).json({ error: "Missing toolName or userId" });
+  const { toolName, params, userId, accessToken } = req.body;
+  if (!toolName || !userId || !accessToken) {
+    res.status(400).json({ error: "Missing toolName, userId, or accessToken" });
     return;
   }
   try {
-    const result = await executeConfirmed(toolName, params ?? {}, userId);
+    const result = await executeConfirmed(toolName, params ?? {}, userId, accessToken);
     res.json({ success: true, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -91633,12 +91638,13 @@ app.post("/agent/confirm", async (req, res) => {
 });
 app.get("/connect/:app", async (req, res) => {
   const { userId } = req.query;
-  if (!userId) {
-    res.status(400).json({ error: "Missing userId" });
+  const token = bearer(req);
+  if (!userId || !token) {
+    res.status(400).json({ error: "Missing userId or accessToken" });
     return;
   }
   try {
-    const url2 = await getConnectUrl(req.params["app"], userId);
+    const url2 = await getConnectUrl(req.params["app"], userId, token);
     res.json({ url: url2 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -91647,12 +91653,13 @@ app.get("/connect/:app", async (req, res) => {
 });
 app.get("/connections/status", async (req, res) => {
   const { userId } = req.query;
-  if (!userId) {
-    res.status(400).json({ error: "Missing userId" });
+  const token = bearer(req);
+  if (!userId || !token) {
+    res.status(400).json({ error: "Missing userId or accessToken", statuses: [] });
     return;
   }
   try {
-    const statuses = await getConnectionStatuses(userId);
+    const statuses = await getConnectionStatuses(userId, token);
     res.json({ statuses });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -91662,12 +91669,13 @@ app.get("/connections/status", async (req, res) => {
 });
 app.get("/connections", async (req, res) => {
   const { userId } = req.query;
-  if (!userId) {
-    res.status(400).json({ error: "Missing userId" });
+  const token = bearer(req);
+  if (!userId || !token) {
+    res.status(400).json({ error: "Missing userId or accessToken", connected: [] });
     return;
   }
   try {
-    const connected = await getConnectedApps(userId);
+    const connected = await getConnectedApps(userId, token);
     res.json({ connected });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
