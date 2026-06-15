@@ -50,13 +50,20 @@ Deno.serve(async (req: Request) => {
   const isStream = body.stream === true;
 
   // 4) Forward with the server-held key.
+  const fwdHeaders: Record<string, string> = {
+    "x-api-key": ANTHROPIC_API_KEY,
+    "anthropic-version": req.headers.get("anthropic-version") ?? "2023-06-01",
+    "content-type": "application/json",
+  };
+  // Forward beta opt-ins (e.g. computer-use-2025-11-24) so element grounding and
+  // the Computer Use orchestrator work through the proxy. Without this Anthropic
+  // rejects the `computer` tool and every grounding call fails (grounded=false).
+  const beta = req.headers.get("anthropic-beta");
+  if (beta) fwdHeaders["anthropic-beta"] = beta;
+
   const upstream = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": req.headers.get("anthropic-version") ?? "2023-06-01",
-      "content-type": "application/json",
-    },
+    headers: fwdHeaders,
     body: JSON.stringify(body),
   });
 
