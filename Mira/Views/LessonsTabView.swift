@@ -39,6 +39,11 @@ struct LessonsTabView: View {
                                 unverified: manifest.scaffolded && !learner.hasGroundedRun(forSkillId: manifest.id),
                                 action: { start(manifest) }
                             )
+                            .contextMenu {
+                                Button { start(manifest, restart: true) } label: {
+                                    Label("Restart from the beginning", systemImage: "arrow.counterclockwise")
+                                }
+                            }
                         }
 
                         if let err = loadError {
@@ -169,11 +174,11 @@ struct LessonsTabView: View {
 
     // MARK: Actions
 
-    private func start(_ manifest: SkillManifest) {
+    private func start(_ manifest: SkillManifest, restart: Bool = false) {
         loadError = nil
         switch SkillCatalog.shared.loadSkill(manifest) {
         case .success(let skill):
-            let idx = LearnerModel.shared.resumeIndex(for: skill)
+            let idx = restart ? 0 : LearnerModel.shared.resumeIndex(for: skill)
             TeachingEngine.shared.start(skill, fromStepIndex: idx)
         case .failure(let err):
             NSLog("[Lessons] load failed: %@", err.message)

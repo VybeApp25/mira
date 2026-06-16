@@ -149,6 +149,13 @@ final class TeachingEngine: ObservableObject {
 
             let groundedPoint = await groundAndAnnotate(step, number: i + 1)
 
+            // Hybrid execution: in autonomous mode, satisfy an "open app X" step via the
+            // NSWorkspace API (launch + activate) rather than waiting for a UI action —
+            // use a real API where one exists, UI clicking only where it doesn't.
+            if autonomousEnabled, case .appFrontmost(let bundleId) = step.successCheck {
+                await launchApp(bundleId)
+            }
+
             // Autonomous mode: Mira performs the grounded step itself (a real click)
             // instead of guiding. Only confident grounds, only user-confirmation steps,
             // and risky/irreversible steps fall back to manual when "Confirm risky" is on.
@@ -348,6 +355,18 @@ final class TeachingEngine: ObservableObject {
     static func isContentEntry(_ step: TeachingStep) -> Bool {
         let t = step.instruction.lowercased()
         return contentWords.contains { t.contains($0) }
+    }
+
+    /// Hybrid execution: open + activate an app by bundle id via the NSWorkspace API,
+    /// so an autonomous "open app X" step is satisfied directly instead of by clicking
+    /// the Dock. Observation (`appFrontmost`) still confirms it actually came forward.
+    private func launchApp(_ bundleId: String) async {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return }
+        statusLine = "Autonomous — opening the app…"
+        let cfg = NSWorkspace.OpenConfiguration()
+        cfg.activates = true
+        _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: cfg)
+        try? await Task.sleep(nanoseconds: 800_000_000)
     }
 
     /// Outcome of one autonomous step attempt.
