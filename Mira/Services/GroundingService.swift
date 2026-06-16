@@ -99,15 +99,23 @@ final class GroundingService {
         let cgX = Float(appKitPt.x)
         let cgY = Float(primaryH - appKitPt.y)
 
-        let system = AXUIElementCreateSystemWide()
+        // Probe the topmost NON-Mira app window at the point and hit-test WITHIN it,
+        // rather than the system-wide top element. The screen capture excludes Mira's
+        // windows, so the model grounds against the target app — but a system-wide AX
+        // probe lands on our own full-screen click-through overlay/HUD that sits on top.
+        // Scoping to the real app's AXUIElement makes the cross-check match what the
+        // model saw, so the confidence tiers below actually engage.
+        let probe = CGPoint(x: CGFloat(cgX), y: CGFloat(cgY))
+        let ownPID = ProcessInfo.processInfo.processIdentifier
         var element: AXUIElement?
-        let err = AXUIElementCopyElementAtPosition(system, cgX, cgY, &element)
-        guard err == .success, let el = element else {
-            // AX saw nothing here. For a vision-grounded skill (custom UI AX can't
-            // read) that's expected, so keep the vision baseline. For an AX-grounded
-            // skill a real target *should* expose an element here — silence is
-            // genuine disconfirmation (most likely an empty-space mis-ground), so
-            // drop below the gate and ASK instead of ringing nothing.
+        if let pid = Self.topmostAppPID(at: probe, excludingPID: ownPID) {
+            AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(pid), cgX, cgY, &element)
+        }
+        guard let el = element else {
+            // No real app window under the point (empty desktop) or AX couldn't read
+            // it. For a vision-grounded skill that's expected (custom UI) → vision
+            // baseline; for an AX-grounded skill a real target SHOULD expose an element
+            // here, so silence is disconfirmation (likely an empty-space mis-ground) → ASK.
             return requireActionableAX ? (.vision, 0.35) : (.vision, 0.60)
         }
 
@@ -139,6 +147,24 @@ final class GroundingService {
         // nodes at all). Honesty bias: a false ASK ("find it yourself") costs less
         // than a confident ring on the wrong thing.
         return requireActionableAX ? (.vision, 0.40) : (.accessibility, 0.75)
+    }
+
+    /// PID of the frontmost on-screen window at `p` (top-left global coords) that
+    /// is NOT owned by `excludingPID` (Mira). Lets the AX probe see PAST our own
+    /// full-screen overlay/HUD to the real app underneath. Desktop wallpaper/icons
+    /// are excluded, so a hit on empty desktop returns nil (→ honest "nothing here").
+    static func topmostAppPID(at p: CGPoint, excludingPID: pid_t) -> pid_t? {
+        let opts: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let infos = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else { return nil }
+        // CGWindowListCopyWindowInfo returns windows front-to-back.
+        for w in infos {
+            guard let pid = w[kCGWindowOwnerPID as String] as? pid_t, pid != excludingPID,
+                  let b = w[kCGWindowBounds as String] as? [String: CGFloat],
+                  let x = b["X"], let y = b["Y"], let width = b["Width"], let height = b["Height"]
+            else { continue }
+            if CGRect(x: x, y: y, width: width, height: height).contains(p) { return pid }
+        }
+        return nil
     }
 
     /// Bundle id of the app that owns an AX element, via its pid.
