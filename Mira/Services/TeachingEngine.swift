@@ -411,6 +411,14 @@ final class TeachingEngine: ObservableObject {
 
         // Let the ring/callout register so the user sees what's about to happen.
         statusLine = Self.autoStatus(for: step.action)
+
+        // A targetless type/shortcut acts on whoever holds keyboard focus. Frontmost
+        // (observed) is NOT the same as key focus — so without this, keystrokes can
+        // leak into whatever was focused before (a terminal, Mira's HUD, etc.). Bring
+        // the lesson's app to the foreground first. Click-based actions don't need
+        // this: the click itself focuses the right app.
+        if point == nil { await focusDomainAppIfNeeded(for: step.action) }
+
         try? await Task.sleep(nanoseconds: 900_000_000)
         if Task.isCancelled { return .deferred }
 
@@ -423,6 +431,22 @@ final class TeachingEngine: ObservableObject {
             return cu.changedFraction(a, b) >= 0.02 ? .performed : .noEffect
         }
         return .performed   // couldn't fingerprint — don't get stuck, credit the action
+    }
+
+    /// Brings the lesson's app (`skill.domainApp`) to the foreground so a targetless
+    /// type/shortcut lands there, not in whatever else held keyboard focus. No-op for
+    /// click/double-click (the click focuses the app) or when the skill has no domain
+    /// app. Waits briefly so focus settles before keystrokes are posted.
+    private func focusDomainAppIfNeeded(for action: StepAction) async {
+        switch action {
+        case .type, .key: break
+        default:          return
+        }
+        guard let bundleId = skill?.domainApp,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first
+        else { return }
+        app.activate()
+        try? await Task.sleep(nanoseconds: 350_000_000)   // let key focus settle
     }
 
     /// Executes one autonomous action. Typing first clicks to focus the field, then
