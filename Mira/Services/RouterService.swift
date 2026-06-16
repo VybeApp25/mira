@@ -389,7 +389,15 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .mapsQuery, onStreamChunk: onStreamChunk)
 
         case .computerUse:
-            return await computerUseResult(prompt: prompt, apiKey: apiKey)
+            // Full machine control is powerful, so it's a deliberate opt-in: only
+            // when the user has turned on autonomous mode (the same switch teaching
+            // mode uses, default off) does a chat request actually drive the screen.
+            // Otherwise fall back to describing/guiding — a chat message can never
+            // seize the computer unless the user has opted in.
+            if UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") {
+                return await computerUseResult(prompt: prompt, apiKey: apiKey)
+            }
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .computerUse, onStreamChunk: onStreamChunk)
 
         case .findMyDevices:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices, onStreamChunk: onStreamChunk)
