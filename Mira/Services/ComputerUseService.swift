@@ -55,6 +55,39 @@ final class ComputerUseService {
         return NSImage(cgImage: cgImage, size: NSSize(width: displayWidth, height: displayHeight))
     }
 
+    // MARK: - Outcome verification (cheap before/after screen-change detection)
+
+    /// A tiny grayscale fingerprint of the screen (~96×60 luminance samples),
+    /// EXCLUDING Mira's own windows — so the diff reflects the target app changing,
+    /// not our overlay/HUD. Used to confirm an autonomous action actually did
+    /// something (a window opened, the UI shifted) before crediting the step.
+    func screenFingerprint() async -> [UInt8]? {
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+              let display = content.displays.first else { return nil }
+        let ownBundle  = Bundle.main.bundleIdentifier
+        let ownWindows = content.windows.filter { $0.owningApplication?.bundleIdentifier == ownBundle }
+        let filter     = SCContentFilter(display: display, excludingWindows: ownWindows)
+        let cfg = SCStreamConfiguration()
+        cfg.width = 96; cfg.height = 60; cfg.showsCursor = false
+        guard let cg = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else { return nil }
+        let w = cg.width, h = cg.height
+        var bytes = [UInt8](repeating: 0, count: w * h)
+        guard let ctx = CGContext(data: &bytes, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w, space: CGColorSpaceCreateDeviceGray(),
+                                  bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return bytes
+    }
+
+    /// Fraction of samples that changed by more than `tolerance` between two
+    /// fingerprints. ~0 ⇒ the screen didn't move (the action had no effect).
+    func changedFraction(_ a: [UInt8], _ b: [UInt8], tolerance: Int = 24) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return 1 }
+        var changed = 0
+        for i in 0..<a.count where abs(Int(a[i]) - Int(b[i])) > tolerance { changed += 1 }
+        return Double(changed) / Double(a.count)
+    }
+
     // MARK: - Mouse
 
     func click(x: Int, y: Int, button: String = "left") {

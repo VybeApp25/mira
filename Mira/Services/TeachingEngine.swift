@@ -152,15 +152,29 @@ final class TeachingEngine: ObservableObject {
             // Autonomous mode: Mira performs the grounded step itself (a real click)
             // instead of guiding. Only confident grounds, only user-confirmation steps,
             // and risky/irreversible steps fall back to manual when "Confirm risky" is on.
-            if autonomousEnabled,
-               step.successCheck == .userConfirmation,
-               let n = groundedPoint,
-               await autoPerform(step: step, at: n) {
-                TelemetryService.shared.track(.stepCompleted(
-                    skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.autonomous.rawValue))
-                completed += 1
-                AnnotationCanvasService.shared.clear()
-                continue
+            if autonomousEnabled, step.successCheck == .userConfirmation, let n = groundedPoint {
+                var outcome = await autoPerform(step: step, at: n)
+                if outcome == .noEffect {
+                    // Self-correct: the click likely missed → re-ground once and retry.
+                    TelemetryService.shared.track(.stepOutcome(skillId: skill.id, stepId: step.id, result: "retried"))
+                    if let n2 = await groundAndAnnotate(step, number: i + 1) {
+                        outcome = await autoPerform(step: step, at: n2)
+                    }
+                }
+                if outcome == .performed {
+                    TelemetryService.shared.track(.stepOutcome(skillId: skill.id, stepId: step.id, result: "verified"))
+                    TelemetryService.shared.track(.stepCompleted(
+                        skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.autonomous.rawValue))
+                    completed += 1
+                    AnnotationCanvasService.shared.clear()
+                    continue
+                }
+                if outcome == .noEffect {
+                    // Tried twice, nothing changed → be honest and hand back to the user.
+                    TelemetryService.shared.track(.stepOutcome(skillId: skill.id, stepId: step.id, result: "unverified"))
+                    statusLine = "I clicked but nothing changed — do this one and I'll continue."
+                }
+                // .deferred or unverified → fall through to observe (manual).
             }
 
             let result = await observe(step, generation: stepGeneration)
@@ -238,6 +252,21 @@ final class TeachingEngine: ObservableObject {
         return s.isEmpty ? instruction : s
     }
 
+    /// One capture + ground pass for a target description. Throws only on capture
+    /// failure; a "couldn't locate" result comes back as a non-grounded outcome.
+    private func groundOnce(question: String) async throws -> GroundingOutcome {
+        let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
+        guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else {
+            return .uncertain(reason: "no_display")
+        }
+        return await GroundingService.shared.ground(
+            question: question,
+            screenshotData: primary.imageData,
+            displayFrame: primary.displayFrame,
+            expectedBundleId: skill?.domainApp,
+            requireActionableAX: skill?.grounding == "accessibility")
+    }
+
     /// Returns the grounded normalized point on the confident path (so autonomous
     /// mode can click it), or nil when there's no target or we couldn't ground.
     @discardableResult
@@ -252,15 +281,15 @@ final class TeachingEngine: ObservableObject {
         // flag a correct ground as a wrong-app mis-ground → ASK.
         AnnotationCanvasService.shared.clear()
         do {
-            let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
-            guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return nil }
-
-            let outcome = await GroundingService.shared.ground(
-                question: target.description,
-                screenshotData: primary.imageData,
-                displayFrame: primary.displayFrame,
-                expectedBundleId: skill?.domainApp,
-                requireActionableAX: skill?.grounding == "accessibility")
+            // Vision grounding is non-deterministic — it sometimes returns no coordinate
+            // on a target that's plainly there. Try once; if it doesn't confidently
+            // ground, take a second look before falling back to ASK.
+            var outcome = try await groundOnce(question: target.description)
+            if gateDecision(for: outcome) != .annotate,
+               let retry = try? await groundOnce(question: target.description),
+               gateDecision(for: retry) == .annotate {
+                outcome = retry
+            }
 
             switch (outcome, gateDecision(for: outcome)) {
             case (.grounded(let normalized, _, let source, let confidence), .annotate):
@@ -321,40 +350,45 @@ final class TeachingEngine: ObservableObject {
         return contentWords.contains { t.contains($0) }
     }
 
-    /// Autonomous mode: Mira performs the grounded step itself (a real click).
-    /// Returns true if it acted. Refuses when the step looks risky and "Confirm
-    /// risky actions" is on (falls back to the guided flow so the human decides),
-    /// and when automated input is detected. The completion is journaled with the
-    /// distinct `.autonomous` provenance — never disguised as a human confirmation.
-    private func autoPerform(step: TeachingStep, at normalized: CGPoint) async -> Bool {
+    /// Outcome of one autonomous step attempt.
+    enum AutoOutcome { case performed, noEffect, deferred }
+
+    /// Autonomous mode: Mira performs the grounded step itself (a real click), then
+    /// VERIFIES the screen actually changed before crediting it. `.deferred` = handed
+    /// back to the human (risky / content-entry / automation detected). `.noEffect` =
+    /// clicked but nothing moved (likely a missed ground) → the run loop re-grounds and
+    /// retries. Completion is journaled with the distinct `.autonomous` provenance.
+    private func autoPerform(step: TeachingStep, at normalized: CGPoint) async -> AutoOutcome {
         if Self.isRisky(step), confirmRiskyAutonomous {
             statusLine = "Paused — this looks irreversible. Do this one yourself, then it continues."
             canSkip = true
-            return false
+            return .deferred
         }
-        guard !automatedInputDetected else { return false }
+        guard !automatedInputDetected else { return .deferred }
+        let cu = ComputerUseService.shared
+        let x = Int(normalized.x * CGFloat(cu.displayWidth))
+        let y = Int(normalized.y * CGFloat(cu.displayHeight))
         if Self.isContentEntry(step) {
             // The text here is the user's own content (an address, a title) — autonomous
-            // mode must not fabricate it. Click to focus the field, then hand back so the
-            // user types it and confirms. (Literal autotyping of real task content lives
-            // in the free-form Computer Use orchestrator, not in lessons.)
-            let cu = ComputerUseService.shared
-            cu.click(x: Int(normalized.x * CGFloat(cu.displayWidth)),
-                     y: Int(normalized.y * CGFloat(cu.displayHeight)))
+            // mode must not fabricate it. Click to focus the field, then hand back.
+            cu.click(x: x, y: y)
             statusLine = "Mira focused this field — type your text, then tap Done."
             canSkip = true
-            return false
+            return .deferred
         }
         // Let the ring/callout register so the user sees what's about to be clicked.
         statusLine = "Autonomous — Mira is doing this step…"
         try? await Task.sleep(nanoseconds: 900_000_000)
-        if Task.isCancelled { return false }
-        let cu = ComputerUseService.shared
-        let x = Int(normalized.x * CGFloat(cu.displayWidth))
-        let y = Int(normalized.y * CGFloat(cu.displayHeight))
+        if Task.isCancelled { return .deferred }
+        // Outcome verification: fingerprint the screen, click, confirm it changed.
+        let before = await cu.screenFingerprint()
         cu.click(x: x, y: y)
-        try? await Task.sleep(nanoseconds: 700_000_000)   // let the target app react
-        return true
+        try? await Task.sleep(nanoseconds: 800_000_000)   // let the target app react
+        let after = await cu.screenFingerprint()
+        if let b = before, let a = after {
+            return cu.changedFraction(a, b) >= 0.02 ? .performed : .noEffect
+        }
+        return .performed   // couldn't fingerprint — don't get stuck, credit the action
     }
 
     /// Opt-in (Settings → Screen & Guidance → "Guide my cursor"). On a *confident*

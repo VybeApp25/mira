@@ -63,6 +63,9 @@ enum TelemetryEvent {
     // Opt-in "guide my cursor": Mira glided the pointer to a grounded target.
     // Recorded so a pointer move is never an unobserved action (Mira never clicks).
     case stepCursorGuided(skillId: String, stepId: String)
+    // Autonomous outcome verification: did the auto-click visibly change the screen?
+    // result = verified | retried | unverified. The honest signal behind self-correction.
+    case stepOutcome(skillId: String, stepId: String, result: String)
     case stepCompleted(skillId: String, stepId: String, groundedBy: String)
     // A "Done"/"Skip" tap was ignored because its backing event was synthesized
     // and posted by another process, not a genuine human action. Recorded so the
@@ -101,6 +104,7 @@ enum TelemetryEvent {
         case .stepInstructed:             return "step_instructed"
         case .stepGrounded:               return "step_grounded"
         case .stepCursorGuided:           return "step_cursor_guided"
+        case .stepOutcome:                return "step_outcome"
         case .stepCompleted:              return "step_completed"
         case .stepConfirmRejected:        return "step_confirm_rejected"
         case .stepFailed:                 return "step_failed"
@@ -206,6 +210,9 @@ enum TelemetryEvent {
 
         case .stepCursorGuided(let skillId, let stepId):
             return ["skillId": skillId, "stepId": stepId]
+
+        case .stepOutcome(let skillId, let stepId, let result):
+            return ["skillId": skillId, "stepId": stepId, "result": result]
 
         case .stepCompleted(let skillId, let stepId, let groundedBy):
             return ["skillId": skillId, "stepId": stepId, "groundedBy": groundedBy]
