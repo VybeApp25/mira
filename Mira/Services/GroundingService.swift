@@ -99,63 +99,38 @@ final class GroundingService {
         let cgX = Float(appKitPt.x)
         let cgY = Float(primaryH - appKitPt.y)
 
-        // Probe the topmost NON-Mira app window and hit-test WITHIN it (not the
-        // system-wide top element, which is our own full-screen overlay/HUD). Computer
-        // Use coordinates are a few px imprecise and the exact pixel can land on toolbar
-        // chrome just off an actionable control — so probe the exact point PLUS a small
-        // neighborhood and prefer an actionable, target-app element if one is near.
-        let ownPID = ProcessInfo.processInfo.processIdentifier
+        // AX is a confidence ENRICHER, not a blocker (its absence must never reject a
+        // ground the vision model got right — that just over-ASKs on visible targets).
+        // Use the SYSTEM-WIDE element: it's the only mode that reliably hit-tests by
+        // position (an app-scoped element returns nothing). It returns the topmost
+        // window's element, which may be one of Mira's own overlays — that's fine, we
+        // just can't corroborate through it. Probe a small neighborhood (CU coords are a
+        // few px imprecise). An actionable target-app element nearby UPGRADES to high
+        // confidence; the exact point on a *different* app downgrades to a mis-ground;
+        // everything else keeps the vision baseline so the ring still draws.
+        let system = AXUIElementCreateSystemWide()
+        let own = Bundle.main.bundleIdentifier
         let offsets: [(Float, Float)] = [(0, 0), (-11, 0), (11, 0), (0, -11), (0, 11),
                                          (-9, -9), (9, -9), (-9, 9), (9, 9)]
-        var firstAppHit: AXUIElement?   // a target-app element near the point (any role)
-        var actionableHit = false       // an actionable target-app element is near
-        var sawWrongApp = false         // the exact point is owned by a *different* app
+        var actionableHit = false
+        var sawWrongApp = false
 
         for (dx, dy) in offsets {
-            let p = CGPoint(x: CGFloat(cgX + dx), y: CGFloat(cgY + dy))
-            guard let pid = Self.topmostAppPID(at: p, excludingPID: ownPID) else { continue }
             var e: AXUIElement?
-            AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(pid), cgX + dx, cgY + dy, &e)
-            guard let e else { continue }
+            guard AXUIElementCopyElementAtPosition(system, cgX + dx, cgY + dy, &e) == .success,
+                  let e else { continue }
             let owner = owningBundleId(of: e)
-            if owner == Bundle.main.bundleIdentifier { continue }   // our own overlay/HUD
+            if owner == own { continue }                            // our overlay/HUD — can't verify through it
             if let expected = expectedBundleId, owner != expected {
-                if dx == 0, dy == 0 { sawWrongApp = true }          // exact hit is another app
+                if dx == 0, dy == 0 { sawWrongApp = true }          // exact hit is a different app
                 continue
             }
-            if firstAppHit == nil { firstAppHit = e }
             if isActionable(e) { actionableHit = true; break }
         }
 
-        // Actionable target-app control under/near the point — strongest signal.
-        if actionableHit { return (.accessibility, 0.92) }
-        // Right app, but only a non-actionable element (container/label). For an
-        // AX-grounded skill that's a weak/likely-off ground → ASK; vision skills pass.
-        if firstAppHit != nil { return requireActionableAX ? (.vision, 0.40) : (.accessibility, 0.75) }
-        // The exact point is owned by a *different* app and nothing target-app is near
-        // → a real mis-ground (vision pointed at the wrong window).
-        if sawWrongApp { return (.vision, 0.20) }
-        // Nothing in the target app anywhere near the point. Vision skill → baseline;
-        // AX skill → the target should be here, so silence is disconfirmation → ASK.
-        return requireActionableAX ? (.vision, 0.35) : (.vision, 0.60)
-    }
-
-    /// PID of the frontmost on-screen window at `p` (top-left global coords) that
-    /// is NOT owned by `excludingPID` (Mira). Lets the AX probe see PAST our own
-    /// full-screen overlay/HUD to the real app underneath. Desktop wallpaper/icons
-    /// are excluded, so a hit on empty desktop returns nil (→ honest "nothing here").
-    static func topmostAppPID(at p: CGPoint, excludingPID: pid_t) -> pid_t? {
-        let opts: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        guard let infos = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else { return nil }
-        // CGWindowListCopyWindowInfo returns windows front-to-back.
-        for w in infos {
-            guard let pid = w[kCGWindowOwnerPID as String] as? pid_t, pid != excludingPID,
-                  let b = w[kCGWindowBounds as String] as? [String: CGFloat],
-                  let x = b["X"], let y = b["Y"], let width = b["Width"], let height = b["Height"]
-            else { continue }
-            if CGRect(x: x, y: y, width: width, height: height).contains(p) { return pid }
-        }
-        return nil
+        if actionableHit { return (.accessibility, 0.92) }   // corroborated → high
+        if sawWrongApp { return (.vision, 0.20) }             // clear wrong-app → ASK
+        return (.vision, 0.60)                                // can't corroborate → ring still draws
     }
 
     /// Bundle id of the app that owns an AX element, via its pid.
