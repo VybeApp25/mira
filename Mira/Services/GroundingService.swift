@@ -115,22 +115,58 @@ final class GroundingService {
         var actionableHit = false
         var sawWrongApp = false
 
-        for (dx, dy) in offsets {
-            var e: AXUIElement?
-            guard AXUIElementCopyElementAtPosition(system, cgX + dx, cgY + dy, &e) == .success,
-                  let e else { continue }
-            let owner = owningBundleId(of: e)
-            if owner == own { continue }                            // our overlay/HUD — can't verify through it
-            if let expected = expectedBundleId, owner != expected {
-                if dx == 0, dy == 0 { sawWrongApp = true }          // exact hit is a different app
-                continue
+        // Mira's own full-screen click-through overlays (the always-on guided
+        // cursor, the annotation canvas) sit above every app window, so an AX
+        // hit-test at ANY point lands on *our* window first — we skip it as
+        // own-app, but because the overlay is full-screen every offset resolves to
+        // it and we can never reach the real target. Order those overlays out for
+        // the synchronous duration of the probe and restore them immediately:
+        // hide → probe → restore all run in one main-thread turn before the next
+        // compositor frame, so the cursor never visibly flickers.
+        withFullScreenOverlaysHidden {
+            for (dx, dy) in offsets {
+                var e: AXUIElement?
+                guard AXUIElementCopyElementAtPosition(system, cgX + dx, cgY + dy, &e) == .success,
+                      let e else { continue }
+                let owner = owningBundleId(of: e)
+                if owner == own { continue }                        // a Mira window still up — can't verify through it
+                if let expected = expectedBundleId, owner != expected {
+                    if dx == 0, dy == 0 { sawWrongApp = true }      // exact hit is a different app
+                    continue
+                }
+                if isActionable(e) { actionableHit = true; break }
             }
-            if isActionable(e) { actionableHit = true; break }
         }
 
         if actionableHit { return (.accessibility, 0.92) }   // corroborated → high
         if sawWrongApp { return (.vision, 0.20) }             // clear wrong-app → ASK
         return (.vision, 0.60)                                // can't corroborate → ring still draws
+    }
+
+    /// Runs `body` with Mira's own full-screen click-through overlay windows
+    /// ordered out, then restores them. See `verify()` for why this is needed.
+    /// Synchronous on the main thread: the hide and restore bracket `body` within
+    /// a single run-loop turn, so no frame is composited in between — the overlays
+    /// disappear from the window server's position hit-test (which backs
+    /// AXUIElementCopyElementAtPosition) without ever visibly blinking.
+    private func withFullScreenOverlaysHidden(_ body: () -> Void) {
+        let occluders = NSApp.windows.filter { win in
+            win.isVisible && win.ignoresMouseEvents && isFullScreenSized(win)
+        }
+        occluders.forEach { $0.orderOut(nil) }
+        defer { occluders.forEach { $0.orderFrontRegardless() } }
+        body()
+    }
+
+    /// True when the window covers (essentially) an entire display — the shape of
+    /// our overlays, and exactly what makes them occlude every AX hit-test. Small
+    /// surfaces like the notch island or the agent HUD are left untouched.
+    private func isFullScreenSized(_ win: NSWindow) -> Bool {
+        NSScreen.screens.contains { s in
+            let f = s.frame, w = win.frame
+            return abs(w.width - f.width) < 2 && abs(w.height - f.height) < 2
+                && abs(w.minX - f.minX) < 2 && abs(w.minY - f.minY) < 2
+        }
     }
 
     /// Bundle id of the app that owns an AX element, via its pid.
