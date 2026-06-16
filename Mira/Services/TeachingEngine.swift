@@ -280,8 +280,13 @@ final class TeachingEngine: ObservableObject {
 
     /// Returns the grounded normalized point on the confident path (so autonomous
     /// mode can click it), or nil when there's no target or we couldn't ground.
+    /// Confidence of the most recent `groundAndAnnotate` (0 when it didn't ground).
+    /// Lets `autoPerform` trust an AX-corroborated click without the screen-diff check.
+    private var lastGroundConfidence: Double = 0
+
     @discardableResult
     private func groundAndAnnotate(_ step: TeachingStep, number: Int) async -> CGPoint? {
+        lastGroundConfidence = 0
         guard let target = step.target else {
             AnnotationCanvasService.shared.clear()
             return nil
@@ -311,6 +316,7 @@ final class TeachingEngine: ObservableObject {
                 ])
                 recordGrounding(step, grounded: true,
                                 source: String(describing: source), confidence: confidence)
+                lastGroundConfidence = confidence
                 await guideCursorIfEnabled(to: normalized, step: step)
                 return normalized
             default:
@@ -421,6 +427,17 @@ final class TeachingEngine: ObservableObject {
 
         try? await Task.sleep(nanoseconds: 900_000_000)
         if Task.isCancelled { return .deferred }
+
+        // An AX-corroborated ground (high confidence) means the action landed on a
+        // real, actionable element — trust it. The whole-screen change check below is
+        // blind to small/low-contrast effects (a popover opening, a toggle flipping),
+        // so requiring it here wrongly scores a successful click as a miss. Keep the
+        // fingerprint as the safety net only for lower-confidence vision clicks, where
+        // a miss is genuinely plausible.
+        if point != nil, lastGroundConfidence >= 0.9 {
+            await perform(step.action, at: point, cu: cu)
+            return .performed
+        }
 
         // Outcome verification: fingerprint the screen, act, confirm it changed.
         let before = await cu.screenFingerprint()
