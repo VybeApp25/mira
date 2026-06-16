@@ -156,15 +156,19 @@ final class TeachingEngine: ObservableObject {
                 await launchApp(bundleId)
             }
 
-            // Autonomous mode: Mira performs the grounded step itself (a real click)
-            // instead of guiding. Only confident grounds, only user-confirmation steps,
-            // and risky/irreversible steps fall back to manual when "Confirm risky" is on.
-            if autonomousEnabled, step.successCheck == .userConfirmation, let n = groundedPoint {
-                var outcome = await autoPerform(step: step, at: n)
+            // Autonomous mode: Mira performs the step itself (click, double-click,
+            // type, or keyboard shortcut) instead of guiding. Only user-confirmation
+            // steps; pointer actions need a confident ground (a keyboard shortcut
+            // doesn't); risky/irreversible steps fall back to manual when "Confirm
+            // risky" is on.
+            if autonomousEnabled, step.successCheck == .userConfirmation,
+               groundedPoint != nil || !step.action.needsTarget {
+                var outcome = await autoPerform(step: step, at: groundedPoint)
                 if outcome == .noEffect {
-                    // Self-correct: the click likely missed → re-ground once and retry.
+                    // Self-correct: the action likely missed → re-ground once and retry.
                     TelemetryService.shared.track(.stepOutcome(skillId: skill.id, stepId: step.id, result: "retried"))
-                    if let n2 = await groundAndAnnotate(step, number: i + 1) {
+                    let n2 = await groundAndAnnotate(step, number: i + 1)
+                    if n2 != nil || !step.action.needsTarget {
                         outcome = await autoPerform(step: step, at: n2)
                     }
                 }
@@ -372,12 +376,13 @@ final class TeachingEngine: ObservableObject {
     /// Outcome of one autonomous step attempt.
     enum AutoOutcome { case performed, noEffect, deferred }
 
-    /// Autonomous mode: Mira performs the grounded step itself (a real click), then
-    /// VERIFIES the screen actually changed before crediting it. `.deferred` = handed
-    /// back to the human (risky / content-entry / automation detected). `.noEffect` =
-    /// clicked but nothing moved (likely a missed ground) → the run loop re-grounds and
-    /// retries. Completion is journaled with the distinct `.autonomous` provenance.
-    private func autoPerform(step: TeachingStep, at normalized: CGPoint) async -> AutoOutcome {
+    /// Autonomous mode: Mira performs the step itself — click, double-click, type
+    /// the lesson's text, or send a keyboard shortcut — then VERIFIES the screen
+    /// actually changed before crediting it. `.deferred` = handed back to the human
+    /// (risky / user's-own-content / automation detected). `.noEffect` = acted but
+    /// nothing moved (likely a missed ground) → the run loop re-grounds and retries.
+    /// Completion is journaled with the distinct `.autonomous` provenance.
+    private func autoPerform(step: TeachingStep, at normalized: CGPoint?) async -> AutoOutcome {
         if Self.isRisky(step), confirmRiskyAutonomous {
             statusLine = "Paused — this looks irreversible. Do this one yourself, then it continues."
             canSkip = true
@@ -385,29 +390,69 @@ final class TeachingEngine: ObservableObject {
         }
         guard !automatedInputDetected else { return .deferred }
         let cu = ComputerUseService.shared
-        let x = Int(normalized.x * CGFloat(cu.displayWidth))
-        let y = Int(normalized.y * CGFloat(cu.displayHeight))
-        if Self.isContentEntry(step) {
-            // The text here is the user's own content (an address, a title) — autonomous
-            // mode must not fabricate it. Click to focus the field, then hand back.
-            cu.click(x: x, y: y)
+
+        // Resolve the on-screen point for actions that act on a target.
+        var point: (x: Int, y: Int)? = nil
+        if let n = normalized {
+            point = (Int(n.x * CGFloat(cu.displayWidth)), Int(n.y * CGFloat(cu.displayHeight)))
+        }
+        if step.action.needsTarget, point == nil { return .deferred }
+
+        // A plain *click* into a field that wants the user's own content (and whose
+        // text wasn't authored into the lesson) must not be fabricated: focus it and
+        // hand back. An explicit `.type` action carries the task's text, so it skips
+        // this guard and is performed.
+        if case .click = step.action, Self.isContentEntry(step), let p = point {
+            cu.click(x: p.x, y: p.y)
             statusLine = "Mira focused this field — type your text, then tap Done."
             canSkip = true
             return .deferred
         }
-        // Let the ring/callout register so the user sees what's about to be clicked.
-        statusLine = "Autonomous — Mira is doing this step…"
+
+        // Let the ring/callout register so the user sees what's about to happen.
+        statusLine = Self.autoStatus(for: step.action)
         try? await Task.sleep(nanoseconds: 900_000_000)
         if Task.isCancelled { return .deferred }
-        // Outcome verification: fingerprint the screen, click, confirm it changed.
+
+        // Outcome verification: fingerprint the screen, act, confirm it changed.
         let before = await cu.screenFingerprint()
-        cu.click(x: x, y: y)
+        await perform(step.action, at: point, cu: cu)
         try? await Task.sleep(nanoseconds: 800_000_000)   // let the target app react
         let after = await cu.screenFingerprint()
         if let b = before, let a = after {
             return cu.changedFraction(a, b) >= 0.02 ? .performed : .noEffect
         }
         return .performed   // couldn't fingerprint — don't get stuck, credit the action
+    }
+
+    /// Executes one autonomous action. Typing first clicks to focus the field, then
+    /// (after a beat so focus lands) types the task's text. A keyboard shortcut acts
+    /// on whatever is already focused, so it ignores the point.
+    private func perform(_ action: StepAction, at point: (x: Int, y: Int)?, cu: ComputerUseService) async {
+        switch action {
+        case .click:
+            if let p = point { cu.click(x: p.x, y: p.y) }
+        case .doubleClick:
+            if let p = point { cu.doubleClick(x: p.x, y: p.y) }
+        case .type(let text):
+            if let p = point {
+                cu.click(x: p.x, y: p.y)                          // focus the field
+                try? await Task.sleep(nanoseconds: 250_000_000)  // let focus land
+            }
+            cu.type(text: text)
+        case .key(let combo):
+            cu.key(combination: combo)
+        }
+    }
+
+    /// The status line shown just before an autonomous action, so the user can see
+    /// what Mira is about to do.
+    private static func autoStatus(for action: StepAction) -> String {
+        switch action {
+        case .click, .doubleClick: return "Autonomous — Mira is doing this step…"
+        case .type:                return "Autonomous — Mira is typing the text…"
+        case .key:                 return "Autonomous — Mira is using a keyboard shortcut…"
+        }
     }
 
     /// Opt-in (Settings → Screen & Guidance → "Guide my cursor"). On a *confident*

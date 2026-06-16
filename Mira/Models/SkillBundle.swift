@@ -53,6 +53,7 @@ struct StepDTO: Codable {
     let successCheck: SuccessCheckDTO
     let remediation:  String?
     let observeWindow: Double?
+    let action:       StepActionDTO?
 
     /// Returns the domain step, or nil if the success check is unsupported — in
     /// which case the whole skill must fail to load. A bundle may not declare a
@@ -65,12 +66,31 @@ struct StepDTO: Codable {
             target: target.map { NamedTarget(description: $0.description) },
             successCheck: check,
             remediation: remediation ?? "Take your time — I'll keep watching.",
-            observeWindow: observeWindow ?? 30)
+            observeWindow: observeWindow ?? 30,
+            action: action?.toDomain() ?? .click)
     }
 }
 
 struct TargetDTO: Codable {
     let description: String
+}
+
+/// Tagged autonomous-mode action. Absent → `.click`. An unknown/incomplete action
+/// degrades to `.click` rather than failing the load (a missing `text`/`combo`
+/// shouldn't make the lesson unusable in guided mode).
+struct StepActionDTO: Codable {
+    let type:  String           // "click" | "doubleClick" | "type" | "key"
+    let text:  String?          // for "type"
+    let combo: String?          // for "key", e.g. "cmd+s"
+
+    func toDomain() -> StepAction {
+        switch type {
+        case "doubleClick": return .doubleClick
+        case "type":        return text.map  { .type(text: $0) }  ?? .click
+        case "key":         return combo.map { .key(combo: $0) }  ?? .click
+        default:            return .click
+        }
+    }
 }
 
 /// Tagged representation of a success check. Unknown `type` → nil (skill won't load).

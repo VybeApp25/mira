@@ -24,6 +24,27 @@ enum SuccessCheck: Equatable {
     case userConfirmation
 }
 
+/// What Mira physically does at a step's grounded target when it performs the
+/// step itself (autonomous mode). Default `.click`. The text in `.type` is the
+/// *task's* text, authored into the lesson — never the user's private content: a
+/// step that needs the user's own data stays a `.click` and Mira focuses the
+/// field and hands back rather than fabricating it.
+enum StepAction: Equatable {
+    case click
+    case doubleClick
+    case type(text: String)
+    case key(combo: String)   // e.g. "cmd+s", "return", "cmd+shift+4"
+
+    /// Click / double-click / type need a grounded on-screen point; a keyboard
+    /// shortcut acts on whatever is focused, so it can run without a target.
+    var needsTarget: Bool {
+        switch self {
+        case .click, .doubleClick, .type: return true
+        case .key:                        return false
+        }
+    }
+}
+
 /// One teaching step.
 struct TeachingStep: Equatable, Identifiable {
     let id:           String
@@ -33,13 +54,15 @@ struct TeachingStep: Equatable, Identifiable {
     let remediation:  String         // shown after the observe window lapses
     /// Seconds to watch for the observed outcome before offering remediation/skip.
     let observeWindow: TimeInterval
+    /// What Mira does at the target in autonomous mode. Defaults to `.click`.
+    let action:       StepAction
 
     init(id: String, instruction: String, target: NamedTarget? = nil,
          successCheck: SuccessCheck, remediation: String = "Take your time — I'll keep watching.",
-         observeWindow: TimeInterval = 30) {
+         observeWindow: TimeInterval = 30, action: StepAction = .click) {
         self.id = id; self.instruction = instruction; self.target = target
         self.successCheck = successCheck; self.remediation = remediation
-        self.observeWindow = observeWindow
+        self.observeWindow = observeWindow; self.action = action
     }
 }
 
