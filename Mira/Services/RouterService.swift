@@ -385,8 +385,11 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             // Widget data is fetched in IslandChatView; this path is the text fallback.
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
 
-        case .mapsQuery, .computerUse:
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
+        case .mapsQuery:
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .mapsQuery, onStreamChunk: onStreamChunk)
+
+        case .computerUse:
+            return await computerUseResult(prompt: prompt, apiKey: apiKey)
 
         case .findMyDevices:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices, onStreamChunk: onStreamChunk)
@@ -952,6 +955,20 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         return RouteResult(route: .screenGuidance, reply: text,
                            pendingConfirmation: nil, clarificationQuestion: nil,
                            permissionNeeded: nil, guidanceTarget: target)
+    }
+
+    /// Full desktop autonomy from chat/voice. Hands the task to the SAME
+    /// ComputerUseService agent loop that powers the Computer Use tab (screenshot →
+    /// click / double-click / type / key / scroll / drag → repeat until done), so
+    /// "do it for me" actually acts outside the Learn tab instead of only describing
+    /// what to do. Destructive phrasing is already caught upstream by
+    /// `detectDangerousCommand` → `confirmationRequired`, and the orchestrator has
+    /// its own iteration cap + Stop kill-switch. Blocks until the task finishes,
+    /// then returns the agent's closing summary as the chat reply.
+    private func computerUseResult(prompt: String, apiKey: String) async -> RouteResult {
+        await ComputerUseOrchestrator.shared.run(task: prompt, apiKey: apiKey)
+        let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)
     }
 
     private func codexOrFallback(
