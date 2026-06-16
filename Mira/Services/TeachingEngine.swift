@@ -310,6 +310,17 @@ final class TeachingEngine: ObservableObject {
         return riskyWords.contains { t.contains($0) }
     }
 
+    private static let contentWords = [
+        "type", "write", "enter ", "fill in", "give it a title", "give the event a title",
+        "name the", "compose", "search for", "paste",
+    ]
+    /// Does this step require the user's own text (an address, a title, a message)?
+    /// Autonomous mode focuses the field but hands back rather than fabricating it.
+    static func isContentEntry(_ step: TeachingStep) -> Bool {
+        let t = step.instruction.lowercased()
+        return contentWords.contains { t.contains($0) }
+    }
+
     /// Autonomous mode: Mira performs the grounded step itself (a real click).
     /// Returns true if it acted. Refuses when the step looks risky and "Confirm
     /// risky actions" is on (falls back to the guided flow so the human decides),
@@ -322,6 +333,18 @@ final class TeachingEngine: ObservableObject {
             return false
         }
         guard !automatedInputDetected else { return false }
+        if Self.isContentEntry(step) {
+            // The text here is the user's own content (an address, a title) — autonomous
+            // mode must not fabricate it. Click to focus the field, then hand back so the
+            // user types it and confirms. (Literal autotyping of real task content lives
+            // in the free-form Computer Use orchestrator, not in lessons.)
+            let cu = ComputerUseService.shared
+            cu.click(x: Int(normalized.x * CGFloat(cu.displayWidth)),
+                     y: Int(normalized.y * CGFloat(cu.displayHeight)))
+            statusLine = "Mira focused this field — type your text, then tap Done."
+            canSkip = true
+            return false
+        }
         // Let the ring/callout register so the user sees what's about to be clicked.
         statusLine = "Autonomous — Mira is doing this step…"
         try? await Task.sleep(nanoseconds: 900_000_000)
