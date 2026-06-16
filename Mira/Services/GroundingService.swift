@@ -99,54 +99,45 @@ final class GroundingService {
         let cgX = Float(appKitPt.x)
         let cgY = Float(primaryH - appKitPt.y)
 
-        // Probe the topmost NON-Mira app window at the point and hit-test WITHIN it,
-        // rather than the system-wide top element. The screen capture excludes Mira's
-        // windows, so the model grounds against the target app — but a system-wide AX
-        // probe lands on our own full-screen click-through overlay/HUD that sits on top.
-        // Scoping to the real app's AXUIElement makes the cross-check match what the
-        // model saw, so the confidence tiers below actually engage.
-        let probe = CGPoint(x: CGFloat(cgX), y: CGFloat(cgY))
+        // Probe the topmost NON-Mira app window and hit-test WITHIN it (not the
+        // system-wide top element, which is our own full-screen overlay/HUD). Computer
+        // Use coordinates are a few px imprecise and the exact pixel can land on toolbar
+        // chrome just off an actionable control — so probe the exact point PLUS a small
+        // neighborhood and prefer an actionable, target-app element if one is near.
         let ownPID = ProcessInfo.processInfo.processIdentifier
-        var element: AXUIElement?
-        if let pid = Self.topmostAppPID(at: probe, excludingPID: ownPID) {
-            AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(pid), cgX, cgY, &element)
-        }
-        guard let el = element else {
-            // No real app window under the point (empty desktop) or AX couldn't read
-            // it. For a vision-grounded skill that's expected (custom UI) → vision
-            // baseline; for an AX-grounded skill a real target SHOULD expose an element
-            // here, so silence is disconfirmation (likely an empty-space mis-ground) → ASK.
-            return requireActionableAX ? (.vision, 0.35) : (.vision, 0.60)
-        }
+        let offsets: [(Float, Float)] = [(0, 0), (-11, 0), (11, 0), (0, -11), (0, 11),
+                                         (-9, -9), (9, -9), (-9, 9), (9, 9)]
+        var firstAppHit: AXUIElement?   // a target-app element near the point (any role)
+        var actionableHit = false       // an actionable target-app element is near
+        var sawWrongApp = false         // the exact point is owned by a *different* app
 
-        // Our own full-screen click-through annotation overlay sits above everything,
-        // so the AX probe can hit IT instead of the target app — flagging a perfectly
-        // correct ground as a "wrong app" mis-ground. We can't AX-verify through our
-        // own window, so fall back to the vision tier instead of disconfirming.
-        // (The teaching engine also hides the overlay before grounding; belt-and-braces.)
-        if owningBundleId(of: el) == Bundle.main.bundleIdentifier {
-            return (.vision, 0.60)
-        }
-
-        // App-ownership check: if the skill names a target app, the grounded
-        // element must belong to it. A hit on a different app's UI — Mira's own
-        // overlay/notifications, or whatever happens to sit where vision pointed —
-        // is a mis-ground. Drop below the gate so we ASK instead of confidently
-        // ringing the wrong thing. (This is the honest fix for "console closed →
-        // ring landed on a Mira notification card".)
-        if let expected = expectedBundleId, let owner = owningBundleId(of: el), owner != expected {
-            return (.vision, 0.20)
+        for (dx, dy) in offsets {
+            let p = CGPoint(x: CGFloat(cgX + dx), y: CGFloat(cgY + dy))
+            guard let pid = Self.topmostAppPID(at: p, excludingPID: ownPID) else { continue }
+            var e: AXUIElement?
+            AXUIElementCopyElementAtPosition(AXUIElementCreateApplication(pid), cgX + dx, cgY + dy, &e)
+            guard let e else { continue }
+            let owner = owningBundleId(of: e)
+            if owner == Bundle.main.bundleIdentifier { continue }   // our own overlay/HUD
+            if let expected = expectedBundleId, owner != expected {
+                if dx == 0, dy == 0 { sawWrongApp = true }          // exact hit is another app
+                continue
+            }
+            if firstAppHit == nil { firstAppHit = e }
+            if isActionable(e) { actionableHit = true; break }
         }
 
-        if isActionable(el) { return (.accessibility, 0.92) }
-
-        // Right app, but a non-actionable element (a container/label/empty chrome).
-        // For an AX-grounded skill the ring should sit on something actionable, so a
-        // non-actionable hit is a weak/likely-off ground → ASK. For a vision skill,
-        // keep the moderate vision-backed pass (its targets may not be actionable AX
-        // nodes at all). Honesty bias: a false ASK ("find it yourself") costs less
-        // than a confident ring on the wrong thing.
-        return requireActionableAX ? (.vision, 0.40) : (.accessibility, 0.75)
+        // Actionable target-app control under/near the point — strongest signal.
+        if actionableHit { return (.accessibility, 0.92) }
+        // Right app, but only a non-actionable element (container/label). For an
+        // AX-grounded skill that's a weak/likely-off ground → ASK; vision skills pass.
+        if firstAppHit != nil { return requireActionableAX ? (.vision, 0.40) : (.accessibility, 0.75) }
+        // The exact point is owned by a *different* app and nothing target-app is near
+        // → a real mis-ground (vision pointed at the wrong window).
+        if sawWrongApp { return (.vision, 0.20) }
+        // Nothing in the target app anywhere near the point. Vision skill → baseline;
+        // AX skill → the target should be here, so silence is disconfirmation → ASK.
+        return requireActionableAX ? (.vision, 0.35) : (.vision, 0.60)
     }
 
     /// PID of the frontmost on-screen window at `p` (top-left global coords) that
