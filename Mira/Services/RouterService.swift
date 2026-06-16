@@ -990,7 +990,10 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// unreliable to parse by hand) with a tiny Haiku call, then writes straight to
     /// the Apple/iCloud calendar in the background — no UI, no screen takeover.
     private func calendarResult(prompt: String, apiKey: String) async -> RouteResult {
-        guard !apiKey.isEmpty else {
+        // In proxy mode the Anthropic API key is intentionally empty — auth is the
+        // Supabase JWT — so "signed in" is a present JWT, not a non-empty key.
+        let signedIn = MiraBackend.useProxy ? !SupabaseService.cachedAccessToken.isEmpty : !apiKey.isEmpty
+        guard signedIn else {
             return .reply("I need to be signed in to manage your calendar.", route: .calendarAction)
         }
         let ctx = Date().formatted(.dateTime.weekday(.wide).month(.wide).day().year().hour().minute())
