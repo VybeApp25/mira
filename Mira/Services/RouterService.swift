@@ -399,6 +399,17 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             }
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .computerUse, onStreamChunk: onStreamChunk)
 
+        case .calendarAction:
+            // This user's calendar is the native Apple/iCloud Calendar, which the cloud
+            // (Composio) integration can't reach — it would create events in a separate
+            // Google/Outlook account. Drive the real Calendar app via the same gated
+            // computer-use path as .computerUse (needs autonomous on); otherwise fall
+            // back to describing the steps.
+            if UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") {
+                return await computerUseResult(prompt: prompt, apiKey: apiKey)
+            }
+            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .calendarAction, onStreamChunk: onStreamChunk)
+
         case .findMyDevices:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices, onStreamChunk: onStreamChunk)
 
@@ -418,7 +429,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             return await codexOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, onStreamChunk: onStreamChunk)
 
         case .obsidianAction, .polymarketQuery,
-             .memoryWrite, .fileOperation, .calendarAction, .notesAction,
+             .memoryWrite, .fileOperation, .notesAction,
              .agentTask, .websiteBuilder, .composioAction, .higherModel:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
         }
