@@ -400,15 +400,11 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .computerUse, onStreamChunk: onStreamChunk)
 
         case .calendarAction:
-            // This user's calendar is the native Apple/iCloud Calendar, which the cloud
-            // (Composio) integration can't reach — it would create events in a separate
-            // Google/Outlook account. Drive the real Calendar app via the same gated
-            // computer-use path as .computerUse (needs autonomous on); otherwise fall
-            // back to describing the steps.
-            if UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") {
-                return await computerUseResult(prompt: prompt, apiKey: apiKey)
-            }
-            return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .calendarAction, onStreamChunk: onStreamChunk)
+            // Native Apple/iCloud Calendar via EventKit — writes the event directly in
+            // the background (instant, no UI takeover), so the user keeps working. The
+            // cloud (Composio) path can't reach the native calendar, and the UI agent
+            // is slow and seizes the screen — both wrong for an app with a real API.
+            return await calendarResult(prompt: prompt, apiKey: apiKey)
 
         case .findMyDevices:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .findMyDevices, onStreamChunk: onStreamChunk)
@@ -988,6 +984,68 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         await ComputerUseOrchestrator.shared.run(task: prompt, apiKey: apiKey)
         let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
         return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)
+    }
+
+    /// Native calendar handling via EventKit. Extracts the event details (dates are
+    /// unreliable to parse by hand) with a tiny Haiku call, then writes straight to
+    /// the Apple/iCloud calendar in the background — no UI, no screen takeover.
+    private func calendarResult(prompt: String, apiKey: String) async -> RouteResult {
+        guard !apiKey.isEmpty else {
+            return .reply("I need to be signed in to manage your calendar.", route: .calendarAction)
+        }
+        let ctx = Date().formatted(.dateTime.weekday(.wide).month(.wide).day().year().hour().minute())
+        let system = """
+        You convert a calendar request into JSON. The user's current local date and time is: \(ctx).
+        Output ONE line of JSON and nothing else:
+        {"action":"create"|"read","title":"<title or empty>","start":"YYYY-MM-DDTHH:MM","end":"YYYY-MM-DDTHH:MM or empty","all_day":true|false,"days_ahead":<int>}
+        Rules: resolve relative dates ("today","tomorrow","Friday","next week") against the current date above. Use 24-hour LOCAL times, no timezone offset. For checking the schedule use action=read with days_ahead. For creating, fill title and start; leave end empty unless an end/duration is given.
+        """
+        guard let json = try? await haikuJSON(system: system, user: prompt, apiKey: apiKey) else {
+            return .reply("I couldn't read that calendar request — try rephrasing the date and time.", route: .calendarAction)
+        }
+
+        if (json["action"] as? String) == "read" {
+            let days = (json["days_ahead"] as? Int) ?? 1
+            let result = await MiraToolService.execute(name: "get_calendar_events", argsJSON: "{\"days_ahead\":\(days)}")
+            return .reply(result, route: .calendarAction)
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: json),
+              let argsJSON = String(data: data, encoding: .utf8) else {
+            return .reply("I couldn't build that event.", route: .calendarAction)
+        }
+        let result = await MiraToolService.execute(name: "create_calendar_event", argsJSON: argsJSON)
+        return .reply(result, route: .calendarAction)
+    }
+
+    /// One-shot Haiku call that returns a parsed JSON object (used for structured
+    /// extraction like calendar fields). Reuses the Haiku request/response types.
+    private func haikuJSON(system: String, user: String, apiKey: String) async throws -> [String: Any] {
+        let body = HaikuReq(model: "claude-haiku-4-5-20251001", max_tokens: 200, system: system,
+                            messages: [HaikuMsg(role: "user", content: user)])
+        var req = URLRequest(url: MiraBackend.anthropicMessagesURL)
+        req.httpMethod = "POST"
+        _ = MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
+        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+        req.timeoutInterval = 12
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api("haiku-\((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        }
+        let raw = try JSONDecoder().decode(HaikuResp.self, from: data).text
+        let clean = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let d = clean.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else {
+            throw MiraError.api("haiku-json-parse")
+        }
+        return obj
     }
 
     private func codexOrFallback(

@@ -620,6 +620,7 @@ enum MiraToolService {
         case "open_application":    return openApplication(args)
         case "quit_application":    return quitApplication(args)
         case "get_calendar_events": return await calendarEvents(args)
+        case "create_calendar_event": return await createCalendarEvent(args)
         case "control_music":       return musicControl(args)
         case "control_spotify":     return controlSpotify(args)
         case "search_web":          return searchWeb(args)
@@ -836,6 +837,80 @@ enum MiraToolService {
                 : e.startDate.formatted(.dateTime.hour().minute())
             return "• \(e.title ?? "Untitled") — \(time)"
         }.joined(separator: "\n")
+    }
+
+    // MARK: - create_calendar_event (native Apple/iCloud Calendar via EventKit)
+    //
+    // Writes the event straight into the user's default calendar — instant, no UI,
+    // runs in the background so the user keeps working. This is the right tool for
+    // a native app that exposes an API; UI automation (computer use) is only for
+    // apps that don't. `start`/`end` are ISO-8601 (with or without offset; bare
+    // datetimes are treated as local time).
+    private static func createCalendarEvent(_ args: [String: Any]) async -> String {
+        guard let title = (args["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else {
+            return "I need a title for the event."
+        }
+        guard let startStr = args["start"] as? String, let start = parseEventDate(startStr) else {
+            return "I couldn't work out the event's date and time."
+        }
+        let allDay = (args["all_day"] as? Bool) ?? false
+        let end: Date = {
+            if let e = args["end"] as? String, let d = parseEventDate(e), d > start { return d }
+            return start.addingTimeInterval(3600)   // default to a one-hour event
+        }()
+
+        let store  = EKEventStore()
+        var status = EKEventStore.authorizationStatus(for: .event)
+        if status.rawValue != 3 {   // 3 = .fullAccess (macOS 14+) / .authorized (13)
+            if #available(macOS 14.0, *) {
+                _ = try? await store.requestFullAccessToEvents()
+            } else {
+                _ = try? await store.requestAccess(to: .event)
+            }
+            status = EKEventStore.authorizationStatus(for: .event)
+            guard status.rawValue == 3 else {
+                return "Calendar access isn't granted. Enable it in System Settings › Privacy & Security › Calendars, then try again."
+            }
+        }
+        guard let calendar = store.defaultCalendarForNewEvents else {
+            return "No writable calendar is available to add the event to."
+        }
+
+        let event = EKEvent(eventStore: store)
+        event.title     = title
+        event.calendar  = calendar
+        event.isAllDay  = allDay
+        event.startDate = start
+        event.endDate   = end
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            let when = allDay
+                ? start.formatted(.dateTime.weekday().month().day())
+                : start.formatted(.dateTime.weekday().month().day().hour().minute())
+            return "Added \"\(title)\" to your calendar — \(when)."
+        } catch {
+            return "Couldn't save the event: \(error.localizedDescription)"
+        }
+    }
+
+    /// Parses an ISO-8601 datetime; falls back to common bare formats interpreted
+    /// in the user's local time zone.
+    private static func parseEventDate(_ s: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: s) { return d }
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = iso.date(from: s) { return d }
+
+        let df = DateFormatter()
+        df.locale   = Locale(identifier: "en_US_POSIX")
+        df.timeZone = .current
+        for fmt in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm", "yyyy-MM-dd"] {
+            df.dateFormat = fmt
+            if let d = df.date(from: s) { return d }
+        }
+        return nil
     }
 
     // MARK: - control_music (Apple Music via AppleScript)
