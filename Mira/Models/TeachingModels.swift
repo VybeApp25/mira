@@ -35,12 +35,16 @@ enum StepAction: Equatable {
     case type(text: String)
     case key(combo: String)   // e.g. "cmd+s", "return", "cmd+shift+4"
 
-    /// Click / double-click / type need a grounded on-screen point; a keyboard
-    /// shortcut acts on whatever is focused, so it can run without a target.
+    /// Click / double-click need a grounded on-screen point. Typing and keyboard
+    /// shortcuts act on whatever is focused, so they can run without a target —
+    /// when a `.type` step DOES carry a target we still ground it to click-focus
+    /// the right field first, but if grounding fails (e.g. a blank, featureless
+    /// text area the vision model can't point at) we fall back to typing into the
+    /// currently focused element rather than refusing to act.
     var needsTarget: Bool {
         switch self {
-        case .click, .doubleClick, .type: return true
-        case .key:                        return false
+        case .click, .doubleClick: return true
+        case .type, .key:          return false
         }
     }
 }
