@@ -147,7 +147,21 @@ final class TeachingEngine: ObservableObject {
             canSkip = false
             TelemetryService.shared.track(.stepInstructed(skillId: skill.id, stepId: step.id))
 
-            await groundAndAnnotate(step, number: i + 1)
+            let groundedPoint = await groundAndAnnotate(step, number: i + 1)
+
+            // Autonomous mode: Mira performs the grounded step itself (a real click)
+            // instead of guiding. Only confident grounds, only user-confirmation steps,
+            // and risky/irreversible steps fall back to manual when "Confirm risky" is on.
+            if autonomousEnabled,
+               step.successCheck == .userConfirmation,
+               let n = groundedPoint,
+               await autoPerform(step: step, at: n) {
+                TelemetryService.shared.track(.stepCompleted(
+                    skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.autonomous.rawValue))
+                completed += 1
+                AnnotationCanvasService.shared.clear()
+                continue
+            }
 
             let result = await observe(step, generation: stepGeneration)
             switch result {
@@ -224,10 +238,13 @@ final class TeachingEngine: ObservableObject {
         return s.isEmpty ? instruction : s
     }
 
-    private func groundAndAnnotate(_ step: TeachingStep, number: Int) async {
+    /// Returns the grounded normalized point on the confident path (so autonomous
+    /// mode can click it), or nil when there's no target or we couldn't ground.
+    @discardableResult
+    private func groundAndAnnotate(_ step: TeachingStep, number: Int) async -> CGPoint? {
         guard let target = step.target else {
             AnnotationCanvasService.shared.clear()
-            return
+            return nil
         }
         // Hide any prior step's overlay BEFORE we capture + AX-probe, so the grounding
         // cross-check sees the real target app — not our own full-screen click-through
@@ -236,7 +253,7 @@ final class TeachingEngine: ObservableObject {
         AnnotationCanvasService.shared.clear()
         do {
             let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
-            guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return }
+            guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return nil }
 
             let outcome = await GroundingService.shared.ground(
                 question: target.description,
@@ -255,6 +272,7 @@ final class TeachingEngine: ObservableObject {
                 recordGrounding(step, grounded: true,
                                 source: String(describing: source), confidence: confidence)
                 await guideCursorIfEnabled(to: normalized, step: step)
+                return normalized
             default:
                 // Couldn't ground confidently — be honest, don't draw a guess.
                 AnnotationCanvasService.shared.clear()
@@ -262,11 +280,58 @@ final class TeachingEngine: ObservableObject {
                 // Record the miss too: a silent mis-ground would be wrong-but-invisible.
                 recordGrounding(step, grounded: false,
                                 source: groundingSource(of: outcome), confidence: groundingConfidence(of: outcome))
+                return nil
             }
         } catch {
             AnnotationCanvasService.shared.clear()
             recordGrounding(step, grounded: false, source: "error", confidence: 0)
+            return nil
         }
+    }
+
+    // MARK: - Autonomous mode (opt-in: Settings → Autonomy)
+
+    private var autonomousEnabled: Bool { UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") }
+    /// Defaults to TRUE when unset so a fresh enable of autonomous mode is cautious.
+    private var confirmRiskyAutonomous: Bool {
+        UserDefaults.standard.object(forKey: "mira_autonomous_confirm_risky") as? Bool ?? true
+    }
+
+    private static let riskyWords = [
+        "send", "delete", "remove", "trash", "discard", "buy", "purchase", "pay",
+        "order", "checkout", "submit", "publish", "post ", "overwrite", "replace",
+        "sign out", "log out", "unsubscribe", "empty",
+    ]
+    /// Heuristic: does this step look irreversible/destructive? Keyed off the
+    /// instruction + target text. Conservative — when "Confirm risky" is on, a hit
+    /// here means Mira will NOT auto-click; the human does it.
+    static func isRisky(_ step: TeachingStep) -> Bool {
+        let t = (step.instruction + " " + (step.target?.description ?? "")).lowercased()
+        return riskyWords.contains { t.contains($0) }
+    }
+
+    /// Autonomous mode: Mira performs the grounded step itself (a real click).
+    /// Returns true if it acted. Refuses when the step looks risky and "Confirm
+    /// risky actions" is on (falls back to the guided flow so the human decides),
+    /// and when automated input is detected. The completion is journaled with the
+    /// distinct `.autonomous` provenance — never disguised as a human confirmation.
+    private func autoPerform(step: TeachingStep, at normalized: CGPoint) async -> Bool {
+        if Self.isRisky(step), confirmRiskyAutonomous {
+            statusLine = "Paused — this looks irreversible. Do this one yourself, then it continues."
+            canSkip = true
+            return false
+        }
+        guard !automatedInputDetected else { return false }
+        // Let the ring/callout register so the user sees what's about to be clicked.
+        statusLine = "Autonomous — Mira is doing this step…"
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        if Task.isCancelled { return false }
+        let cu = ComputerUseService.shared
+        let x = Int(normalized.x * CGFloat(cu.displayWidth))
+        let y = Int(normalized.y * CGFloat(cu.displayHeight))
+        cu.click(x: x, y: y)
+        try? await Task.sleep(nanoseconds: 700_000_000)   // let the target app react
+        return true
     }
 
     /// Opt-in (Settings → Screen & Guidance → "Guide my cursor"). On a *confident*

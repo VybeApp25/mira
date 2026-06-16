@@ -62,4 +62,7 @@ struct TeachingSkill: Equatable, Identifiable {
 enum CompletionProvenance: String {
     case observation
     case userConfirmation
+    /// Mira performed the step itself in autonomous mode — recorded distinctly so
+    /// it never masquerades as a human confirmation or an observed outcome.
+    case autonomous
 }

@@ -33,6 +33,8 @@ struct SettingsView: View {
     @State private var previewingVoice: MiraVoice? = nil
     @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
     @AppStorage("mira_guide_cursor")       private var guideCursorEnabled = false
+    @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
+    @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
@@ -84,6 +86,7 @@ struct SettingsView: View {
                             screenCompanionSection
                             pointFollowUpSection
                             guideCursorSection
+                            autonomousSection
                         }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
@@ -1035,6 +1038,67 @@ struct SettingsView: View {
             .padding(.vertical, 8)
             .background(Color.white.opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    // MARK: - Autonomous mode section
+
+    @ViewBuilder
+    private var autonomousSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Autonomous", systemImage: "bolt.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Let Mira do it for me")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("In a lesson, Mira clicks each grounded step itself instead of waiting for you. It really controls your Mac.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $autonomousEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if autonomousEnabled {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Confirm risky actions")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.80))
+                        Text("Pause before anything irreversible (send, delete, buy, submit…) so you decide. Off = fully hands-off.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.35))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $autonomousConfirmRisky)
+                        .toggleStyle(.switch)
+                        .tint(accent)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Label("Mira controls your Mac autonomously. Watch it, and use Stop to halt at any time. Targeting isn't fully reliability-hardened yet — it can mis-click.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
