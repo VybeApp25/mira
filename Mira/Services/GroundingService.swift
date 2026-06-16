@@ -55,7 +55,7 @@ final class GroundingService {
     /// *different* app's UI — most often Mira's own overlay/notifications — is
     /// treated as a mis-ground and routed to ASK instead of drawn confidently.
     func ground(question: String, screenshotData: Data, displayFrame: CGRect,
-                expectedBundleId: String? = nil) async -> GroundingOutcome {
+                expectedBundleId: String? = nil, requireActionableAX: Bool = false) async -> GroundingOutcome {
         switch await ElementLocationDetector.shared.detectElementLocation(
             screenshotData: screenshotData,
             userQuestion:   question,
@@ -72,7 +72,8 @@ final class GroundingService {
             // move the point — snapping to AX element centers proved to scatter the
             // ring onto wrong/oversized elements. (Precision is a measured M1 gate,
             // not a one-sample guess. See docs/architecture/teaching_system.md.)
-            let (source, confidence) = verify(appKitPt: appKitPt, expectedBundleId: expectedBundleId)
+            let (source, confidence) = verify(appKitPt: appKitPt, expectedBundleId: expectedBundleId,
+                                              requireActionableAX: requireActionableAX)
             let normalized = ElementLocationDetector.shared.normalizedPoint(appKitPt, displayFrame: displayFrame)
             return .grounded(location: normalized, appKit: appKitPt, source: source, confidence: confidence)
         }
@@ -87,7 +88,8 @@ final class GroundingService {
     /// Degrades gracefully when Accessibility isn't granted (→ trust vision only).
     /// Returns the grounding source and a confidence. AX is used only to enrich
     /// confidence — it never moves the vision point.
-    private func verify(appKitPt: CGPoint, expectedBundleId: String? = nil) -> (GroundingSource, Double) {
+    private func verify(appKitPt: CGPoint, expectedBundleId: String? = nil,
+                        requireActionableAX: Bool = false) -> (GroundingSource, Double) {
         guard AXIsProcessTrusted() else {
             return (.vision, 0.60)   // can't verify; trust the vision tier moderately
         }
@@ -101,8 +103,20 @@ final class GroundingService {
         var element: AXUIElement?
         let err = AXUIElementCopyElementAtPosition(system, cgX, cgY, &element)
         guard err == .success, let el = element else {
-            // AX saw nothing at this exact pixel; vision still located the target —
-            // AX silence is not disconfirmation. Keep the vision baseline.
+            // AX saw nothing here. For a vision-grounded skill (custom UI AX can't
+            // read) that's expected, so keep the vision baseline. For an AX-grounded
+            // skill a real target *should* expose an element here — silence is
+            // genuine disconfirmation (most likely an empty-space mis-ground), so
+            // drop below the gate and ASK instead of ringing nothing.
+            return requireActionableAX ? (.vision, 0.35) : (.vision, 0.60)
+        }
+
+        // Our own full-screen click-through annotation overlay sits above everything,
+        // so the AX probe can hit IT instead of the target app — flagging a perfectly
+        // correct ground as a "wrong app" mis-ground. We can't AX-verify through our
+        // own window, so fall back to the vision tier instead of disconfirming.
+        // (The teaching engine also hides the overlay before grounding; belt-and-braces.)
+        if owningBundleId(of: el) == Bundle.main.bundleIdentifier {
             return (.vision, 0.60)
         }
 
@@ -116,7 +130,15 @@ final class GroundingService {
             return (.vision, 0.20)
         }
 
-        return (.accessibility, isActionable(el) ? 0.92 : 0.75)
+        if isActionable(el) { return (.accessibility, 0.92) }
+
+        // Right app, but a non-actionable element (a container/label/empty chrome).
+        // For an AX-grounded skill the ring should sit on something actionable, so a
+        // non-actionable hit is a weak/likely-off ground → ASK. For a vision skill,
+        // keep the moderate vision-backed pass (its targets may not be actionable AX
+        // nodes at all). Honesty bias: a false ASK ("find it yourself") costs less
+        // than a confident ring on the wrong thing.
+        return requireActionableAX ? (.vision, 0.40) : (.accessibility, 0.75)
     }
 
     /// Bundle id of the app that owns an AX element, via its pid.

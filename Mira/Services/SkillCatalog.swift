@@ -63,7 +63,8 @@ final class SkillCatalog: ObservableObject {
         }
         guard !steps.isEmpty else { return .failure(.init("\(manifest.name) has no steps")) }
         return .success(TeachingSkill(id: dto.id, title: dto.title, steps: steps,
-                                      domainApp: manifest.domainApp))
+                                      domainApp: manifest.domainApp,
+                                      grounding: manifest.grounding))
     }
 
     // MARK: - Scan

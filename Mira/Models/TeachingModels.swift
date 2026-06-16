@@ -52,6 +52,10 @@ struct TeachingSkill: Equatable, Identifiable {
     /// keep grounding honest: a target that resolves to a *different* app's UI
     /// (e.g. Mira's own overlay) is a mis-ground, not a confident hit.
     var domainApp: String? = nil
+    /// Grounding tier from the manifest: "accessibility" | "vision". AX-grounded
+    /// skills require an actionable AX element under the ring (so an empty-space
+    /// mis-ground routes to ASK); vision skills trust the vision point as-is.
+    var grounding: String? = nil
 }
 
 /// How a step's completion was established — drives honest mastery later (M4).

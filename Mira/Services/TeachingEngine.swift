@@ -229,6 +229,11 @@ final class TeachingEngine: ObservableObject {
             AnnotationCanvasService.shared.clear()
             return
         }
+        // Hide any prior step's overlay BEFORE we capture + AX-probe, so the grounding
+        // cross-check sees the real target app — not our own full-screen click-through
+        // annotation window, which the AX probe would otherwise hit first and (wrongly)
+        // flag a correct ground as a wrong-app mis-ground → ASK.
+        AnnotationCanvasService.shared.clear()
         do {
             let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
             guard let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else { return }
@@ -237,7 +242,8 @@ final class TeachingEngine: ObservableObject {
                 question: target.description,
                 screenshotData: primary.imageData,
                 displayFrame: primary.displayFrame,
-                expectedBundleId: skill?.domainApp)
+                expectedBundleId: skill?.domainApp,
+                requireActionableAX: skill?.grounding == "accessibility")
 
             switch (outcome, gateDecision(for: outcome)) {
             case (.grounded(let normalized, _, let source, let confidence), .annotate):
