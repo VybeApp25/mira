@@ -204,6 +204,7 @@
 		C1670E21C86DE21B68A77C5B /* AgentHUDColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA12B26A9743FAB1D118372 /* AgentHUDColumnView.swift */; };
 		C210BB6ACEAA7C8C58BBF99B /* connection-question.wav in Resources */ = {isa = PBXBuildFile; fileRef = D21BA97FA57DFB6C3315A4D3 /* connection-question.wav */; };
 		C325801C8A507F417362A245 /* github-pr-workflow.md in Resources */ = {isa = PBXBuildFile; fileRef = B39AB07565BD483C4C55CD53 /* github-pr-workflow.md */; };
+		C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */; };
 		C5BF65EFC345902777F0F8CD /* computer-use.md in Resources */ = {isa = PBXBuildFile; fileRef = CECF49A88AB42C914BD34504 /* computer-use.md */; };
 		C983D5ECE5849519EC072872 /* HoverPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8712738938AEA845880976 /* HoverPreferences.swift */; };
 		C99D98F0FAE42E17ABC22272 /* AccentColorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F3AE6AECF82F219A7C1A4 /* AccentColorService.swift */; };
@@ -402,6 +403,7 @@
 		7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJobStore.swift; sourceTree = "<group>"; };
 		7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentResultView.swift; sourceTree = "<group>"; };
 		801F97A114C64C4844285987 /* sheet_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = sheet_rw.py; sourceTree = "<group>"; };
+		80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMCPClient.swift; sourceTree = "<group>"; };
 		803E550071C015B2092E04A1 /* WakeWordService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeWordService.swift; sourceTree = "<group>"; };
 		803FFD5EEBDE9BDFAF14C988 /* CursorCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionView.swift; sourceTree = "<group>"; };
 		80ED8ED7A6C8DC6CE506BB1E /* WebsiteBuilderAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteBuilderAgent.swift; sourceTree = "<group>"; };
@@ -742,6 +744,7 @@
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */,
 				C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */,
+				80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */,
 				BEF6665B0465EE94AD47A55B /* CodexService.swift */,
 				F3AE9C3419A694A4B7C648D1 /* ComputerUseOrchestrator.swift */,
 				01ACF9118D36B54D9E00146F /* ComputerUseService.swift */,
@@ -1113,6 +1116,7 @@
 				81855163613BB6A2B99E016C /* CodexComputerUseService.swift in Sources */,
 				A27ED327A6F5061ED6D27309 /* CodexHUD.swift in Sources */,
 				62946323C65311FC235B93CA /* CodexLiveOverlay.swift in Sources */,
+				C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */,
 				713DA3CACD91572D8939C588 /* CodexService.swift in Sources */,
 				FC7080473DD8A3EDC9CC3E31 /* ComputerUseOrchestrator.swift in Sources */,
 				452762C067D50B0C991CF939 /* ComputerUseService.swift in Sources */,

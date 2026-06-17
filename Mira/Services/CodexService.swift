@@ -34,6 +34,13 @@ final class CodexService {
     /// `timeout` defaults to 10 min (real coding tasks exceed the old 120 s).
     func run(prompt: String, workdir: String? = nil,
              model: String? = nil, timeout: TimeInterval = 600) async -> CodexResult {
+        // Warm transport (Half B): route through the persistent `codex mcp-server` when
+        // selected. On any warm failure, fall through to the proven cold-exec path below.
+        if UserDefaults.standard.string(forKey: "mira_codex_transport") == "mcp" {
+            let warm = await CodexMCPClient.shared.run(prompt: prompt, workdir: workdir, timeout: timeout)
+            if warm.success { return warm }
+        }
+
         guard let bin = await resolveBinary() else {
             return CodexResult(success: false,
                                output: "Codex CLI not found. Install: npm install -g @openai/codex",

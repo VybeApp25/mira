@@ -37,6 +37,7 @@ struct SettingsView: View {
     @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
     @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
     @AppStorage("mira_autonomy_engine") private var autonomyEngine = "auto"
+    @AppStorage("mira_codex_transport") private var codexTransport = "exec"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
@@ -1147,6 +1148,28 @@ struct SettingsView: View {
                         default:       return "Mira picks the best engine for each task and retries on the other if one can't finish. Recommended."
                         }
                     }())
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Codex transport")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Picker("", selection: $codexTransport) {
+                        Text("Per task").tag("exec")
+                        Text("Warm session").tag("mcp")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(codexTransport == "mcp"
+                         ? "Keep one Codex session warm (no cold start) and remember context across follow-ups. Experimental — falls back to per-task if it can't start."
+                         : "Start a fresh Codex for each task. Most reliable. Recommended.")
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)
