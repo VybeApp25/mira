@@ -131,6 +131,22 @@ final class NotchManager {
                 self.hoverManager.update(activationRect: self.expandedZone())
             }
         }
+        // Pin/unpin the island open for multi-step flows (e.g. Knowledge Import).
+        // Reference-counted so nested/overlapping pins don't unpin prematurely.
+        NotificationCenter.default.addObserver(forName: .miraPinIsland, object: nil, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let pinned = (note.userInfo?["pinned"] as? Bool) ?? false
+                if pinned {
+                    self.pinCount += 1
+                    // Cancel any in-flight collapse and keep the panel up.
+                    self.collapseGeneration += 1
+                    self.collapseWork?.cancel(); self.collapseWork = nil
+                } else {
+                    self.pinCount = max(0, self.pinCount - 1)
+                }
+            }
+        }
         // Always-on toggle — tap the ∞ button in the shortcut hint row to enable/disable
         NotificationCenter.default.addObserver(forName: .miraToggleAlwaysOn, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -170,6 +186,9 @@ final class NotchManager {
     private var wakeWordRestartWork: DispatchWorkItem?
     // Incremented on every re-entry; lets performCollapseIfIdle detect that a newer entry occurred.
     private var collapseGeneration = 0
+    // >0 while a multi-step flow has pinned the island open (see .miraPinIsland).
+    // Suppresses the hover-exit auto-collapse so the user can leave Mira and return.
+    private var pinCount = 0
 
     private func wireHover() {
         hoverManager.update(activationRect: collapsedZone())
@@ -193,6 +212,8 @@ final class NotchManager {
 
         hoverManager.onExit = { [weak self] in
             guard let self else { return }
+            // Pinned open (e.g. Knowledge Import round-trip) — never collapse on exit.
+            guard pinCount == 0 else { return }
             hoverManager.update(activationRect: collapsedZone())
             let gen = collapseGeneration
             let work = DispatchWorkItem { [weak self] in
@@ -213,6 +234,7 @@ final class NotchManager {
     /// what Mira is doing. Only blocks when the user must actively respond to a pending job.
     private func performCollapseIfIdle(generation: Int) {
         guard generation == collapseGeneration else { return }   // cursor re-entered — abort
+        guard pinCount == 0 else { return }                      // pinned open — abort
         let needsInput = !AgentJobStore.shared.confirmationPendingJobs.isEmpty ||
                          !AgentJobStore.shared.waitingForInputJobs.isEmpty
         guard !needsInput else {

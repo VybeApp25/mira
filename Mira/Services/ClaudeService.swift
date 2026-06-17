@@ -603,6 +603,9 @@ enum MiraPrompts {
         // Inject active skill context (reads from nonisolated cache)
         let skillContext = SkillStore.cachedContext
         if !skillContext.isEmpty { base += skillContext }
+        // Inject the imported user profile (personal-knowledge plane, local only)
+        let userContext = UserKnowledgeStore.cachedContext
+        if !userContext.isEmpty { base += userContext }
         // Inject connected integration context (reads from nonisolated cache)
         let integrationCtx = IntegrationContextService.cachedContext
         if !integrationCtx.isEmpty { base += integrationCtx }
@@ -734,6 +737,8 @@ enum MiraPrompts {
         - When blocked, name the exact tool, permission, or capability that is missing
         """
         if !skillContext.isEmpty { base += skillContext }
+        let userContext = UserKnowledgeStore.cachedContext
+        if !userContext.isEmpty { base += userContext }
         if !integrationCtx.isEmpty { base += integrationCtx }
         return base
     }
