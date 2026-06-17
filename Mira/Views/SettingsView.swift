@@ -11,6 +11,7 @@ struct SettingsView: View {
     @ObservedObject private var memory   = MemoryStore.shared
     @ObservedObject private var shortcuts = ShortcutStore.shared
     @ObservedObject private var account  = AccountService.shared
+    @ObservedObject private var quota    = QuotaService.shared
     @Environment(\.dismiss) var dismiss
     @State private var keyInput      = ""
     @State private var saved         = false
@@ -22,6 +23,7 @@ struct SettingsView: View {
     @State private var showIntegrations  = false
     @State private var showProposalMetrics = false
     @State private var showReliability     = false
+    @State private var showKnowledgeImport = false
     @ObservedObject private var updater = UpdateService.shared
     @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
     @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
@@ -29,12 +31,12 @@ struct SettingsView: View {
     @ObservedObject private var hoverHistory = HoverHistoryStore.shared
     @State private var showHoverHistory = false
     @ObservedObject private var accentSvc  = AccentColorService.shared
-    @State private var previewPlayer: AVAudioPlayer? = nil
-    @State private var previewingVoice: MiraVoice? = nil
+    @ObservedObject private var voicePreview = VoicePreviewService.shared
     @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
     @AppStorage("mira_guide_cursor")       private var guideCursorEnabled = false
     @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
     @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
+    @AppStorage("mira_autonomy_engine") private var autonomyEngine = "codex"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
@@ -93,6 +95,7 @@ struct SettingsView: View {
                         }
                         settingsGroup("Agents & Memory", icon: "brain.head.profile") {
                             connectedAppsButton
+                            knowledgeImportButton
                             agentFolderSection
                             memorySection
                         }
@@ -123,6 +126,22 @@ struct SettingsView: View {
         .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
         .sheet(isPresented: $showProposalMetrics) { ProposalMetricsView() }
         .sheet(isPresented: $showReliability)     { ReliabilityDashboardView() }
+        // In the island tab, a fixed-size sheet overflows the panel's hover zone:
+        // moving the cursor down to lower rows leaves the zone and auto-collapses
+        // the island (dropping back to Settings). Embed it in-tab instead so the
+        // list scrolls within the panel and the cursor never exits the zone.
+        // The standalone Settings window (embedded == false) still uses a sheet.
+        .sheet(isPresented: Binding(get: { showKnowledgeImport && !embedded },
+                                    set: { showKnowledgeImport = $0 })) {
+            KnowledgeImportView()
+        }
+        .overlay {
+            if embedded && showKnowledgeImport {
+                KnowledgeImportView(embedded: true, onClose: { showKnowledgeImport = false })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
     }
 
     // MARK: - Collapsible group
@@ -780,23 +799,32 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity)
 
-                        // Preview button — plays bundled voice sample if available
+                        // Preview button — synthesizes the voice live via OpenAI
+                        // TTS (every voice speaks the same line).
                         Button {
-                            playVoicePreview(v)
+                            voicePreview.toggle(v)
                         } label: {
-                            Image(systemName: previewingVoice == v ? "stop.fill" : "play.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(previewingVoice == v ? accent : .white.opacity(0.30))
-                                .frame(width: 26, height: 26)
-                                .background(Color.white.opacity(0.05))
-                                .clipShape(Circle())
+                            Group {
+                                if voicePreview.loadingVoice == v {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: voicePreview.playingVoice == v ? "stop.fill" : "play.fill")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundColor(voicePreview.playingVoice == v ? accent : .white.opacity(0.30))
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
 
-            Text("OpenAI Realtime API · gpt-4o-realtime-preview")
+            Text("OpenAI Realtime API · gpt-4o-realtime-preview · Tap ▶ to hear a sample")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.25))
         }
@@ -896,28 +924,6 @@ struct SettingsView: View {
                     .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.25))
             }
-        }
-    }
-
-    private func playVoicePreview(_ voice: MiraVoice) {
-        if previewingVoice == voice {
-            previewPlayer?.stop()
-            previewPlayer = nil
-            previewingVoice = nil
-            return
-        }
-        previewPlayer?.stop()
-        guard let url = Bundle.main.url(forResource: voice.previewResource, withExtension: "mp3"),
-              let player = try? AVAudioPlayer(contentsOf: url) else {
-            AudioCueService.shared.playAgentLaunch()
-            return
-        }
-        player.prepareToPlay()
-        previewPlayer = player
-        previewingVoice = voice
-        player.play()
-        DispatchQueue.main.asyncAfter(deadline: .now() + player.duration + 0.1) {
-            if self.previewingVoice == voice { self.previewingVoice = nil }
         }
     }
 
@@ -1050,6 +1056,30 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
 
+            // Tasks-left meter (autonomy quota). Server-authoritative when signed
+            // in; local estimate otherwise.
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(quota.tasksLeftText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                    Text("\(quota.planName) plan\(quota.lastWasOffline ? " · offline estimate" : "")")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+                Spacer()
+                if quota.limit >= 0 {
+                    Text("\(max(quota.remaining, 0))")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(quota.remaining <= 0 ? .orange : accent)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .task { await quota.refreshQuota() }
+
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Let Mira do it for me")
@@ -1087,6 +1117,28 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .tint(accent)
                         .labelsHidden()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Control engine")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Picker("", selection: $autonomyEngine) {
+                        Text("Codex computer-use").tag("codex")
+                        Text("Claude vision").tag("claude")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(autonomyEngine == "codex"
+                         ? "OpenAI Codex drives apps via its computer-use plugin. Codex enforces its own app safety limits."
+                         : "Claude screenshots and clicks/types via the cursor.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -1348,6 +1400,30 @@ struct SettingsView: View {
 
     @State private var connectedCount:  Int?    = nil
     @AppStorage("mira_composio_entity") private var composioEntity = "default"
+
+    private var knowledgeImportButton: some View {
+        Button(action: { showKnowledgeImport = true }) {
+            HStack {
+                Label("Import Knowledge", systemImage: "person.text.rectangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                if let sources = UserKnowledgeStore.shared.knowledge?.importedFrom, !sources.isEmpty {
+                    Text("\(sources.count) source\(sources.count == 1 ? "" : "s")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(red: 0.20, green: 0.84, blue: 0.29))
+                } else {
+                    Text("Set up")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.20))
+            }
+        }
+        .buttonStyle(.plain)
+    }
 
     private var connectedAppsButton: some View {
         VStack(alignment: .leading, spacing: 8) {

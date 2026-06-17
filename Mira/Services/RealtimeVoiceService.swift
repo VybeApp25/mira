@@ -46,7 +46,12 @@ enum MiraVoice: String, CaseIterable, Identifiable {
         }
     }
 
-    var previewResource: String { "realtime-voice-preview-\(rawValue)" }
+    /// The OpenAI TTS voice id sent to the speech endpoint (same as rawValue).
+    var ttsVoice: String { rawValue }
+
+    /// One shared line every voice speaks in the preview, so they're directly
+    /// comparable. Kept in sync with PREVIEW_PHRASE in the openai-tts-proxy.
+    static let previewPhrase = "Hi, I'm Mira, your AI companion. How can I help you today?"
 
     static var saved: MiraVoice {
         get { MiraVoice(rawValue: UserDefaults.standard.string(forKey: "mira_voice") ?? "alloy") ?? .alloy }
@@ -607,6 +612,58 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     /// so context (screen, clipboard, focused app) is always current.
     private func refreshContextInstructions() {
         emit(buildSessionUpdate(includeFullConfig: false))
+    }
+
+    // MARK: - One-off task announcement (autonomy)
+
+    /// True when there's a live, healthy realtime session that can speak a one-off
+    /// line right now — and Mira isn't already mid-response (injecting then would
+    /// collide with the active response / interrupt a conversational turn).
+    var canSpeakNow: Bool {
+        guard webSocket != nil, sessionHealthy else { return false }
+        switch state {
+        case .thinking, .speaking, .connecting: return false
+        default:                                return true
+        }
+    }
+
+    /// Speak a one-off status line through the live session in the user's selected
+    /// Mira voice (MiraVoice.saved), and silently seed `context` into the
+    /// conversation so a follow-up ("what did you do?") can be answered with the
+    /// full detail. Returns false if there's no healthy session — the caller then
+    /// falls back to local TTS. Used by TaskAnnouncer. See
+    /// project_mira_autonomy_direction.
+    @discardableResult
+    func speakAnnouncement(brief: String, context: String?) -> Bool {
+        guard canSpeakNow else { return false }
+
+        // Seed the full detail as a prior assistant turn so the model can elaborate
+        // if asked, without speaking it now.
+        if let context, !context.isEmpty {
+            emit([
+                "type": "conversation.item.create",
+                "item": [
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [[
+                        "type": "output_text",
+                        "text": "[autonomous task just completed] \(context)"
+                    ]] as [[String: Any]]
+                ] as [String: Any]
+            ])
+        }
+
+        // Speak the brief in the session voice. Per-response instructions keep it
+        // short and stop it from drifting into a full conversational turn.
+        emit([
+            "type": "response.create",
+            "response": [
+                "output_modalities": ["audio"],
+                "instructions": "Tell the user, briefly and naturally in one sentence, "
+                    + "what you just finished. Say it as: \(brief). Do not add follow-up questions."
+            ] as [String: Any]
+        ])
+        return true
     }
 
     // MARK: - Conversation continuity

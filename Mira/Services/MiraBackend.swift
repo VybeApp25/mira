@@ -70,6 +70,17 @@ enum MiraBackend {
         return true
     }
 
+    // MARK: - OpenAI (text-to-speech / voice previews)
+
+    /// Where the voice-preview TTS request goes: the proxy in proxy mode (the
+    /// client sends only the voice; the phrase + key live server-side), else
+    /// OpenAI's speech endpoint directly.
+    static var openAITTSURL: URL {
+        useProxy
+            ? URL(string: "\(functionsBase)/openai-tts-proxy")!
+            : URL(string: "https://api.openai.com/v1/audio/speech")!
+    }
+
     /// Bearer value for the realtime token-mint edge function: the user's JWT when
     /// signed in, else the anon key (keeps unauthenticated direct-mode calls working
     /// until proxy mode is on and sign-in is required).
