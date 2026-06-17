@@ -91,6 +91,7 @@
 		55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */; };
 		55224EC730920EFD365C934D /* OutputEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */; };
 		56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */; };
+		57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */; };
 		57A3C2DE8BEF627CB6B8AC54 /* EvidenceEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2898F0CED0E0D77476860AC0 /* EvidenceEvaluator.swift */; };
 		58C7FB3B6DF3539FEA5AD3C7 /* HoverHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */; };
 		597FF91BBD95F2AC09D1178B /* findmy_devices.py in Resources */ = {isa = PBXBuildFile; fileRef = 688E6384F043AE808602588A /* findmy_devices.py */; };
@@ -279,6 +280,7 @@
 		077436ECE19C7096BAC241EC /* BriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingView.swift; sourceTree = "<group>"; };
 		08509CD2EF20373C6E2B3DE4 /* CodexLiveOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLiveOverlay.swift; sourceTree = "<group>"; };
 		088180F819F6CAD079F973DB /* googledrive.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googledrive.md; sourceTree = "<group>"; };
+		08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRouter.swift; sourceTree = "<group>"; };
 		090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDWindowManager.swift; sourceTree = "<group>"; };
 		0B0C8CBB3FF39C09431B7076 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStore.swift; sourceTree = "<group>"; };
@@ -746,6 +748,7 @@
 				B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */,
 				07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */,
 				C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */,
+				08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */,
 				724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */,
 				AAC4FD2846DA1EEBA136C9D7 /* ErrorService.swift */,
 				2898F0CED0E0D77476860AC0 /* EvidenceEvaluator.swift */,
@@ -1123,6 +1126,7 @@
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
 				4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */,
+				57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,
 				9F6476CCB1151DDCBE55BCC1 /* ErrorService.swift in Sources */,
 				EC74F404278D05BF53DE5BB0 /* EventToastView.swift in Sources */,

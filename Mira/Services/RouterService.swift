@@ -986,26 +986,56 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// its own iteration cap + Stop kill-switch. Blocks until the task finishes,
     /// then returns the agent's closing summary as the chat reply.
     private func computerUseResult(prompt: String, apiKey: String) async -> RouteResult {
-        // Engine choice: Codex computer-use (default — drives the Mac via OpenAI's
-        // computer-use plugin, like HeyClicky) or the Claude vision loop.
-        let engine = UserDefaults.standard.string(forKey: "mira_autonomy_engine") ?? "codex"
-
-        if engine == "codex" {
-            // Codex path meters + announces here (the Claude path does its own).
-            let decision = await QuotaService.shared.consume(path: "codex-computer-use")
-            guard decision.allowed else {
-                return .reply("You're out of autonomous tasks this month — \(QuotaService.shared.tasksLeftText).",
-                              route: .computerUse)
-            }
-            CodexHUD.shared.show()   // live "watch Codex work" panel; stays up after to show the outcome
-            let summary = await CodexComputerUseService.shared.run(task: prompt)
-            TaskAnnouncer.shared.announce(task: prompt, success: !summary.isEmpty, detail: summary)
-            return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)
+        // Engine selection is INVISIBLE to the user: by default Mira picks Codex
+        // computer-use vs the Claude vision loop itself (EngineRouter) and fails
+        // over transparently, so they just see the task get done. "codex"/"claude"
+        // are power-user overrides; "auto" (default) lets Mira decide.
+        let mode = UserDefaults.standard.string(forKey: "mira_autonomy_engine") ?? "auto"
+        let plan: EngineRouter.Plan
+        switch mode {
+        case "codex":  plan = .forced(.codex)
+        case "claude": plan = .forced(.claude)
+        default:       plan = await EngineRouter.shared.planDesktopControl(prompt)
         }
 
-        await ComputerUseOrchestrator.shared.run(task: prompt, apiKey: apiKey)
-        let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)
+        // ONE quota consume for the whole task — a Codex→Claude failover must not
+        // double-charge the user's monthly task budget.
+        let decision = await QuotaService.shared.consume(path: "computer-use")
+        guard decision.allowed else {
+            return .reply("You're out of autonomous tasks this month — \(QuotaService.shared.tasksLeftText).",
+                          route: .computerUse)
+        }
+
+        // Run primary; on a refusal/failure (not a user Stop), silently retry on
+        // the other engine.
+        var run = await runEngine(plan.primary, task: prompt, apiKey: apiKey)
+        if !run.success, let secondary = plan.secondary {
+            NSLog("[EngineRouter] \(plan.primary.rawValue) did not complete (\(plan.reason)) — failing over to \(secondary.rawValue)")
+            let retry = await runEngine(secondary, task: prompt, apiKey: apiKey)
+            if retry.success || run.summary.isEmpty { run = retry }
+        }
+
+        // Single announcement, once the final engine has finished.
+        TaskAnnouncer.shared.announce(task: prompt, success: run.success,
+                                      detail: run.summary.isEmpty ? nil : run.summary)
+        return .reply(run.summary.isEmpty ? "Done." : run.summary, route: .computerUse)
+    }
+
+    /// Runs one engine WITHOUT consuming quota or announcing (the caller owns both,
+    /// so a failover stays a single metered task). Returns the summary + whether it
+    /// completed cleanly.
+    private func runEngine(_ engine: EngineRouter.Engine, task: String, apiKey: String) async -> (summary: String, success: Bool) {
+        switch engine {
+        case .codex:
+            CodexHUD.shared.show()   // live "watch Codex work" panel; stays up to show the outcome
+            let summary = await CodexComputerUseService.shared.run(task: task)
+            let succeeded = CodexComputerUseService.shared.lastOutcome == .succeeded
+            return (summary, succeeded)
+        case .claude:
+            let ok = await ComputerUseOrchestrator.shared.control(task: task, apiKey: apiKey)
+            let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (summary, ok)
+        }
     }
 
     /// Native calendar handling via EventKit. Extracts the event details (dates are

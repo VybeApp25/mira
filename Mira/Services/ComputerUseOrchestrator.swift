@@ -48,9 +48,18 @@ final class ComputerUseOrchestrator: ObservableObject {
         }
     }
 
+    /// Runs the Claude vision control loop WITHOUT consuming quota or announcing —
+    /// for the auto engine router (EngineRouter), which owns a single consume +
+    /// announce across a possible Codex→Claude failover. Returns whether the task
+    /// completed cleanly.
+    @discardableResult
+    func control(task: String, apiKey: String) async -> Bool {
+        await runVisionLoop(task: task, apiKey: apiKey)
+    }
+
     /// The Claude computer_use loop. Returns whether it completed cleanly. Does
-    /// NOT consume quota or announce — callers (run / perform) own that so a task
-    /// is metered + announced exactly once regardless of how it was routed.
+    /// NOT consume quota or announce — callers (run / control / perform) own that
+    /// so a task is metered + announced exactly once regardless of how it routed.
     @discardableResult
     private func runVisionLoop(task: String, apiKey: String) async -> Bool {
         isRunning     = true

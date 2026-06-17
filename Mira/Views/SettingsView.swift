@@ -36,7 +36,7 @@ struct SettingsView: View {
     @AppStorage("mira_guide_cursor")       private var guideCursorEnabled = false
     @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
     @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
-    @AppStorage("mira_autonomy_engine") private var autonomyEngine = "codex"
+    @AppStorage("mira_autonomy_engine") private var autonomyEngine = "auto"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
@@ -1128,14 +1128,19 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.80))
                     Picker("", selection: $autonomyEngine) {
-                        Text("Codex computer-use").tag("codex")
-                        Text("Claude vision").tag("claude")
+                        Text("Auto").tag("auto")
+                        Text("Codex").tag("codex")
+                        Text("Claude").tag("claude")
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    Text(autonomyEngine == "codex"
-                         ? "OpenAI Codex drives apps via its computer-use plugin. Codex enforces its own app safety limits."
-                         : "Claude screenshots and clicks/types via the cursor.")
+                    Text({
+                        switch autonomyEngine {
+                        case "codex":  return "Always use OpenAI Codex's computer-use plugin. It enforces its own app safety limits."
+                        case "claude": return "Always use Claude vision — screenshots and clicks/types via the cursor."
+                        default:       return "Mira picks the best engine for each task and retries on the other if one can't finish. Recommended."
+                        }
+                    }())
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)

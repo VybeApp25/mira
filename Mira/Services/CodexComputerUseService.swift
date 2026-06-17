@@ -29,9 +29,15 @@ final class CodexComputerUseService: ObservableObject {
         enum Kind { case thinking, tool, toolResult, message, system, refusal }
     }
 
+    /// How the last run ended — lets the auto engine router decide whether to
+    /// transparently fail over to the Claude engine. `.stopped` (user hit Stop)
+    /// and `.succeeded` must NOT trigger failover.
+    enum Outcome { case idle, succeeded, refused, failed, stopped }
+
     @Published private(set) var isRunning = false
     @Published private(set) var steps: [Step] = []
     @Published private(set) var result = ""
+    @Published private(set) var lastOutcome: Outcome = .idle
 
     private var process: Process?
     private var stopRequested = false
@@ -46,6 +52,7 @@ final class CodexComputerUseService: ObservableObject {
         stopRequested = false
         steps = []
         result = ""
+        lastOutcome = .idle
         CodexLiveOverlay.shared.begin()   // live on-screen ring/arrow layer
         append(.system, "Starting Codex computer-use…")
 
@@ -232,6 +239,17 @@ final class CodexComputerUseService: ObservableObject {
         isRunning = false
         process = nil
         CodexLiveOverlay.shared.end()   // fade out the live drawing layer
+        // Classify the outcome BEFORE the "Done." fallback, so the router can tell
+        // a real result from an empty one.
+        if stopRequested {
+            lastOutcome = .stopped
+        } else if steps.contains(where: { $0.kind == .refusal }) || isRefusal(result) {
+            lastOutcome = .refused
+        } else if result.isEmpty {
+            lastOutcome = .failed
+        } else {
+            lastOutcome = .succeeded
+        }
         if result.isEmpty { result = "Done." }
     }
 }
