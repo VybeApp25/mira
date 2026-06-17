@@ -79,6 +79,24 @@ class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
+        #if DEBUG
+        let axProbe = NSMenuItem(title: "Run AX Background Actuation Probe",
+                                 action: #selector(runAXActuationProbe), keyEquivalent: "")
+        axProbe.target = self
+        menu.addItem(axProbe)
+
+        let bgTask = NSMenuItem(title: "Run Background Task (notify + speak)",
+                                action: #selector(runBackgroundTaskDemo), keyEquivalent: "")
+        bgTask.target = self
+        menu.addItem(bgTask)
+
+        let routed = NSMenuItem(title: "Run Routed Task (router + announce)",
+                                action: #selector(runRoutedTaskDemo), keyEquivalent: "")
+        routed.target = self
+        menu.addItem(routed)
+        menu.addItem(.separator())
+        #endif
+
         let quit = NSMenuItem(title: "Quit Mira", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
 
@@ -113,6 +131,54 @@ class StatusBarController: NSObject {
     }
 
     @objc private func openPanel() { togglePopover() }
+
+    #if DEBUG
+    /// DEBUG-only: proves AX background actuation against a real app (default
+    /// TextEdit) with zero cursor movement. Open TextEdit with a document, switch
+    /// to ANY other app, then run this — the marker text should appear in the
+    /// TextEdit document while the pointer never moves and TextEdit never comes
+    /// forward. See AXActuationService.runBackgroundActuationProbe.
+    @objc private func runAXActuationProbe() {
+        let result = AXActuationService.shared.runBackgroundActuationProbe()
+        let alert = NSAlert()
+        alert.messageText = "AX Background Actuation Probe"
+        alert.informativeText = result
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    /// DEBUG-only: the full autonomous UX in miniature — runs a real actuation
+    /// SILENTLY in the background (writes into TextEdit, no cursor, no focus
+    /// steal), then Mira posts a notification AND speaks "Done." Open TextEdit
+    /// with a document, switch to another app, then run this: the note appears,
+    /// the cursor never moves, a notification arrives, and Mira says it's done.
+    @objc private func runBackgroundTaskDemo() {
+        Task { @MainActor in
+            TaskAnnouncer.shared.run(task: "write a note in TextEdit") {
+                _ = try AXActuationService.shared.setTextValue(
+                    "Mira did this in the background ✅",
+                    inBundleID: "com.apple.TextEdit")
+            }
+        }
+    }
+
+    /// DEBUG-only: drives a task through the full integrated front door —
+    /// ComputerUseOrchestrator.perform routes via ActuationRouter (AX background
+    /// vs cursor vs vision), counts the run in TaskRunLedger, and announces
+    /// (notify + speak). Open TextEdit, switch away, then run this.
+    @objc private func runRoutedTaskDemo() {
+        Task { @MainActor in
+            await ComputerUseOrchestrator.shared.perform(
+                .setText("Routed by Mira ✅", field: nil),
+                on: "com.apple.TextEdit",
+                taskDescription: "write a note in TextEdit",
+                apiKey: "")   // unused for AX tiers; only vision fallback needs it
+            #if DEBUG
+            print("[ledger] runs this month: \(TaskRunLedger.shared.runsThisMonth)")
+            #endif
+        }
+    }
+    #endif
 
     private func togglePopover() {
         guard let btn = statusItem.button else { return }

@@ -738,8 +738,13 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     private func matchesComputerUse(_ lower: String) -> Bool {
         ["click on", "type into", "type in the", "open the app", "drive the app",
          "automate this", "fill out the form", "use my mouse", "use computer use",
-         "control my mac", "operate the", "screenshot my desktop",
-         "click the button", "click submit", "scroll down in"].contains { lower.contains($0) }
+         "control my mac", "control my computer", "operate the", "screenshot my desktop",
+         "click the button", "click submit", "scroll down in",
+         // Explicit "drive my Mac for me" autonomy phrasing — signals desktop
+         // control, not a specific app integration, so it's safe to route here
+         // ahead of calendar/notes.
+         "do it for me", "do this for me", "do that for me", "take over", "you do it"]
+            .contains { lower.contains($0) }
     }
 
     private func matchesObsidian(_ lower: String) -> Bool {
@@ -981,6 +986,23 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// its own iteration cap + Stop kill-switch. Blocks until the task finishes,
     /// then returns the agent's closing summary as the chat reply.
     private func computerUseResult(prompt: String, apiKey: String) async -> RouteResult {
+        // Engine choice: Codex computer-use (default — drives the Mac via OpenAI's
+        // computer-use plugin, like HeyClicky) or the Claude vision loop.
+        let engine = UserDefaults.standard.string(forKey: "mira_autonomy_engine") ?? "codex"
+
+        if engine == "codex" {
+            // Codex path meters + announces here (the Claude path does its own).
+            let decision = await QuotaService.shared.consume(path: "codex-computer-use")
+            guard decision.allowed else {
+                return .reply("You're out of autonomous tasks this month — \(QuotaService.shared.tasksLeftText).",
+                              route: .computerUse)
+            }
+            CodexHUD.shared.show()   // live "watch Codex work" panel; stays up after to show the outcome
+            let summary = await CodexComputerUseService.shared.run(task: prompt)
+            TaskAnnouncer.shared.announce(task: prompt, success: !summary.isEmpty, detail: summary)
+            return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)
+        }
+
         await ComputerUseOrchestrator.shared.run(task: prompt, apiKey: apiKey)
         let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
         return .reply(summary.isEmpty ? "Done." : summary, route: .computerUse)

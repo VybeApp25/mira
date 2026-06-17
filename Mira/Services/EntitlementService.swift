@@ -23,6 +23,18 @@ enum SubscriptionPlan: String, Codable, Equatable {
         case .ultra: return 5
         }
     }
+
+    /// Monthly autonomous-task-run quota (the autonomy meter unit). Mirrors the
+    /// server-side `monthly_task_quota()` SQL — the SERVER is authoritative; this
+    /// is only for the offline fallback and "tasks left" display. -1 = uncapped.
+    /// See project_mira_autonomy_direction.
+    var monthlyTaskRunQuota: Int {
+        switch self {
+        case .free:  return 5
+        case .pro:   return 100
+        case .ultra: return 500
+        }
+    }
 }
 
 // MARK: - Entitlements

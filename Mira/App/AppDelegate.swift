@@ -1,5 +1,6 @@
 import Cocoa
 import SwiftUI
+import ApplicationServices
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchManager:        NotchManager?
@@ -63,6 +64,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBarController = StatusBarController(miraState: manager.miraState)
+
+        #if DEBUG
+        // Launch-time self-test for the autonomy pipeline (router → ledger →
+        // announce), gated by MIRA_SELFTEST=1 so it only runs when asked. Prints
+        // runtime evidence to stdout: AX trust, route taken, ledger count.
+        if ProcessInfo.processInfo.environment["MIRA_SELFTEST"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                Task { @MainActor in
+                    NSLog("[selftest] AXIsProcessTrusted = \(AXIsProcessTrusted())")
+                    let before = TaskRunLedger.shared.runsThisMonth
+                    let outcome = ActuationRouter.shared.perform(
+                        .setText("Mira self-test ✅", field: nil),
+                        on: "com.apple.TextEdit")
+                    NSLog("[selftest] router outcome: \(outcome.summary)")
+                    await ComputerUseOrchestrator.shared.perform(
+                        .setText("Mira self-test via orchestrator ✅", field: nil),
+                        on: "com.apple.TextEdit",
+                        taskDescription: "self-test note in TextEdit",
+                        apiKey: "")
+                    NSLog("[selftest] ledger runsThisMonth: \(before) -> \(TaskRunLedger.shared.runsThisMonth)")
+                    NSLog("[selftest] DONE — notification should have posted + voice spoken")
+                }
+            }
+        }
+        #endif
 
         // Show onboarding on first launch, after the island is ready
         if OnboardingService.shared.isFirstLaunch {

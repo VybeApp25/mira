@@ -25,14 +25,40 @@ final class ComputerUseOrchestrator: ObservableObject {
     private var stopRequested = false
     private var apiURL: URL { MiraBackend.anthropicMessagesURL }
 
+    /// Max Claude tool-use steps per task — the per-task cost ceiling.
+    private let perTaskStepCeiling = 40
+
     // MARK: - Public
 
     func run(task: String, apiKey: String) async {
+        // Server-authoritative monthly quota (QuotaService → Supabase, with a
+        // local offline fallback). consume() records the run up front and tells
+        // us whether it's allowed; deny → announce, don't silently no-op.
+        let decision = await QuotaService.shared.consume(path: "vision")
+        guard decision.allowed else {
+            result = "Monthly task limit reached."
+            TaskAnnouncer.shared.announce(task: task, success: false,
+                                          detail: QuotaService.shared.tasksLeftText)
+            return
+        }
+        let ok = await runVisionLoop(task: task, apiKey: apiKey)
+        if !stopRequested {
+            TaskAnnouncer.shared.announce(task: task, success: ok,
+                                          detail: result.isEmpty ? nil : result)
+        }
+    }
+
+    /// The Claude computer_use loop. Returns whether it completed cleanly. Does
+    /// NOT consume quota or announce — callers (run / perform) own that so a task
+    /// is metered + announced exactly once regardless of how it was routed.
+    @discardableResult
+    private func runVisionLoop(task: String, apiKey: String) async -> Bool {
         isRunning     = true
         stopRequested = false
         steps         = []
         result        = ""
         latestScreenshot = nil
+        var taskSucceeded = false
 
         let cua = ComputerUseService.shared
         let w   = cua.displayWidth
@@ -49,9 +75,12 @@ final class ComputerUseOrchestrator: ObservableObject {
             ["role": "user", "content": [["type": "text", "text": task]]]
         ]
 
-        var safetyLimit = 40   // max iterations to prevent runaway loops
-        while !stopRequested, safetyLimit > 0 {
-            safetyLimit -= 1
+        // Per-task cost ceiling: caps a single task's steps so one runaway task
+        // can't burn the whole monthly budget (the cost-side guard that pairs
+        // with the task-count quota). See project_mira_autonomy_direction.
+        var stepsLeft = perTaskStepCeiling
+        while !stopRequested, stepsLeft > 0 {
+            stepsLeft -= 1
             guard let response = await sendRequest(messages: messages, apiKey: apiKey, system: systemPrompt, width: w, height: h) else {
                 result = "API request failed."
                 break
@@ -68,6 +97,7 @@ final class ComputerUseOrchestrator: ObservableObject {
 
             if toolUses.isEmpty || stopReason == "end_turn" {
                 result = turnText
+                taskSucceeded = true
                 break
             }
 
@@ -91,9 +121,49 @@ final class ComputerUseOrchestrator: ObservableObject {
         }
 
         isRunning = false
+        return taskSucceeded
     }
 
     func stop() { stopRequested = true }
+
+    // MARK: - Structured autonomous entry (router-first)
+
+    /// The front door for a structured autonomous action. Routes through the
+    /// deterministic ActuationRouter tiers first (AX background → AX-located
+    /// cursor); only when the router reports `.needsVision` (AX-invisible app)
+    /// does it fall into the Claude vision loop above. Counts the run and
+    /// announces on completion — exactly once, regardless of which tier ran it.
+    func perform(_ action: ActuationRouter.Action,
+                 on bundleID: String,
+                 taskDescription: String? = nil,
+                 apiKey: String) async {
+        let desc = taskDescription ?? action.phrasing
+
+        // One quota consume for the whole task, up front (records + gates).
+        let decision = await QuotaService.shared.consume(path: "routed")
+        guard decision.allowed else {
+            TaskAnnouncer.shared.announce(task: desc, success: false,
+                                          detail: QuotaService.shared.tasksLeftText)
+            return
+        }
+
+        let outcome = ActuationRouter.shared.perform(action, on: bundleID)
+
+        // Tier 3: AX-invisible app → Claude vision loop. No second consume (this
+        // task is already metered); runVisionLoop just executes + we announce.
+        if outcome.path == .needsVision {
+            let ok = await runVisionLoop(task: desc, apiKey: apiKey)
+            if !stopRequested {
+                TaskAnnouncer.shared.announce(task: desc, success: ok,
+                                              detail: result.isEmpty ? nil : result)
+            }
+            return
+        }
+
+        // Tiers 1–2 executed deterministically: announce here.
+        TaskAnnouncer.shared.announce(task: desc, success: outcome.success,
+                                      detail: outcome.summary)
+    }
 
     // Analyze a single captured screenshot region (Handoff mode — no action loop).
     func analyzeHandoff(image: NSImage, prompt: String, apiKey: String) async {
