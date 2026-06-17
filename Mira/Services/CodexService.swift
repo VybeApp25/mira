@@ -66,9 +66,13 @@ final class CodexService {
         let chosenModel = model ?? UserDefaults.standard.string(forKey: "mira_codex_model")
         let modelFlag = (chosenModel?.isEmpty == false) ? " -m \(chosenModel!.shellEscaped)" : ""
 
+        // Tier-based reasoning effort (cost/speed/quality lever).
+        let effort = EntitlementService.shared.plan.codexReasoningEffort
+        let effortFlag = " -c model_reasoning_effort=\(effort)"
+
         let escapedPrompt = prompt.replacingOccurrences(of: "'", with: "'\\''")
         let cmd = "cd \(wd.shellEscaped) && \(bin.shellEscaped) exec '\(escapedPrompt)'"
-            + " --full-auto\(modelFlag) -o \(lastMsgPath.shellEscaped) 2>&1"
+            + " --full-auto\(modelFlag)\(effortFlag) -o \(lastMsgPath.shellEscaped) 2>&1"
 
         let run = await runProcess(cmd, timeout: timeout)
 

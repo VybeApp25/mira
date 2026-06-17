@@ -58,9 +58,11 @@ final class CodexComputerUseService: ObservableObject {
 
         // Run through a login shell so the nvm-installed `codex` is on PATH.
         // --json streams events; --skip-git-repo-check because desktop control
-        // isn't a coding task and needs no repo.
+        // isn't a coding task and needs no repo. Reasoning effort scales with the
+        // user's tier — the main cost lever on this (token-heavy) path.
+        let effort = EntitlementService.shared.plan.codexReasoningEffort
         let escaped = task.replacingOccurrences(of: "'", with: "'\\''")
-        let command = "codex exec '\(escaped)' --json --skip-git-repo-check"
+        let command = "codex exec '\(escaped)' --json --skip-git-repo-check -c model_reasoning_effort=\(effort)"
 
         let proc = Process()
         proc.launchPath = "/bin/zsh"

@@ -35,6 +35,18 @@ enum SubscriptionPlan: String, Codable, Equatable {
         case .ultra: return 500
         }
     }
+
+    /// Codex `model_reasoning_effort` by tier — the cross-model cost/speed/quality
+    /// lever (safe under ChatGPT auth, where specific model names aren't known).
+    /// Free trades depth for speed + lower spend; Ultra gets maximum quality.
+    /// Applied to both the coding and computer-use Codex paths.
+    var codexReasoningEffort: String {
+        switch self {
+        case .free:  return "low"
+        case .pro:   return "medium"
+        case .ultra: return "high"
+        }
+    }
 }
 
 // MARK: - Entitlements
