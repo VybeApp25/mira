@@ -42,6 +42,12 @@ final class CodexComputerUseService: ObservableObject {
     private var process: Process?
     private var stopRequested = false
 
+    // Tool-call tallies for outcome classification: if Codex attempted actions
+    // but none succeeded, the task didn't actually happen — even if it ends with
+    // a polite "I couldn't…" message (which would otherwise look like success).
+    private var toolSuccesses = 0
+    private var toolFailures  = 0
+
     /// Run a desktop-control task through Codex computer-use. Streams steps as it
     /// goes; returns the agent's final message. Blocks until the task finishes or
     /// stop() is called.
@@ -53,6 +59,8 @@ final class CodexComputerUseService: ObservableObject {
         steps = []
         result = ""
         lastOutcome = .idle
+        toolSuccesses = 0
+        toolFailures  = 0
         CodexLiveOverlay.shared.begin()   // live on-screen ring/arrow layer
         append(.system, "Starting Codex computer-use…")
 
@@ -121,6 +129,7 @@ final class CodexComputerUseService: ObservableObject {
                 let status = item["status"] as? String ?? ""
                 if done {
                     let failed = status == "failed"
+                    if failed { toolFailures += 1 } else { toolSuccesses += 1 }
                     let detail = failed ? toolResultText(item) : ""
                     if failed, isRefusal(detail) {
                         // Codex's OWN app-safety guardrail blocked this app — surface
@@ -242,16 +251,37 @@ final class CodexComputerUseService: ObservableObject {
         process = nil
         CodexLiveOverlay.shared.end()   // fade out the live drawing layer
         // Classify the outcome BEFORE the "Done." fallback, so the router can tell
-        // a real result from an empty one.
+        // a real result from an empty/soft-failed one and fail over accordingly.
         if stopRequested {
             lastOutcome = .stopped
         } else if steps.contains(where: { $0.kind == .refusal }) || isRefusal(result) {
             lastOutcome = .refused
         } else if result.isEmpty {
             lastOutcome = .failed
+        } else if toolFailures > 0 && toolSuccesses == 0 {
+            // Attempted actions, none landed → the task didn't actually happen,
+            // even if it ended with a polite explanation. Fail over.
+            lastOutcome = .failed
+        } else if indicatesIncomplete(result) {
+            // A "couldn't / denied / you'll need to…" sign-off is a soft failure,
+            // not success — let the router try the other engine.
+            lastOutcome = .failed
         } else {
             lastOutcome = .succeeded
         }
         if result.isEmpty { result = "Done." }
+    }
+
+    /// Final-message language that admits the task wasn't completed. Conservative —
+    /// a false positive only costs a failover attempt on the other engine (which
+    /// is single-metered), and Tre's priority is "get it done".
+    private func indicatesIncomplete(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        let t = text.lowercased()
+        return ["couldn't", "could not", "cannot ", "can't ", "unable to",
+                "wasn't able", "was not able", "approval denied", "denied",
+                "you'll need to", "you will need to", "please approve",
+                "failed to", "didn't work", "was unable"]
+            .contains { t.contains($0) }
     }
 }
