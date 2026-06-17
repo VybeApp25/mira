@@ -68,7 +68,19 @@ private struct SharpieStroke: View {
         case .arrow(let from): return arrowPath(from: from)
         case .underline:      return underlinePath()
         case .bracket:        return bracketPath()
+        case .polygon(let pts): return polygonPath(pts)
         }
+    }
+
+    // Closed polygon traced through the given points (region tracing, à la
+    // HeyClicky). No-op for fewer than 2 points.
+    private func polygonPath(_ pts: [CGPoint]) -> Path {
+        var path = Path()
+        guard let first = pts.first, pts.count >= 2 else { return path }
+        path.move(to: first)
+        for p in pts.dropFirst() { path.addLine(to: p) }
+        path.closeSubpath()
+        return path
     }
 
     // Ellipse drawn slightly outside the target rect, starting from top-center

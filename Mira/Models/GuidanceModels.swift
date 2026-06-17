@@ -22,6 +22,7 @@ enum SharpieStyle {
     case arrow(from: CGPoint)   // draws an arrow from a point to the target center
     case underline              // draws a wobbly line under the target
     case bracket                // draws [ ] around the target
+    case polygon([CGPoint])     // traces a closed polygon through the given points
 }
 
 enum SharpieColor {
