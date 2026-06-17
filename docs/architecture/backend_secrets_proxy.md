@@ -22,6 +22,7 @@ The edge function receives the **same body** the client used to send to the prov
 - Client change is minimal: swap the base URL, drop the `x-api-key`/`Authorization: Bearer <provider key>` header, add `Authorization: Bearer <supabase JWT>`. **Request bodies are untouched** (the proxy is transparent), so tool-use, streaming, vision, etc. work as-is.
 - `anthropic-proxy`: forwards to `api.anthropic.com/v1/messages`; passes `stream:true` SSE straight through. Enforces a **model allowlist** + per-plan `max_tokens` cap. Meters `usage.input_tokens`/`output_tokens` from the response into the `usage` table.
 - `openai-proxy`, `assemblyai-proxy` (batch), `miso-tts-proxy`: same shape.
+- `openai-tts-proxy` (deployed): forwards to `api.openai.com/v1/audio/speech` (`gpt-4o-mini-tts`) for the in-app voice previews. Unlike the transparent proxies, the **phrase + model are fixed server-side** and the client sends only `{voice}` (allowlisted) — so every voice speaks the same line and the endpoint can't be used as a general TTS sink. Shares the `OPENAI_API_KEY` secret with `openai-proxy`. See `Mira/Services/VoicePreviewService.swift`.
 
 ## Pattern B — Ephemeral token (OpenAI Realtime, AssemblyAI streaming)
 You can't cheaply proxy a realtime audio socket; mint a short-lived token and let the client connect directly (the provider-blessed pattern).

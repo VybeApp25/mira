@@ -30,6 +30,16 @@ final class VoicePreviewService: NSObject, ObservableObject {
         return base
     }
 
+    /// Cache file for a voice, versioned by the phrase. If the preview line ever
+    /// changes, the filename changes too, so a stale clip can never silently play.
+    /// Uses a deterministic hash (Swift's String.hashValue is randomized per run).
+    private func cacheURL(for voice: MiraVoice) -> URL {
+        var h: UInt64 = 5381
+        for byte in MiraVoice.previewPhrase.utf8 { h = (h &* 33) &+ UInt64(byte) }
+        let tag = String(h, radix: 36)
+        return cacheDir.appendingPathComponent("\(voice.rawValue)-\(tag).mp3")
+    }
+
     /// Tap handler: stops if this voice is already playing/loading, else fetches
     /// (or replays from cache) and plays it.
     func toggle(_ voice: MiraVoice) {
@@ -40,7 +50,7 @@ final class VoicePreviewService: NSObject, ObservableObject {
         stop()
 
         // Cached clip → play immediately.
-        let cached = cacheDir.appendingPathComponent("\(voice.rawValue).mp3")
+        let cached = cacheURL(for: voice)
         if FileManager.default.fileExists(atPath: cached.path) {
             play(cached, voice: voice)
             return
