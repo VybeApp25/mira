@@ -70,11 +70,22 @@ final class CodexComputerUseService: ObservableObject {
         // user's tier — the main cost lever on this (token-heavy) path.
         let effort = EntitlementService.shared.plan.codexReasoningEffort
         let escaped = task.replacingOccurrences(of: "'", with: "'\\''")
-        let command = "codex exec '\(escaped)' --json --skip-git-repo-check -c model_reasoning_effort=\(effort)"
+        // Codex gates MCP/computer-use tool calls behind its own approval+sandbox; in
+        // non-interactive `exec` only the full bypass lets them through (verified
+        // 2026-06-17). Mira owns safety via its own gates (RouterService danger-confirm
+        // + MiraMCPServer's dangerous-tool prompt), so default to bypassing Codex's.
+        // Kill switch: mira_codex_bypass_sandbox.
+        let bypass = (UserDefaults.standard.object(forKey: "mira_codex_bypass_sandbox") as? Bool ?? true)
+            ? " --dangerously-bypass-approvals-and-sandbox" : ""
+        let command = "codex exec '\(escaped)' --json --skip-git-repo-check\(bypass) -c model_reasoning_effort=\(effort)"
 
         let proc = Process()
         proc.launchPath = "/bin/zsh"
         proc.arguments  = ["-lc", command]
+        // Bidirectional MCP: let Codex authenticate back into Mira's MCP server.
+        var env = ProcessInfo.processInfo.environment
+        env[CodexBridgeConfig.tokenEnvVar] = MiraMCPServer.shared.token
+        proc.environment = env
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError  = pipe

@@ -63,6 +63,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PointFollowUpService.shared.start()
         }
 
+        // Bidirectional MCP: stand up Mira's MCP server so Codex can call back into
+        // Mira's tools. Only relevant when autonomous control is enabled (the only path
+        // that spawns Codex). The server reconciles ~/.codex/config.toml once it binds.
+        if UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") {
+            MiraMCPServer.shared.start()
+        }
+
         statusBarController = StatusBarController(miraState: manager.miraState)
 
         #if DEBUG

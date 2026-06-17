@@ -1095,6 +1095,12 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .tint(accent)
                     .labelsHidden()
+                    .onChange(of: autonomousEnabled) { _, enabled in
+                        // Bring Mira's MCP server up/down with autonomy so Codex can
+                        // (or can't) call back into Mira's tools.
+                        if enabled { MiraMCPServer.shared.start() }
+                        else { MiraMCPServer.shared.stop() }
+                    }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

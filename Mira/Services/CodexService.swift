@@ -70,9 +70,16 @@ final class CodexService {
         let effort = EntitlementService.shared.plan.codexReasoningEffort
         let effortFlag = " -c model_reasoning_effort=\(effort)"
 
+        // Bypass Codex's own approval+sandbox so it can use MCP tools (incl. Mira's own
+        // via the bidirectional bridge); only the full bypass clears MCP elicitation in
+        // non-interactive exec (verified 2026-06-17). Mira owns safety via its own gates.
+        // Kill switch mira_codex_bypass_sandbox falls back to the prior --full-auto.
+        let autoFlag = (UserDefaults.standard.object(forKey: "mira_codex_bypass_sandbox") as? Bool ?? true)
+            ? " --dangerously-bypass-approvals-and-sandbox" : " --full-auto"
+
         let escapedPrompt = prompt.replacingOccurrences(of: "'", with: "'\\''")
         let cmd = "cd \(wd.shellEscaped) && \(bin.shellEscaped) exec '\(escapedPrompt)'"
-            + " --full-auto\(modelFlag)\(effortFlag) -o \(lastMsgPath.shellEscaped) 2>&1"
+            + "\(autoFlag)\(modelFlag)\(effortFlag) -o \(lastMsgPath.shellEscaped) 2>&1"
 
         let run = await runProcess(cmd, timeout: timeout)
 
@@ -103,6 +110,10 @@ final class CodexService {
         let proc = Process()
         proc.launchPath = "/bin/zsh"
         proc.arguments  = ["-lc", command]
+        // Bidirectional MCP: let Codex authenticate back into Mira's MCP server.
+        var env = ProcessInfo.processInfo.environment
+        env[CodexBridgeConfig.tokenEnvVar] = MiraMCPServer.shared.token
+        proc.environment = env
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError  = pipe
