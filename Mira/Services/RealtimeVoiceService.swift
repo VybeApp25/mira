@@ -989,8 +989,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             return "\(action) music…"
         case "control_spotify":
             let action = args["action"] as? String ?? ""
-            if action == "play_song", let song = args["song"] as? String {
-                return "Playing \"\(song)\" on Spotify…"
+            if action == "play_song" {
+                let song   = (args["song"]   as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let track  = (args["track"]  as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let artist = (args["artist"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let label  = !song.isEmpty ? song
+                           : [track, artist].filter { !$0.isEmpty }.joined(separator: " by ")
+                if !label.isEmpty { return "Playing \"\(label)\" on Spotify…" }
             }
             return "\(action.capitalized.isEmpty ? "Controlling" : action.capitalized) Spotify…"
         case "search_web":
@@ -1041,23 +1046,40 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     // Pause Spotify and Music during mic capture so they don't bleed into the recording.
-    // Resume is best-effort — if the user manually stopped the music we leave it stopped.
-    private var musicWasPaused = false
+    // Resume is best-effort — only apps that were ACTUALLY playing when we paused are
+    // resumed. Tracking which apps we paused (instead of a single bool) is what keeps
+    // toggling voice from spuriously *starting* music that was stopped/paused: the old
+    // code set its flag whenever the AppleScript merely ran (the result descriptor is
+    // non-nil even when nothing was playing), so exiting voice sent `play` unconditionally.
+    private var pausedMusicApps: [String] = []
 
     private func pauseMusicPlayers() {
-        musicWasPaused = false
+        pausedMusicApps = []
         for app in ["Spotify", "Music"] {
-            let src = "tell application \"\(app)\" to if it is running then if player state is playing then pause"
-            if NSAppleScript(source: src)?.executeAndReturnError(nil) != nil {
-                musicWasPaused = true
+            // Returns "paused" ONLY when the app was running and actively playing.
+            let src = """
+            tell application "\(app)"
+                if it is running then
+                    if player state is playing then
+                        pause
+                        return "paused"
+                    end if
+                end if
+            end tell
+            return "no"
+            """
+            var err: NSDictionary?
+            let result = NSAppleScript(source: src)?.executeAndReturnError(&err)
+            if err == nil, result?.stringValue == "paused" {
+                pausedMusicApps.append(app)
             }
         }
     }
 
     private func resumeMusicPlayers() {
-        guard musicWasPaused else { return }
-        musicWasPaused = false
-        for app in ["Spotify", "Music"] {
+        let apps = pausedMusicApps
+        pausedMusicApps = []
+        for app in apps {
             let src = "tell application \"\(app)\" to if it is running then play"
             NSAppleScript(source: src)?.executeAndReturnError(nil)
         }

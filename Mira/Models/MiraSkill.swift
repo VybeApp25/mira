@@ -457,10 +457,11 @@ enum MiraSkillCatalog {
             context: """
                 Skill active: Spotify.
                 Use control_spotify(action:...) for all playback control.
-                Actions: "play", "pause", "next", "previous", "get_state", "play_song" (requires song: parameter).
-                When user says "play X": call open_application("Spotify") then control_spotify(action:"play_song", song:"X").
-                When user says "what's playing": call control_spotify(action:"get_state").
-                For volume: control_spotify(action:"set_volume", volume:50).
+                Actions: "play", "pause", "toggle", "next", "previous", "play_song", "quit".
+                When user says "play X" or "play X on Spotify": call control_spotify(action:"play_song", ...). \
+                If the user names both a song and an artist, pass them as track: and artist: \
+                (order in their phrasing doesn't matter); otherwise pass the whole phrase as song:. \
+                It starts playback immediately — no need to call play afterward.
                 Prefer the structured control_spotify tool over AppleScript for Spotify. \
                 Playback-mutating actions require Spotify Premium.
                 """

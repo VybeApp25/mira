@@ -113,4 +113,10 @@ enum MiraBackend {
 
     /// Edge function that mints a short-lived AssemblyAI streaming token.
     static var assemblyAITokenURL: URL { URL(string: "\(functionsBase)/mint-assemblyai-token")! }
+
+    // MARK: - Spotify
+
+    /// Edge function that resolves a track/artist query to a playable Spotify URI
+    /// via the Web API (Client Credentials). Keeps the Spotify client secret server-side.
+    static var spotifySearchURL: URL { URL(string: "\(functionsBase)/spotify-search")! }
 }

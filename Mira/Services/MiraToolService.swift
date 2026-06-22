@@ -206,10 +206,13 @@ enum MiraToolService {
             "description": """
                 Control Spotify or play a specific song. \
                 action "quit": quits/closes Spotify entirely — use when the user says "close Spotify", "quit Spotify", "exit Spotify". \
-                action "play_song": searches Spotify for the song and plays the top result — \
-                use this when the user asks to play a specific song or artist on Spotify. \
+                action "play_song": finds the song and starts playing it immediately. \
+                Use this whenever the user asks to play a specific song, artist, or "play X on Spotify". \
+                When the user names both a track and an artist, pass them in the separate \
+                "track" and "artist" fields for a precise match — word order in the user's \
+                request does not matter. Otherwise put the whole phrase in "song". \
                 action "play"/"pause"/"toggle"/"next"/"previous": basic playback control. \
-                Requires Spotify to be installed. Keyboard automation requires Accessibility permission.
+                Requires Spotify to be installed.
                 """,
             "parameters": [
                 "type": "object",
@@ -221,7 +224,15 @@ enum MiraToolService {
                     ],
                     "song": [
                         "type": "string",
-                        "description": "Song + artist for play_song, e.g. 'Blinding Lights The Weeknd'"
+                        "description": "Free-text query for play_song when track/artist aren't clearly separable, e.g. 'Blinding Lights The Weeknd'"
+                    ],
+                    "track": [
+                        "type": "string",
+                        "description": "Song/track title for play_song, when known separately, e.g. 'Blinding Lights'"
+                    ],
+                    "artist": [
+                        "type": "string",
+                        "description": "Artist name for play_song, when known separately, e.g. 'The Weeknd'"
                     ]
                 ],
                 "required": ["action"]
@@ -622,7 +633,7 @@ enum MiraToolService {
         case "get_calendar_events": return await calendarEvents(args)
         case "create_calendar_event": return await createCalendarEvent(args)
         case "control_music":       return musicControl(args)
-        case "control_spotify":     return controlSpotify(args)
+        case "control_spotify":     return await controlSpotify(args)
         case "search_web":          return searchWeb(args)
         case "run_shortcut":        return runShortcut(args)
         case "run_apple_script":    return runAppleScript(args)
@@ -958,7 +969,7 @@ enum MiraToolService {
 
     // MARK: - control_spotify
 
-    private static func controlSpotify(_ args: [String: Any]) -> String {
+    private static func controlSpotify(_ args: [String: Any]) async -> String {
         guard let action = args["action"] as? String else { return "Missing action." }
 
         switch action {
@@ -970,12 +981,38 @@ enum MiraToolService {
         case "quit":     return spotifyAppleScript("quit")
 
         case "play_song":
-            guard let song = args["song"] as? String, !song.isEmpty else { return "Missing song." }
-            let safe = song
+            // Accept either a combined "song" string or separate track/artist — the
+            // model may split them, and order doesn't matter (the Web API search
+            // resolves "track:X artist:Y" regardless of how the user phrased it).
+            let song   = (args["song"]   as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let track  = (args["track"]  as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let artist = (args["artist"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let label  = !song.isEmpty ? song
+                       : [track, artist].filter { !$0.isEmpty }.joined(separator: " — ")
+            if song.isEmpty && track.isEmpty && artist.isEmpty { return "Missing song." }
+
+            // Preferred path: resolve to a precise track URI via the backend Spotify
+            // Web API proxy, then play it directly — instant, reliable, no UI focus games.
+            if let uri = await resolveSpotifyURI(query: song, track: track, artist: artist) {
+                let safeURI = uri.replacingOccurrences(of: "\"", with: "")
+                let script = """
+                    tell application "Spotify"
+                        activate
+                        play track "\(safeURI)"
+                    end tell
+                    """
+                var err: NSDictionary?
+                NSAppleScript(source: script)?.executeAndReturnError(&err)
+                if err == nil { return "Playing '\(label)' on Spotify." }
+                // If the local Spotify app rejected the URI, fall through to keyboard search.
+            }
+
+            // Fallback: keyboard automation (used when the proxy is unreachable or the
+            // user isn't signed in). Requires Accessibility permission.
+            let query = !song.isEmpty ? song : [track, artist].filter { !$0.isEmpty }.joined(separator: " ")
+            let safe  = query
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
-            // Keyboard automation via System Events — searches Spotify and plays the top result.
-            // Requires Accessibility permission (Mira listed in System Settings › Privacy › Accessibility).
             let script = """
                 tell application "Spotify" to activate
                 delay 0.8
@@ -993,16 +1030,45 @@ enum MiraToolService {
                 """
             var err: NSDictionary?
             NSAppleScript(source: script)?.executeAndReturnError(&err)
-            if err == nil { return "Searching and playing '\(song)' on Spotify." }
+            if err == nil { return "Searching and playing '\(label)' on Spotify." }
 
-            // Fallback: URL scheme — shows search results without auto-playing
-            let encoded = song.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            // Last resort: URL scheme — shows search results without auto-playing.
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
             if let url = URL(string: "spotify:search:\(encoded)") { NSWorkspace.shared.open(url) }
             let reason = (err?["NSAppleScriptErrorMessage"] as? String) ?? "unknown error"
-            return "Opened Spotify search for '\(song)'. To enable auto-play, go to System Settings › Privacy & Security › Accessibility and add Mira. (\(reason))"
+            return "Opened Spotify search for '\(label)'. To enable auto-play, go to System Settings › Privacy & Security › Accessibility and add Mira. (\(reason))"
 
         default:
             return "Unknown Spotify action '\(action)'."
+        }
+    }
+
+    /// Resolves a track/artist query to a `spotify:track:…` URI via the backend
+    /// Spotify Web API proxy (keeps the Spotify client secret server-side). Returns
+    /// nil on any failure so the caller falls back to keyboard search.
+    private static func resolveSpotifyURI(query: String, track: String, artist: String) async -> String? {
+        let jwt = SupabaseService.cachedAccessToken
+        guard MiraBackend.useProxy, !jwt.isEmpty else { return nil }  // needs a signed-in session
+
+        var req = URLRequest(url: MiraBackend.spotifySearchURL)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.addValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "query": query, "track": track, "artist": artist,
+        ])
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let uri = json["uri"] as? String, !uri.isEmpty else {
+                return nil
+            }
+            return uri
+        } catch {
+            return nil
         }
     }
 
