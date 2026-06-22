@@ -308,12 +308,28 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func openSocketAsync() async {
         let model     = "gpt-realtime"
+        // In proxy mode the ephemeral token is minted against the signed-in user's
+        // Supabase JWT, which expires ~1h after sign-in. Renew it first so a stale
+        // token (timer missed while asleep, etc.) self-heals instead of 401'ing the
+        // mint — the most common cause of a session stuck on "Connecting".
+        if MiraBackend.useProxy {
+            await SupabaseService.shared.ensureFreshToken()
+        }
         // Prefer the minted ephemeral token. Fall back to the embedded key ONLY in
         // direct mode; in proxy mode a mint failure must NOT leak the raw key —
         // refuse to connect instead.
         guard let authToken = await fetchEphemeralToken()
                 ?? (MiraBackend.useProxy ? nil : AppSecrets.openAIKey) else {
-            NSLog("[MiraRealtime] no ephemeral token (proxy mode) — not connecting")
+            // Don't leave the UI hanging on "Connecting" forever: the mint failed
+            // (no valid signed-in session). Stop any reconnect/always-on loop and
+            // surface an actionable error.
+            NSLog("[MiraRealtime] mint failed (proxy mode) — surfacing sign-in error")
+            shouldReconnect  = false
+            isAlwaysOn       = false
+            isAlwaysOnActive = false
+            reconnectTask?.cancel(); reconnectTask = nil
+            teardown()
+            state = .error("Sign in to use voice")
             return
         }
 

@@ -16,6 +16,8 @@ extension Notification.Name {
     static let miraPushToTalkEnded        = Notification.Name("miraPushToTalkEnded")
     // Draw-on-screen spatial context (⌃⌥D) — toggles the freehand draw overlay
     static let miraDrawModeToggled        = Notification.Name("miraDrawModeToggled")
+    // Show/hide the island in screenshots & screen recordings (demo mode)
+    static let miraShowInCaptureChanged   = Notification.Name("miraShowInCaptureChanged")
     // Personalization
     static let miraAccentColorChanged     = Notification.Name("miraAccentColorChanged")
     static let miraPointFollowUp          = Notification.Name("miraPointFollowUp")

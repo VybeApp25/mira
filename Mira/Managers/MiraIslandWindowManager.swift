@@ -33,6 +33,12 @@ final class MiraIslandWindowManager {
     // Tall enough for expandedTallH (500) + notch + shadow margin
     static let windowH: CGFloat = 560
 
+    /// When true, the island is allowed to appear in screenshots / screen recordings
+    /// (sharingType .readOnly). Default false hides it from capture. Toggled from
+    /// Settings → Appearance → "Show in screen recordings" for demo videos.
+    static let showInCaptureKey = "mira_show_in_screen_capture"
+    static var showInCapture: Bool { UserDefaults.standard.bool(forKey: showInCaptureKey) }
+
     private var panel: NSPanel?
     private let geometry: NotchGeometry
 
@@ -51,6 +57,15 @@ final class MiraIslandWindowManager {
         p.setFrame(windowFrame(), display: false)
         p.orderFrontRegardless()
         panel = p
+
+        // Apply screen-capture visibility live when the Settings toggle changes.
+        NotificationCenter.default.addObserver(
+            forName: .miraShowInCaptureChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.panel?.sharingType = Self.showInCapture ? .readOnly : .none
+            }
+        }
     }
 
     func teardown() {
@@ -92,8 +107,9 @@ final class MiraIslandWindowManager {
         p.isMovableByWindowBackground = false
         // Exclude the island from screen capture (screenshots, screen recording, SCK)
         // so the notch UI never appears in the user's captures — same trick HeyClicky /
-        // DynamicLake use. The notch is Mira's chrome, not the user's content.
-        p.sharingType = .none
+        // DynamicLake use. The notch is Mira's chrome, not the user's content. The user
+        // can opt in (e.g. to record a demo) via Settings → Appearance.
+        p.sharingType = Self.showInCapture ? .readOnly : .none
         p.collectionBehavior = [
             .canJoinAllSpaces,
             .stationary,

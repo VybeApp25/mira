@@ -42,6 +42,7 @@ struct SettingsView: View {
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
+    @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
     @AppStorage(BrowserService.preferredKey) private var preferredBrowser = ""
     @State private var installedBrowsers: [BrowserService.Browser] = []
@@ -1794,6 +1795,18 @@ struct SettingsView: View {
                 subtitle: "Mira responds with feline energy",
                 binding: $catMode
             )
+
+            // Show the notch island in screenshots & screen recordings (for demos).
+            // Off by default so Mira's chrome stays out of the user's captures.
+            toggleRow(
+                icon: "record.circle",
+                title: "Show in screen recordings",
+                subtitle: "Let the Mira island appear in screenshots & screen captures (for demos)",
+                binding: $showInCapture
+            )
+            .onChange(of: showInCapture) {
+                NotificationCenter.default.post(name: .miraShowInCaptureChanged, object: nil)
+            }
         }
     }
 
