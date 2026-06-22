@@ -25,6 +25,7 @@
 		1069F0D23BBC741304EE2EB1 /* polymarket.py in Resources */ = {isa = PBXBuildFile; fileRef = FF06F27DEBFA930ADF8EA0F5 /* polymarket.py */; };
 		11218344D3F6CBABAA2FF89F /* IntegrationContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76009B6D8C1113E1C1AF41D5 /* IntegrationContextService.swift */; };
 		12DCA5666EE4D742C97C071B /* github.md in Resources */ = {isa = PBXBuildFile; fileRef = EC1077104B21B7200330C80E /* github.md */; };
+		12EC8F5AB9E2C753C4A66BE3 /* BrowserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41C5FF860F44DB7354F8359 /* BrowserService.swift */; };
 		1332B83258D1F7F88CE8B3A1 /* maps.py in Resources */ = {isa = PBXBuildFile; fileRef = 76184F3E1F4A2F05F047551D /* maps.py */; };
 		1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803FFD5EEBDE9BDFAF14C988 /* CursorCompanionView.swift */; };
 		13AE801B18D406CB15EEDCE5 /* airtable.md in Resources */ = {isa = PBXBuildFile; fileRef = 600F7145CE2FE8AF6E86A44C /* airtable.md */; };
@@ -82,6 +83,7 @@
 		4C80776FEC563AEB1E99B9A9 /* enter.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3593098536F17182B92491AE /* enter.mp3 */; };
 		4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */; };
 		4EE2ACF2D09E4434510DB330 /* excalidraw.md in Resources */ = {isa = PBXBuildFile; fileRef = 5B22AFE60CB6F6E579CEDC91 /* excalidraw.md */; };
+		4F4EDACACD01FB5FFA7DCC8B /* PendingDrawnContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */; };
 		4F78913E764350E22C107F25 /* AgentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */; };
 		5115F2CE84E84A8009B70C81 /* AgentResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */; };
 		516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 714E5F324015327B7790838A /* SharedStatusView.swift */; };
@@ -131,6 +133,7 @@
 		769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077436ECE19C7096BAC241EC /* BriefingView.swift */; };
 		76C7F035A150D5CE197652A7 /* AXActuationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299758A12C64451C7C8799E5 /* AXActuationService.swift */; };
 		77D6454BBE135552947BC1F8 /* AssemblyAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */; };
+		78DC18E55F5011C56CFEE6F9 /* ScreenDrawController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DAEE1D4ABC7A13B722CB44D /* ScreenDrawController.swift */; };
 		79E0D07306E8750C92D98B07 /* ImprovementOutcome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7453264472C5BA542F725096 /* ImprovementOutcome.swift */; };
 		7C99EFBDAFDA988D7D688D23 /* UserKnowledgeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29A4049793E083EAA037BB4 /* UserKnowledgeStore.swift */; };
 		7D4BE077CAA4A185EC3507EA /* diagram_gen.py in Resources */ = {isa = PBXBuildFile; fileRef = 8887E72ED18B616336B6B36E /* diagram_gen.py */; };
@@ -221,6 +224,7 @@
 		D37336D1E54FF64164918D9A /* ProjectsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */; };
 		D39FB3D62ED7EB5B5C31CB1C /* KnowledgeImportPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */; };
 		D4992E88735ED08374C4577B /* ActuationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8970CEC5FCF54756B314E53 /* ActuationRouter.swift */; };
+		D53BE4353E6BF74135431739 /* AudioOutputRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */; };
 		D5BB80F248D7A934870197B9 /* TriggersTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C866D699E86AEDCD53A7217 /* TriggersTabView.swift */; };
 		D6BC0011333BD8D5DC98B090 /* ActionChipService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B535DE12D73CC125D81565 /* ActionChipService.swift */; };
 		D71BD504ABE216221A704300 /* sheet_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 801F97A114C64C4844285987 /* sheet_rw.py */; };
@@ -338,6 +342,7 @@
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
 		40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportView.swift; sourceTree = "<group>"; };
 		42036566FF695AD6554E8E01 /* AgentOutputsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutputsView.swift; sourceTree = "<group>"; };
+		441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputRoute.swift; sourceTree = "<group>"; };
 		4486101C5C80FCD26BD6F11C /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
 		44B3A75742D4282073152A2A /* gmail.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = gmail.md; sourceTree = "<group>"; };
 		463BF5B30736DAB269B90717 /* WebsiteHealthAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteHealthAgent.swift; sourceTree = "<group>"; };
@@ -382,6 +387,7 @@
 		6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillCatalog.swift; sourceTree = "<group>"; };
 		6BA8022B07E7E98EB0CCFBD2 /* eshop.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = eshop.mp3; sourceTree = "<group>"; };
 		6C32360D76CD7D9599499DCA /* MisoTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MisoTTSService.swift; sourceTree = "<group>"; };
+		6DAEE1D4ABC7A13B722CB44D /* ScreenDrawController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenDrawController.swift; sourceTree = "<group>"; };
 		6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContextService.swift; sourceTree = "<group>"; };
 		6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTooltipController.swift; sourceTree = "<group>"; };
 		6FEC2EEB4477277178736C9C /* maps.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = maps.md; sourceTree = "<group>"; };
@@ -460,6 +466,7 @@
 		B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffscreenRenderer.swift; sourceTree = "<group>"; };
 		B29A4049793E083EAA037BB4 /* UserKnowledgeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserKnowledgeStore.swift; sourceTree = "<group>"; };
 		B39AB07565BD483C4C55CD53 /* github-pr-workflow.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "github-pr-workflow.md"; sourceTree = "<group>"; };
+		B41C5FF860F44DB7354F8359 /* BrowserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserService.swift; sourceTree = "<group>"; };
 		B4B324BC14AED4E3627AA2C7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		B5D41497F7635F087FD3D293 /* GroundingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroundingService.swift; sourceTree = "<group>"; };
 		B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = imessage_read.py; sourceTree = "<group>"; };
@@ -536,6 +543,7 @@
 		F861FAC8802E2F2125CE93E4 /* MiraSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraSkill.swift; sourceTree = "<group>"; };
 		F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverHistoryStore.swift; sourceTree = "<group>"; };
 		F9B4A19539539B3B6D18DDD0 /* CursorCompanionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionModels.swift; sourceTree = "<group>"; };
+		FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingDrawnContextService.swift; sourceTree = "<group>"; };
 		FB775F6CE844E78162C50C54 /* HUDStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDStateMachine.swift; sourceTree = "<group>"; };
 		FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceEngine.swift; sourceTree = "<group>"; };
 		FD96AD74487529E2CEF249FB /* OutputDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputDetailView.swift; sourceTree = "<group>"; };
@@ -615,6 +623,7 @@
 				6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */,
 				04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */,
 				F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */,
+				6DAEE1D4ABC7A13B722CB44D /* ScreenDrawController.swift */,
 				8BE4187651AAE648F8751542 /* StatusBarController.swift */,
 			);
 			path = Controllers;
@@ -736,8 +745,10 @@
 				8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */,
 				2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */,
 				ED0ACABB44793DCD72302E5A /* AudioCueService.swift */,
+				441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */,
 				299758A12C64451C7C8799E5 /* AXActuationService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
+				B41C5FF860F44DB7354F8359 /* BrowserService.swift */,
 				3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */,
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
@@ -787,6 +798,7 @@
 				872DD8FFE16217C9024800BE /* OpenAIService.swift */,
 				55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */,
 				556FE075FEBF1DA1129BA4C8 /* OutputStore.swift */,
+				FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */,
 				8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */,
 				F71BBE7E8D7EEA7B8AE4D74C /* PointToService.swift */,
 				B06B0C92C98D179DE8BF3C3D /* PolicyEngine.swift */,
@@ -1102,9 +1114,11 @@
 				0F2017378D1394AAD7234E25 /* AttentionDirective.swift in Sources */,
 				533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */,
 				A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */,
+				D53BE4353E6BF74135431739 /* AudioOutputRoute.swift in Sources */,
 				941D5549A8E31FC3B610A41F /* AuthView.swift in Sources */,
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
+				12EC8F5AB9E2C753C4A66BE3 /* BrowserService.swift in Sources */,
 				23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */,
 				E6A689A9A3667D0837875C10 /* CausalInsight.swift in Sources */,
 				36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */,
@@ -1203,6 +1217,7 @@
 				55224EC730920EFD365C934D /* OutputEntry.swift in Sources */,
 				672A2547217E0BAB12193C2E /* OutputStore.swift in Sources */,
 				E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */,
+				4F4EDACACD01FB5FFA7DCC8B /* PendingDrawnContextService.swift in Sources */,
 				4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */,
 				EA34E17889F5809A0D65D945 /* PillStateModel.swift in Sources */,
 				24F66A36C54D673F2CD4D6CF /* PointFollowUpService.swift in Sources */,
@@ -1230,6 +1245,7 @@
 				9D95DC35830EBC1989F2837C /* ResponseCardView.swift in Sources */,
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
+				78DC18E55F5011C56CFEE6F9 /* ScreenDrawController.swift in Sources */,
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */,
 				BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */,

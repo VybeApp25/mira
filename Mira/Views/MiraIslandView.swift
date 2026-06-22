@@ -58,6 +58,12 @@ struct MiraIslandView: View {
     let geometry: NotchGeometry
     @ObservedObject private var engine   = ProjectEngine.shared
     @ObservedObject private var pointTo  = PointToService.shared
+    // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
+    // pill even when the island is closed. (miraState.realtimeState is only mirrored
+    // by IslandChatView, which exists only while expanded — so in always-on/closed
+    // notch the voice state never reached the pill. PointToService worked because it's
+    // observed directly here, which is why "Pointing" opened the notch but voice didn't.)
+    @ObservedObject private var realtime = RealtimeVoiceService.shared
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -82,15 +88,33 @@ struct MiraIslandView: View {
     private var pillW: CGFloat {
         if isExpanded { return AnimationController.expandedW }
         guard collapsedIndicatorActive else { return geometry.notchWidth }
-        let hasSupplementaryContent = !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive
-        return geometry.notchWidth + (hasSupplementaryContent ? 110 : 54)
+        return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
+
+    // A short state label for the collapsed pill (shown in the drop strip BELOW the
+    // physical notch — see collapsedDropH). nil when idle.
+    private var voiceModeLabel: String? {
+        switch pillState.mode {
+        case .listening: return "Listening"
+        case .thinking:  return "Thinking"
+        case .working:   return "Working"
+        case .speaking:  return "Speaking"
+        case .idle:      return nil
+        }
+    }
+    private var hasCollapsedText: Bool {
+        !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive || voiceModeLabel != nil
+    }
+    // The physical notch occludes the top `notchHeight`, so collapsed content can't
+    // render there. When active we grow the pill DOWNWARD and place the indicator +
+    // label in this strip below the cutout (Dynamic-Island style).
+    private var collapsedDropH: CGFloat { (!isExpanded && collapsedIndicatorActive) ? 34 : 0 }
     // Settings/agents/crons are content-dense — give them the tall panel.
     private var expandedHeight: CGFloat {
         selectedTab == .home ? AnimationController.expandedH
                              : AnimationController.expandedTallH
     }
-    private var pillH: CGFloat { isExpanded ? expandedHeight : geometry.notchHeight }
+    private var pillH: CGFloat { isExpanded ? expandedHeight : geometry.notchHeight + collapsedDropH }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
     private var botR:  CGFloat { isExpanded ? AnimationController.expandedBotR : AnimationController.collapsedBotR }
 
@@ -126,6 +150,13 @@ struct MiraIslandView: View {
         .ignoresSafeArea()
         // Sync existing RealtimeState → PillStateModel (debounced)
         .onChange(of: miraState.realtimeState) { _, new in
+            if case .error = new { pillState.postEvent(.error) }
+            pillState.syncFromRealtime(new, isListening: voice.isListening, isLoading: miraState.isLoading)
+        }
+        // Drive the collapsed pill straight from the voice service so always-on
+        // listening/speaking animate the closed notch (the miraState mirror above only
+        // runs while the panel is expanded). Idempotent with it when both fire.
+        .onChange(of: realtime.state) { _, new in
             if case .error = new { pillState.postEvent(.error) }
             pillState.syncFromRealtime(new, isListening: voice.isListening, isLoading: miraState.isLoading)
         }
@@ -189,11 +220,16 @@ struct MiraIslandView: View {
             // lives at a stable ZStack slot above the content branches.
             // Collapsed: centered in the pill (HeyClicky NotchActivitySurface placement).
             // Expanded:  top-right area of nav bar (88 pt from trailing to clear gear/mic).
+            // Collapsed: the live waveform sits in the LEFT EAR beside the cutout (at
+            // notch height) — glanceable like the iPhone Dynamic Island. The cutout
+            // can't be drawn on; the ear is empty menu-bar space next to it. The text
+            // label drops just below (collapsedContent). Expanded: top-right of nav bar.
             SharedStatusView(pillState: pillState, isCompact: !isExpanded)
                 .frame(maxWidth: .infinity, maxHeight: .infinity,
-                       alignment: isExpanded ? .topTrailing : .center)
+                       alignment: isExpanded ? .topTrailing : .topLeading)
                 .padding(.trailing, isExpanded ? 88 : 0)
-                .padding(.top, isExpanded ? 12 : 0)
+                .padding(.leading, isExpanded ? 0 : 14)
+                .padding(.top, isExpanded ? 12 : 7)
                 .allowsHitTesting(false)
                 .animation(
                     reduceMotion ? .easeInOut(duration: 0.10)
@@ -301,14 +337,24 @@ struct MiraIslandView: View {
                             .foregroundColor(miraTeale.opacity(0.85))
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.80, anchor: .leading)))
+                } else if let label = voiceModeLabel {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(collapsedAccent.opacity(0.9))
+                        .lineLimit(1)
+                        .transition(.opacity)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
+        // Centered in the drop strip BELOW the physical notch (top of the pill is
+        // occluded by the camera cutout); the waveform lives in the ear above-left.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 9)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: hudVM.statusText)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: taskStore.tasks.count)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: pointTo.isActive)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voiceModeLabel)
     }
 
     private var collapsedAccent: Color {

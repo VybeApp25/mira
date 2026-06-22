@@ -18,6 +18,8 @@ enum MiraRoute: String, CaseIterable {
     case notesAction            = "notes_action"
     case composioAction         = "composio_action"
     case stockLookup            = "stock_lookup"
+    case weatherLookup          = "weather_lookup"
+    case webSearch              = "web_search"
     case imageSearch            = "image_search"
     case placeSearch            = "place_search"
     case mapsQuery              = "maps_query"
@@ -50,6 +52,8 @@ enum MiraRoute: String, CaseIterable {
         case .notesAction:            return "Notes"
         case .composioAction:         return "Integration"
         case .stockLookup:            return "Stock"
+        case .weatherLookup:          return "Weather"
+        case .webSearch:              return "Web Search"
         case .imageSearch:            return "Images"
         case .placeSearch:            return "Place"
         case .mapsQuery:              return "Maps"
@@ -213,7 +217,13 @@ final class RouterService: ObservableObject {
     /// URL open, memory ops) bypass Haiku since they don't benefit from LLM classification.
     /// Falls back to the sync `route()` if the API key is missing or the Haiku call fails.
     func classifyIntent(prompt: String, context: RouterContext, apiKey: String) async -> RouteDecision {
-        guard !apiKey.isEmpty else { return route(prompt: prompt, context: context) }
+        // Haiku auth needs EITHER a direct key (legacy) OR a signed-in proxy
+        // session — in proxy mode the Anthropic key is intentionally empty and
+        // auth is the Supabase JWT, so gating on a non-empty key would silently
+        // disable the entire LLM classifier and leave only keyword matching.
+        let canClassify = !apiKey.isEmpty
+            || (MiraBackend.useProxy && !SupabaseService.cachedAccessToken.isEmpty)
+        guard canClassify else { return route(prompt: prompt, context: context) }
 
         let sync = route(prompt: prompt, context: context)
         switch sync.route {
@@ -263,6 +273,8 @@ Routes and when to use them:
 - notes_action: Apple Notes create/search/append
 - composio_action: GitHub, Gmail, Notion, Slack, Linear, Vercel, Netlify, Google Drive, Google Docs, Google Sheets, Airtable tasks
 - stock_lookup: current stock price, share price, market quote, ticker symbol lookup
+- weather_lookup: weather, temperature, forecast, how hot/cold, will it rain, do I need a jacket/umbrella
+- web_search: live scores, latest news, current events, "what's happening with", today's results, look it up online, search the web for something with a time-sensitive or factual answer
 - image_search: show images of, pictures of, find photos of
 - place_search: where is, directions to, find nearby, navigate to a location
 - findmy_devices: Find My, list Apple devices, where is my iPhone/Mac/Watch/AirPods
@@ -385,6 +397,12 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             // Widget data is fetched in IslandChatView; this path is the text fallback.
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: decision.route, onStreamChunk: onStreamChunk)
 
+        case .weatherLookup:
+            return await weatherResult(prompt: prompt)
+
+        case .webSearch:
+            return await webSearchResult(prompt: prompt, apiKey: apiKey)
+
         case .mapsQuery:
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .mapsQuery, onStreamChunk: onStreamChunk)
 
@@ -476,6 +494,14 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         if matchesStockLookup(lower) {
             return RouteDecision(route: .stockLookup, confidence: 0.90,
                                  explanation: "Stock quote lookup")
+        }
+        if matchesWeather(lower) {
+            return RouteDecision(route: .weatherLookup, confidence: 0.88,
+                                 explanation: "Weather lookup")
+        }
+        if matchesWebSearch(lower) {
+            return RouteDecision(route: .webSearch, confidence: 0.85,
+                                 explanation: "Live web search")
         }
         if matchesImageSearch(lower) {
             return RouteDecision(route: .imageSearch, confidence: 0.90,
@@ -718,6 +744,23 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     private func matchesImageSearch(_ lower: String) -> Bool {
         ["show me images of", "images of ", "pictures of ", "show pictures of",
          "find images of", "search images", "image search"].contains { lower.contains($0) }
+    }
+
+    private func matchesWeather(_ lower: String) -> Bool {
+        ["weather", "temperature", "forecast", "how hot", "how cold", "how warm",
+         "will it rain", "is it raining", "going to rain", "do i need an umbrella",
+         "do i need a jacket", "is it snowing", "how's it outside",
+         "hows it outside"].contains { lower.contains($0) }
+    }
+
+    private func matchesWebSearch(_ lower: String) -> Bool {
+        ["search the web", "search online", "search for", "look it up", "look up online",
+         "google ", "live score", "the score", "latest news", "sports news", "current news",
+         "current score", "who won", "world cup", "headlines", "what's happening with",
+         "whats happening with", "what's the latest", "whats the latest", "today's results",
+         "todays results"].contains { lower.contains($0) }
+            || lower.range(of: #"\bscores?\b"#, options: .regularExpression) != nil
+            || lower.range(of: #"\bnews\b"#,    options: .regularExpression) != nil
     }
 
     private func matchesGPT(_ lower: String) -> Bool {
@@ -998,6 +1041,10 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         default:       plan = await EngineRouter.shared.planDesktopControl(prompt)
         }
 
+        // If the user drew on screen to mark WHERE to act, attach it to the task.
+        // Survives a Codex→Claude failover (both engines get the same context).
+        let drawn = PendingDrawnContextService.shared.pop()
+
         // ONE quota consume for the whole task — a Codex→Claude failover must not
         // double-charge the user's monthly task budget.
         let decision = await QuotaService.shared.consume(path: "computer-use")
@@ -1008,10 +1055,10 @@ Output ONLY the JSON line. No preamble, no markdown fences.
 
         // Run primary; on a refusal/failure (not a user Stop), silently retry on
         // the other engine.
-        var run = await runEngine(plan.primary, task: prompt, apiKey: apiKey)
+        var run = await runEngine(plan.primary, task: prompt, apiKey: apiKey, drawn: drawn)
         if !run.success, let secondary = plan.secondary {
             NSLog("[EngineRouter] \(plan.primary.rawValue) did not complete (\(plan.reason)) — failing over to \(secondary.rawValue)")
-            let retry = await runEngine(secondary, task: prompt, apiKey: apiKey)
+            let retry = await runEngine(secondary, task: prompt, apiKey: apiKey, drawn: drawn)
             if retry.success || run.summary.isEmpty { run = retry }
         }
 
@@ -1024,15 +1071,15 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// Runs one engine WITHOUT consuming quota or announcing (the caller owns both,
     /// so a failover stays a single metered task). Returns the summary + whether it
     /// completed cleanly.
-    private func runEngine(_ engine: EngineRouter.Engine, task: String, apiKey: String) async -> (summary: String, success: Bool) {
+    private func runEngine(_ engine: EngineRouter.Engine, task: String, apiKey: String, drawn: DrawnContext? = nil) async -> (summary: String, success: Bool) {
         switch engine {
         case .codex:
             CodexHUD.shared.show()   // live "watch Codex work" panel; stays up to show the outcome
-            let summary = await CodexComputerUseService.shared.run(task: task)
+            let summary = await CodexComputerUseService.shared.run(task: task, drawn: drawn)
             let succeeded = CodexComputerUseService.shared.lastOutcome == .succeeded
             return (summary, succeeded)
         case .claude:
-            let ok = await ComputerUseOrchestrator.shared.control(task: task, apiKey: apiKey)
+            let ok = await ComputerUseOrchestrator.shared.control(task: task, apiKey: apiKey, drawn: drawn)
             let summary = ComputerUseOrchestrator.shared.result.trimmingCharacters(in: .whitespacesAndNewlines)
             return (summary, ok)
         }
@@ -1041,6 +1088,139 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// Native calendar handling via EventKit. Extracts the event details (dates are
     /// unreliable to parse by hand) with a tiny Haiku call, then writes straight to
     /// the Apple/iCloud calendar in the background — no UI, no screen takeover.
+    // MARK: - Weather (open Weather app + cheap text answer)
+
+    /// Opens the native Weather app (visible, no screenshots) and speaks the
+    /// requested city's weather from the free wttr.in API. The app gives the
+    /// visual; the API gives an accurate spoken answer for the specific city.
+    private func weatherResult(prompt: String) async -> RouteResult {
+        let city = extractCity(from: prompt)
+        // Visible path — open the Weather app and, if a city was named, drive its
+        // search so the app actually shows that city (not just current location).
+        await openWeatherApp(showingCity: city)
+        // Spoken path — cheap text lookup for the exact city.
+        if let summary = await WeatherService.lookup(city: city) {
+            return .reply(summary, route: .weatherLookup)
+        }
+        let where_ = city.map { " for \($0)" } ?? ""
+        return .reply("I opened the Weather app\(where_) for you.", route: .weatherLookup)
+    }
+
+    /// Opens (and activates) the Weather app. When a specific city is named,
+    /// drives the search field — focus it via AX, type the city as real key
+    /// events so the live-search list populates, then Return to open the top
+    /// match — so the app visibly shows that city. Best-effort: failures are
+    /// non-fatal because the spoken answer already names the right city.
+    private func openWeatherApp(showingCity city: String?) async {
+        let bundleID = "com.apple.weather"
+
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let cfg = NSWorkspace.OpenConfiguration()
+            cfg.activates = true
+            _ = try? await NSWorkspace.shared.openApplication(at: appURL, configuration: cfg)
+        } else {
+            _ = await MiraToolService.execute(name: "open_application",
+                                              argsJSON: "{\"app_name\":\"Weather\"}")
+        }
+
+        guard let city, !city.isEmpty else { return }
+        // Let the window come forward before sending keystrokes to it.
+        try? await Task.sleep(nanoseconds: 900_000_000)
+
+        // Focus + clear the search field via AX (no app activation of its own).
+        do {
+            _ = try AXActuationService.shared.setTextValue("", inBundleID: bundleID)
+        } catch {
+            NSLog("[Weather] couldn't focus search field via AX: \(error.localizedDescription)")
+            return
+        }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        ComputerUseService.shared.type(text: city)
+        try? await Task.sleep(nanoseconds: 700_000_000)   // let the results list populate
+        ComputerUseService.shared.key(combination: "return")
+    }
+
+    /// Pulls a city/location out of a weather prompt ("weather in Atlanta" →
+    /// "Atlanta"). Returns nil for the Mac's current location.
+    private func extractCity(from prompt: String) -> String? {
+        let lower = prompt.lowercased()
+        guard let r = lower.range(of: " in ") else { return nil }
+        var city = String(prompt[r.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "?.!,"))
+        for suffix in [" today", " right now", " tonight", " tomorrow",
+                       " this week", " this weekend", " now"] {
+            if city.lowercased().hasSuffix(suffix) {
+                city = String(city.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return city.isEmpty ? nil : city
+    }
+
+    // MARK: - Web search (open browser + read results for accuracy)
+
+    /// Opens the user's chosen browser to the live results page (visible, free)
+    /// AND reads the answer as text via the web_search tool, so Mira speaks a
+    /// verified answer while the page is on screen — no screenshot loop.
+    private func webSearchResult(prompt: String, apiKey: String) async -> RouteResult {
+        let query = searchQuery(from: prompt)
+        let browserName: String = BrowserService.searchURL(for: query)
+            .map { BrowserService.shared.open($0) } ?? "your browser"
+
+        if let answer = await webSearchAnswer(query: prompt, apiKey: apiKey), !answer.isEmpty {
+            return .reply("\(answer)\n\n_Opened the full results in \(browserName)._",
+                          route: .webSearch)
+        }
+        return .reply("I opened the results in \(browserName) — take a look.", route: .webSearch)
+    }
+
+    /// Strips leading filler so the browser URL gets a clean query.
+    private func searchQuery(from prompt: String) -> String {
+        var q = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["search the web for ", "search online for ", "search for ",
+                       "look up ", "look it up ", "google ", "search "] {
+            if q.lowercased().hasPrefix(prefix) {
+                q = String(q.dropFirst(prefix.count)); break
+            }
+        }
+        return q.isEmpty ? prompt : q
+    }
+
+    /// Reads live web results as text via Anthropic's web_search server tool
+    /// (cheap, cited, no HTML scraping). Returns a short spoken answer.
+    private func webSearchAnswer(query: String, apiKey: String) async -> String? {
+        let body: [String: Any] = [
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 500,
+            "system": "You are Mira. Use web search to answer with current, accurate "
+                    + "information. Reply in 1-3 plain spoken sentences. No markdown, "
+                    + "no bullet lists, no citation list.",
+            "tools": [["type": "web_search_20250305", "name": "web_search", "max_uses": 3]],
+            "messages": [["role": "user", "content": query]]
+        ]
+        guard let httpBody = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+
+        var req = URLRequest(url: MiraBackend.anthropicMessagesURL)
+        req.httpMethod = "POST"
+        guard MiraBackend.authorizeAnthropic(&req, directKey: apiKey) else { return nil }
+        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = httpBody
+        req.timeoutInterval = 30
+
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json    = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? [[String: Any]] else { return nil }
+
+        let text = content
+            .filter { ($0["type"] as? String) == "text" }
+            .compactMap { $0["text"] as? String }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
     private func calendarResult(prompt: String, apiKey: String) async -> RouteResult {
         // In proxy mode the Anthropic API key is intentionally empty — auth is the
         // Supabase JWT — so "signed in" is a present JWT, not a non-empty key.

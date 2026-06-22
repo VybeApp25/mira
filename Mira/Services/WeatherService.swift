@@ -59,4 +59,38 @@ final class WeatherService: ObservableObject {
         if c.contains("clear") || c.contains("sun") { return "sun.max.fill"         }
         return "cloud.fill"
     }
+
+    // MARK: - Spoken lookup (cheap text path, no screenshots)
+
+    /// Fetches a one-line spoken weather summary for `city` (or the Mac's current
+    /// location when nil) from wttr.in. Used by the router's `weather_lookup`
+    /// route alongside visibly opening the native Weather app. No vision cost.
+    static func lookup(city: String?) async -> String? {
+        var path = "https://wttr.in/"
+        if let city, !city.isEmpty,
+           let enc = city.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            path += enc
+        }
+        path += "?format=j1"
+
+        guard let url = URL(string: path),
+              let (data, resp) = try? await URLSession.shared.data(from: url),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let cur  = (json["current_condition"] as? [[String: Any]])?.first
+        else { return nil }
+
+        let tempF = cur["temp_F"] as? String ?? "--"
+        let feels = cur["FeelsLikeF"] as? String ?? tempF
+        let desc  = (cur["weatherDesc"] as? [[String: Any]])?.first?["value"] as? String ?? "clear"
+        let day   = (json["weather"] as? [[String: Any]])?.first
+        let maxF  = day?["maxtempF"] as? String ?? "--"
+        let minF  = day?["mintempF"] as? String ?? "--"
+        let area  = (json["nearest_area"] as? [[String: Any]])?.first
+        let place = (area?["areaName"] as? [[String: Any]])?.first?["value"] as? String
+            ?? (city ?? "your area")
+
+        return "It's \(tempF)°F and \(desc.lowercased()) in \(place), feels like \(feels)°. "
+             + "Today's high \(maxF)°, low \(minF)°."
+    }
 }

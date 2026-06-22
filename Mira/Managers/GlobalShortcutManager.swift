@@ -14,6 +14,8 @@ extension Notification.Name {
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
     static let miraPushToTalkEnded        = Notification.Name("miraPushToTalkEnded")
+    // Draw-on-screen spatial context (⌃⌥D) — toggles the freehand draw overlay
+    static let miraDrawModeToggled        = Notification.Name("miraDrawModeToggled")
     // Personalization
     static let miraAccentColorChanged     = Notification.Name("miraAccentColorChanged")
     static let miraPointFollowUp          = Notification.Name("miraPointFollowUp")
@@ -57,6 +59,10 @@ private func miraHotKeyHandler(
             if !isRelease {
                 NotificationCenter.default.post(name: .miraActivateText, object: nil)
             }
+        case 3:
+            if !isRelease {
+                NotificationCenter.default.post(name: .miraDrawModeToggled, object: nil)
+            }
         default: break
         }
     }
@@ -71,6 +77,7 @@ final class GlobalShortcutManager {
 
     private var voiceRef:   EventHotKeyRef?
     private var textRef:    EventHotKeyRef?
+    private var drawRef:    EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
 
     // "MIRA" encoded as OSType
@@ -104,6 +111,7 @@ final class GlobalShortcutManager {
     private func register() {
         apply(ShortcutStore.shared.voice, id: 1, into: &voiceRef)
         apply(ShortcutStore.shared.text,  id: 2, into: &textRef)
+        apply(ShortcutStore.shared.draw,  id: 3, into: &drawRef)
     }
 
     private func apply(_ config: ShortcutConfig, id: UInt32, into ref: inout EventHotKeyRef?) {
@@ -115,7 +123,9 @@ final class GlobalShortcutManager {
     private func unregisterAll() {
         if let r = voiceRef { UnregisterEventHotKey(r) }
         if let r = textRef  { UnregisterEventHotKey(r) }
+        if let r = drawRef  { UnregisterEventHotKey(r) }
         voiceRef = nil
         textRef  = nil
+        drawRef  = nil
     }
 }

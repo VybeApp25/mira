@@ -52,7 +52,7 @@ final class CodexComputerUseService: ObservableObject {
     /// goes; returns the agent's final message. Blocks until the task finishes or
     /// stop() is called.
     @discardableResult
-    func run(task: String) async -> String {
+    func run(task: String, drawn: DrawnContext? = nil) async -> String {
         guard !isRunning else { return "A Codex task is already running." }
         isRunning = true
         stopRequested = false
@@ -69,7 +69,20 @@ final class CodexComputerUseService: ObservableObject {
         // isn't a coding task and needs no repo. Reasoning effort scales with the
         // user's tier — the main cost lever on this (token-heavy) path.
         let effort = EntitlementService.shared.plan.codexReasoningEffort
-        let escaped = task.replacingOccurrences(of: "'", with: "'\\''")
+        // Codex is a CLI and can't take image bytes — if the user drew on screen,
+        // save the annotated capture to a temp PNG and point Codex at it + the marked
+        // coordinates (best-effort spatial context for its computer-use plugin).
+        var effectiveTask = task
+        if let drawn {
+            let r = drawn.normalizedBoundingRect
+            let coord = String(format: "normalized center (%.2f, %.2f), top-left origin", r.midX, r.midY)
+            if let path = drawn.writeTempPNG() {
+                effectiveTask += " (The user marked a region of the screen to act on; an annotated screenshot is saved at \(path). Marked region \(coord). Focus your actions there.)"
+            } else {
+                effectiveTask += " (The user marked the screen region around \(coord); focus your actions there.)"
+            }
+        }
+        let escaped = effectiveTask.replacingOccurrences(of: "'", with: "'\\''")
         // Codex gates MCP/computer-use tool calls behind its own approval+sandbox; in
         // non-interactive `exec` only the full bypass lets them through (verified
         // 2026-06-17). Mira owns safety via its own gates (RouterService danger-confirm

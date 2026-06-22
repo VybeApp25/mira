@@ -72,6 +72,7 @@ struct IslandChatView: View {
     // Use the app-lifetime singleton — mirrors HeyClicky's always-on architecture.
     // @ObservedObject (not @StateObject) because the session outlives this view.
     @ObservedObject private var realtime = RealtimeVoiceService.shared
+    @ObservedObject private var pendingDrawn = PendingDrawnContextService.shared
     @ObservedObject private var tts = MisoTTSService.shared
     @State private var speakingMessageID: UUID? = nil
     @ObservedObject private var dictate = AssemblyAIStreamingService.shared
@@ -409,10 +410,32 @@ struct IslandChatView: View {
                 .fill(Color.white.opacity(0.07))
                 .frame(height: 0.5)
             voiceShortcutHintRow
+            if pendingDrawn.hasPending { drawnMarksChip }
             inlineFollowUpComposer
         }
         .background(DS.Colors.surface1)
         .animation(.easeInOut(duration: 0.18), value: isVoiceActive)
+    }
+
+    // Shown above the composer when the user has drawn spatial marks (⌃⌥D / Draw).
+    private var drawnMarksChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "pencil.and.scribble")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(accent)
+            Text("Marks attached — ask about what you circled")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.6))
+            Spacer()
+            Button { PendingDrawnContextService.shared.clear() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
     }
 
     // Activity surface shown above the composer when voice is active
@@ -648,6 +671,50 @@ struct IslandChatView: View {
             context: context,
             apiKey:  miraState.effectiveAPIKey
         )
+
+        // Drawn spatial context (⌃⌥D / Control-tab Draw): if the user marked the
+        // screen and this isn't an autonomy command, answer about the marked region
+        // with the annotated screenshot streamed in. (Autonomy routes pop the same
+        // pending context themselves in RouterService.computerUseResult.)
+        if decision.route != .computerUse,
+           PendingDrawnContextService.shared.hasPending,
+           let ctx = PendingDrawnContextService.shared.pop() {
+            let ph = ChatMessage(role: .mira, text: "")
+            streamingMsgId = ph.id
+            messages.append(ph)
+            var reply = ""
+            do {
+                // Token-efficient: send a tight crop of just what the user circled,
+                // not the whole screen.
+                guard let b64 = ctx.markedCropJPEGBase64() else {
+                    throw MiraError.api("couldn't encode the marked region")
+                }
+                NSLog("[DrawContext] sending marked crop JPEG b64=%dKB", b64.count / 1024)
+                let visionPrompt = "\(prompt)\n\nThis image is the region the user circled on their screen (their mark is drawn on it). Answer about what's inside or nearest the mark."
+                reply = try await claude.askStreaming(
+                    prompt: visionPrompt,
+                    imageBase64: b64,
+                    imageMediaType: "image/jpeg"
+                ) { chunk in
+                    if let idx = self.messages.firstIndex(where: { $0.id == self.streamingMsgId }) {
+                        self.messages[idx].text = chunk
+                    }
+                }
+            } catch {
+                NSLog("[DrawContext] askStreaming FAILED: \(error)")
+                reply = "I couldn't read your marked screen region (\(error.localizedDescription))."
+            }
+            streamingMsgId = nil
+            if let idx = messages.firstIndex(where: { $0.id == ph.id }), messages[idx].text.isEmpty {
+                messages[idx].text = reply
+            }
+            ConversationStore.shared.save(role: "mira", text: reply)
+            if !hasPlayedReceiveChime { hasPlayedReceiveChime = true; AudioCueService.shared.playTextReceive() }
+            miraState.recordUsage()
+            isLoading = false
+            scheduleAutoDismiss(after: 8.0)
+            return
+        }
 
         if decision.route == .websiteBuilder && miraState.isSignedIn {
             // Launch inline agent job — shows live status card in chat thread

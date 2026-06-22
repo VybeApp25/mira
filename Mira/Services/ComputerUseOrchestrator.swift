@@ -30,7 +30,7 @@ final class ComputerUseOrchestrator: ObservableObject {
 
     // MARK: - Public
 
-    func run(task: String, apiKey: String) async {
+    func run(task: String, apiKey: String, drawn: DrawnContext? = nil) async {
         // Server-authoritative monthly quota (QuotaService → Supabase, with a
         // local offline fallback). consume() records the run up front and tells
         // us whether it's allowed; deny → announce, don't silently no-op.
@@ -41,7 +41,7 @@ final class ComputerUseOrchestrator: ObservableObject {
                                           detail: QuotaService.shared.tasksLeftText)
             return
         }
-        let ok = await runVisionLoop(task: task, apiKey: apiKey)
+        let ok = await runVisionLoop(task: task, apiKey: apiKey, drawn: drawn)
         if !stopRequested {
             TaskAnnouncer.shared.announce(task: task, success: ok,
                                           detail: result.isEmpty ? nil : result)
@@ -53,15 +53,15 @@ final class ComputerUseOrchestrator: ObservableObject {
     /// announce across a possible Codex→Claude failover. Returns whether the task
     /// completed cleanly.
     @discardableResult
-    func control(task: String, apiKey: String) async -> Bool {
-        await runVisionLoop(task: task, apiKey: apiKey)
+    func control(task: String, apiKey: String, drawn: DrawnContext? = nil) async -> Bool {
+        await runVisionLoop(task: task, apiKey: apiKey, drawn: drawn)
     }
 
     /// The Claude computer_use loop. Returns whether it completed cleanly. Does
     /// NOT consume quota or announce — callers (run / control / perform) own that
     /// so a task is metered + announced exactly once regardless of how it routed.
     @discardableResult
-    private func runVisionLoop(task: String, apiKey: String) async -> Bool {
+    private func runVisionLoop(task: String, apiKey: String, drawn: DrawnContext? = nil) async -> Bool {
         isRunning     = true
         stopRequested = false
         steps         = []
@@ -80,8 +80,19 @@ final class ComputerUseOrchestrator: ObservableObject {
             The "super" key is the macOS Command (⌘) key.
             """
 
+        // If the user drew on screen to mark WHERE to act, lead with the annotated
+        // capture + a region hint (logical points). Mirrors analyzeHandoff's image+text
+        // shape; the per-step screenshots later in the loop are unchanged.
+        var firstContent: [[String: Any]] = []
+        if let drawn, let b64 = drawn.annotatedJPEGBase64() {
+            firstContent.append(["type": "image",
+                                 "source": ["type": "base64", "media_type": "image/jpeg", "data": b64]])
+            firstContent.append(["type": "text", "text": "\(task)\n\n\(drawn.computerUseHint)"])
+        } else {
+            firstContent.append(["type": "text", "text": task])
+        }
         var messages: [[String: Any]] = [
-            ["role": "user", "content": [["type": "text", "text": task]]]
+            ["role": "user", "content": firstContent]
         ]
 
         // Per-task cost ceiling: caps a single task's steps so one runaway task

@@ -4,6 +4,7 @@ struct ComputerUseTabView: View {
     let miraState: MiraState
 
     @ObservedObject private var orchestrator = ComputerUseOrchestrator.shared
+    @ObservedObject private var drawn = PendingDrawnContextService.shared
     @State private var taskText = ""
     @State private var handoffPrompt = ""
     @State private var showHandoffSheet = false
@@ -39,6 +40,14 @@ struct ComputerUseTabView: View {
                     .foregroundColor(.red)
                     .buttonStyle(.plain)
             }
+            Button(action: startDraw) {
+                Label("Draw", systemImage: "pencil.and.scribble")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(drawn.hasPending ? Color(DS.Colors.accent) : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Draw on your screen to mark where Mira should act, then type the task")
+
             Button(action: startHandoff) {
                 Label("Handoff", systemImage: "crop")
                     .font(.system(size: 11, weight: .medium))
@@ -132,6 +141,33 @@ struct ComputerUseTabView: View {
     // MARK: - Input bar
 
     private var inputBar: some View {
+        VStack(spacing: 6) {
+            if drawn.hasPending {
+                HStack(spacing: 6) {
+                    Image(systemName: "pencil.and.scribble")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(DS.Colors.accent))
+                    Text("Marks attached — they'll target your task")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button { drawn.clear() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Discard the drawn marks")
+                }
+                .padding(.horizontal, 4)
+            }
+            inputRow
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+    }
+
+    private var inputRow: some View {
         HStack(spacing: 8) {
             TextField("Describe what to do on your Mac…", text: $taskText, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -152,8 +188,6 @@ struct ComputerUseTabView: View {
             .buttonStyle(.plain)
             .disabled(!orchestrator.isRunning && taskText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
     }
 
     // MARK: - Actions
@@ -163,7 +197,12 @@ struct ComputerUseTabView: View {
         let task = taskText.trimmingCharacters(in: .whitespaces)
         guard !task.isEmpty else { return }
         taskText = ""
-        Task { await orchestrator.run(task: task, apiKey: miraState.effectiveAPIKey) }
+        let ctx = drawn.pop()   // attach any drawn spatial context to this task
+        Task { await orchestrator.run(task: task, apiKey: miraState.effectiveAPIKey, drawn: ctx) }
+    }
+
+    private func startDraw() {
+        ScreenDrawController.shared.begin(mode: .standalone)
     }
 
     private func startHandoff() {

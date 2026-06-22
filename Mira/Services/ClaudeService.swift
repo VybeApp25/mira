@@ -469,6 +469,64 @@ class ClaudeService {
         return accumulated
     }
 
+    /// Streaming ask with a PRE-ENCODED image (caller controls format + size). The
+    /// NSImage `askStreaming` PNG-encodes at full Retina resolution, which for a
+    /// screen capture is ~14 MB base64 → over Anthropic's 5 MB/image cap → HTTP 400.
+    /// The draw-on-screen path passes a downscaled JPEG through here instead.
+    func askStreaming(
+        prompt: String,
+        imageBase64: String,
+        imageMediaType: String = "image/jpeg",
+        system: String = MiraPrompts.system,
+        maxTokensOverride: Int? = nil,
+        onChunk: @MainActor @Sendable (String) -> Void
+    ) async throws -> String {
+        let content: [[String: Any]] = [
+            ["type": "image", "source": ["type": "base64", "media_type": imageMediaType, "data": imageBase64]],
+            ["type": "text", "text": prompt]
+        ]
+        let body: [String: Any] = [
+            "model": model,
+            "max_tokens": maxTokensOverride ?? 800,
+            "stream": true,
+            "system": system,
+            "messages": [["role": "user", "content": content]]
+        ]
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
+        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = 120
+
+        let session = URLSession(configuration: {
+            let c = URLSessionConfiguration.default
+            c.urlCache = nil; c.httpCookieStorage = nil; return c
+        }())
+        let (byteStream, response) = try await session.bytes(for: req)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw MiraError.api("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+        }
+
+        var accumulated = ""
+        for try await line in byteStream.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let json = String(line.dropFirst(6))
+            guard json != "[DONE]" else { break }
+            guard let data = json.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  (payload["type"] as? String) == "content_block_delta",
+                  let delta = payload["delta"] as? [String: Any],
+                  (delta["type"] as? String) == "text_delta",
+                  let chunk = delta["text"] as? String else { continue }
+            accumulated += chunk
+            await onChunk(accumulated)
+        }
+        return accumulated
+    }
+
     func locateGuidanceTarget(goal: String, in screenshot: NSImage) async throws -> GuidanceTarget? {
         let startTime = Date()
         let prompt = """

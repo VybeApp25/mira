@@ -10,6 +10,7 @@ struct SettingsView: View {
     var embedded: Bool = false
     @ObservedObject private var memory   = MemoryStore.shared
     @ObservedObject private var shortcuts = ShortcutStore.shared
+    @ObservedObject private var realtime = RealtimeVoiceService.shared
     @ObservedObject private var account  = AccountService.shared
     @ObservedObject private var quota    = QuotaService.shared
     @Environment(\.dismiss) var dismiss
@@ -37,10 +38,13 @@ struct SettingsView: View {
     @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
     @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
     @AppStorage("mira_autonomy_engine") private var autonomyEngine = "auto"
+    @AppStorage("mira_draw_context_enabled") private var drawContextEnabled = true
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
+    @AppStorage(BrowserService.preferredKey) private var preferredBrowser = ""
+    @State private var installedBrowsers: [BrowserService.Browser] = []
     @State private var micDevices:     [AVCaptureDevice] = []
     @State private var selectedMicUID: String = UserDefaults.standard.string(forKey: "mira_mic_uid") ?? ""
     @State private var micLevel:       Float  = 0.0
@@ -54,7 +58,16 @@ struct SettingsView: View {
 
     private static let defaultAgentFolder = NSHomeDirectory() + "/Desktop/Mira"
 
-    enum RecordingTarget { case voice, text }
+    enum RecordingTarget {
+        case voice, text, draw
+        var defaultConfig: ShortcutConfig {
+            switch self {
+            case .voice: return .defaultVoice
+            case .text:  return .defaultText
+            case .draw:  return .defaultDraw
+            }
+        }
+    }
 
     private let accent = DS.Colors.accent
 
@@ -93,6 +106,7 @@ struct SettingsView: View {
                         }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
+                            browserSection
                         }
                         settingsGroup("Agents & Memory", icon: "brain.head.profile") {
                             connectedAppsButton
@@ -429,6 +443,36 @@ struct SettingsView: View {
 
     // MARK: - Shortcuts section
 
+    private var browserSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Web Browser", systemImage: "safari")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Open searches & web pages in")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.80))
+                Picker("", selection: $preferredBrowser) {
+                    Text("System default").tag("")
+                    ForEach(installedBrowsers) { browser in
+                        Text(browser.name).tag(browser.bundleID)
+                    }
+                }
+                .labelsHidden()
+                Text("When you ask for live scores, news, or anything on the web, Mira opens this browser to the page and reads it back to you.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .onAppear { installedBrowsers = BrowserService.shared.installedBrowsers() }
+    }
+
     @ViewBuilder
     private var shortcutsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -436,8 +480,33 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
 
-            shortcutRow(label: "Talk to Mira", config: $shortcuts.voice, target: .voice)
-            shortcutRow(label: "Text Mira",    config: $shortcuts.text,  target: .text)
+            shortcutRow(label: "Talk to Mira",   config: $shortcuts.voice, target: .voice)
+            shortcutRow(label: "Text Mira",      config: $shortcuts.text,  target: .text)
+            shortcutRow(label: "Draw on screen", config: $shortcuts.draw,  target: .draw)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Always-on voice")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Hands-free listening that lives in the closed notch. Interrupt Mira while she talks when you're on headphones/AirPods.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { realtime.isAlwaysOnActive },
+                    set: { _ in NotificationCenter.default.post(name: .miraToggleAlwaysOn, object: nil) }
+                ))
+                .toggleStyle(.switch)
+                .tint(accent)
+                .labelsHidden()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             if recording != nil {
                 Text("Press a key combo — Esc to cancel. Requires ⌃, ⌥, or ⌘.")
@@ -473,10 +542,10 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
 
-            if config.wrappedValue != (target == .voice ? .defaultVoice : .defaultText) {
+            if config.wrappedValue != target.defaultConfig {
                 Button(action: {
                     stopRecording()
-                    config.wrappedValue = target == .voice ? .defaultVoice : .defaultText
+                    config.wrappedValue = target.defaultConfig
                 }) {
                     Image(systemName: "arrow.uturn.left")
                         .font(.system(size: 10))
@@ -1121,6 +1190,27 @@ struct SettingsView: View {
                     }
                     Spacer()
                     Toggle("", isOn: $autonomousConfirmRisky)
+                        .toggleStyle(.switch)
+                        .tint(accent)
+                        .labelsHidden()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Draw on screen for context")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.80))
+                        Text("Hold the Draw shortcut (\(shortcuts.draw.displayString)) or the voice key to sketch on your screen — Mira uses the marks to know where to act or what you mean.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.35))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $drawContextEnabled)
                         .toggleStyle(.switch)
                         .tint(accent)
                         .labelsHidden()

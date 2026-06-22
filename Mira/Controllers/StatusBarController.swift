@@ -71,6 +71,14 @@ class StatusBarController: NSObject {
         textItem.target = self
         menu.addItem(textItem)
 
+        // Always-on continuous voice — toggles a hands-free session that lives in the
+        // CLOSED notch (listening/speaking shown in the pill). Checkmark reflects state.
+        let alwaysOn = NSMenuItem(title: "Always-on voice",
+                                  action: #selector(toggleAlwaysOn), keyEquivalent: "")
+        alwaysOn.target = self
+        menu.addItem(alwaysOn)
+        self.alwaysOnItem = alwaysOn
+
         menu.addItem(.separator())
 
         let openItem = NSMenuItem(title: "Open Chat Panel", action: #selector(openPanel), keyEquivalent: "")
@@ -104,6 +112,7 @@ class StatusBarController: NSObject {
     }
 
     private var contextMenu: NSMenu?
+    private var alwaysOnItem: NSMenuItem?
 
     // MARK: - Shortcut actions (fired by key equivalents globally)
 
@@ -115,12 +124,19 @@ class StatusBarController: NSObject {
         NotificationCenter.default.post(name: .miraActivateText, object: nil)
     }
 
+    @objc private func toggleAlwaysOn() {
+        NotificationCenter.default.post(name: .miraToggleAlwaysOn, object: nil)
+    }
+
     // MARK: - Click handling
 
     @objc private func handleClick() {
         guard let event = NSApp.currentEvent else { return }
         if event.type == .rightMouseUp {
             if let btn = statusItem.button, let menu = contextMenu {
+                MainActor.assumeIsolated {
+                    alwaysOnItem?.state = RealtimeVoiceService.shared.isAlwaysOnActive ? .on : .off
+                }
                 menu.popUp(positioning: nil,
                            at: NSPoint(x: 0, y: btn.bounds.height + 4),
                            in: btn)

@@ -137,6 +137,16 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             || UserDefaults.standard.bool(forKey: "mira_voice_screen_context")
     }
 
+    /// Draw-on-screen spatial context coupled to PTT: hold the voice key, draw on
+    /// screen, release → the annotated screenshot + coordinates ride the turn.
+    /// Disable with `defaults write … mira_draw_context_enabled -bool NO`.
+    private var drawContextEnabled: Bool {
+        UserDefaults.standard.object(forKey: "mira_draw_context_enabled") == nil
+            || UserDefaults.standard.bool(forKey: "mira_draw_context_enabled")
+    }
+    // True for the duration of a PTT hold that armed the draw overlay.
+    private var pttDrawCoupled = false
+
     // MARK: Private — Session
 
     private var openAIKey       = ""
@@ -214,6 +224,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         idleTeardownTask?.cancel(); idleTeardownTask = nil
         pttActive = true
 
+        // Voice-coupled drawing: arm the freehand overlay so the user can mark up the
+        // screen while talking. The annotated capture is emitted at end-of-turn
+        // (flushed in the PTT tail, just before commit). The begin-time snapshot below
+        // still sends a clean baseline.
+        pttDrawCoupled = screenContextEnabled && drawContextEnabled
+        if pttDrawCoupled { ScreenDrawController.shared.begin(mode: .voiceCoupled) }
+
         if webSocket != nil && sessionHealthy {
             // Warm session — mic was stopped during idle; restart it and clear any stale buffer
             NSLog("[MiraRealtime] PTT begin: reusing healthy session")
@@ -262,6 +279,16 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                     return
                 }
                 try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            // If the user drew on screen during this hold, capture + composite the
+            // marks and emit the annotated image + coordinates BEFORE the response is
+            // requested, so the model sees them as part of this turn.
+            if await MainActor.run(body: { self.pttDrawCoupled }) {
+                if let ctx = await ScreenDrawController.shared.commit() {
+                    await MainActor.run { self.emitDrawnContext(ctx) }
+                }
+                await MainActor.run { self.pttDrawCoupled = false }
             }
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -696,6 +723,12 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     /// input_image item — gives the model HeyClicky-style live screen awareness.
     private func sendScreenSnapshot() {
         guard screenContextEnabled else { return }
+        // If the user pre-marked the screen (⌃⌥D, then talk), send the annotated
+        // capture + coordinates instead of a fresh clean shot.
+        if let ctx = PendingDrawnContextService.shared.pop() {
+            emitDrawnContext(ctx)
+            return
+        }
         Task { [weak self] in
             do {
                 let screens = try await ScreenCaptureService.captureAllDisplaysAsJPEG()
@@ -723,6 +756,26 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
     }
 
+    /// Emit a user-drawn spatial-context item: the annotated screenshot plus a text
+    /// part describing the marked region (normalized coords). Same `conversation.item.create`
+    /// shape as sendScreenSnapshot, just with the marks burned in + a coordinate hint.
+    private func emitDrawnContext(_ ctx: DrawnContext) {
+        guard sessionHealthy, let jpeg = ctx.annotatedJPEGData() else { return }
+        emit([
+            "type": "conversation.item.create",
+            "item": [
+                "type": "message",
+                "role": "user",
+                "content": [
+                    ["type": "input_image",
+                     "image_url": "data:image/jpeg;base64,\(jpeg.base64EncodedString())"],
+                    ["type": "input_text", "text": ctx.coordinateHint]
+                ] as [[String: Any]]
+            ] as [String: Any]
+        ])
+        NSLog("[MiraRealtime] drawn spatial context attached (%d KB)", jpeg.count / 1024)
+    }
+
     private func buildSessionUpdate(includeFullConfig: Bool) -> [String: Any] {
         let contextBlock = ContextService.shared.buildPromptBlock()
         let instructions = MiraPrompts.realtimeSystem + "\n\n" + contextBlock
@@ -745,7 +798,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                     "type":                "server_vad",
                     "threshold":           0.5,
                     "prefix_padding_ms":   300,
-                    "silence_duration_ms": 500
+                    // Snappier continuous turn-taking — commit ~400ms after silence
+                    // so replies come fast (HeyClicky-style). Bump back toward 500 if
+                    // it clips trailing words.
+                    "silence_duration_ms": 400
                   ] as [String: Any])
                 : NSNull()
 
@@ -826,8 +882,12 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            // Suppress mic while Mira is speaking (prevents speaker echo → VAD false positive)
-            if case .speaking = self.state { return }
+            // While Mira is speaking, keep streaming the mic ONLY on external output
+            // (headphones/AirPods) so server-VAD can detect a barge-in and the
+            // speech_started handler can interrupt her. On the built-in speaker this
+            // would echo Mira's own voice back and self-interrupt, so we stay silent
+            // and let her finish — barge-in is headphones-only by design.
+            if case .speaking = self.state, !AudioOutputRoute.isExternalOutput { return }
             // Post-response settle window — 800ms after playback drains
             guard Date() > self.suppressMicUntil else { return }
             self.emit(["type": "input_audio_buffer.append", "audio": base64])

@@ -32,7 +32,7 @@ targets:
     info:
       path: Mira/Info.plist
       properties:
-        LSUIElement: false
+        LSUIElement: true
         NSPrincipalClass: NSApplication
         CFBundleDisplayName: Mira
         CFBundleName: Mira

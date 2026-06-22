@@ -11,10 +11,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EvidenceEvaluator.runIsolationVerification()
         #endif
 
-        // Activate once so the dock running indicator appears. Mira's panels are
-        // all .nonactivatingPanel, so without this the app never enters active state
-        // and the dock dot never shows despite LSUIElement = false.
-        NSApp.activate(ignoringOtherApps: true)
+        // Menu-bar (accessory) app — no Dock icon or app-switcher entry, ambient like
+        // HeyClicky. Mira's UI is the menu-bar item + the notch island + global
+        // hotkeys; panels are .nonactivatingPanel so we never steal the user's focus.
+        // (LSUIElement=true sets this at launch; we assert it here belt-and-suspenders.)
+        NSApp.setActivationPolicy(.accessory)
 
         ScreenCaptureService.requestAccessIfNeeded()
 

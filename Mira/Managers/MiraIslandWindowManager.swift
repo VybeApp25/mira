@@ -90,6 +90,10 @@ final class MiraIslandWindowManager {
         p.hasShadow          = false    // always off — shadow drawn by SwiftUI to avoid macOS corner rounding
         p.ignoresMouseEvents = true     // pass-through until user hovers
         p.isMovableByWindowBackground = false
+        // Exclude the island from screen capture (screenshots, screen recording, SCK)
+        // so the notch UI never appears in the user's captures — same trick HeyClicky /
+        // DynamicLake use. The notch is Mira's chrome, not the user's content.
+        p.sharingType = .none
         p.collectionBehavior = [
             .canJoinAllSpaces,
             .stationary,

@@ -120,6 +120,10 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { RealtimeVoiceService.shared.endPushToTalk() }
         }
+        // Draw-on-screen spatial context (⌃⌥D) — toggle the freehand draw overlay
+        NotificationCenter.default.addObserver(forName: .miraDrawModeToggled, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { ScreenDrawController.shared.toggleStandalone() }
+        }
         // Auto-collapse requested (post-PTT or post-text-response dismiss)
         NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.animController.collapse() }
@@ -153,11 +157,15 @@ final class NotchManager {
                 guard let self else { return }
                 if RealtimeVoiceService.shared.isAlwaysOnActive {
                     RealtimeVoiceService.shared.disconnectAlwaysOn()
+                    UserDefaults.standard.set(false, forKey: "mira_always_on")
                     NSLog("[Mira] always-on voice disabled")
                 } else {
-                    self.expandForShortcut()
+                    // Stay in the CLOSED notch — the collapsed pill shows live
+                    // listening/thinking/speaking via SharedStatusView, no panel needed.
                     RealtimeVoiceService.shared.connectAlwaysOn()
-                    NSLog("[Mira] always-on voice enabled")
+                    UserDefaults.standard.set(true, forKey: "mira_always_on")
+                    self.animController.collapse()
+                    NSLog("[Mira] always-on voice enabled (closed notch)")
                 }
             }
         }

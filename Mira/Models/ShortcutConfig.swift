@@ -18,6 +18,11 @@ struct ShortcutConfig: Codable, Equatable {
         carbonMods: UInt32(controlKey | optionKey),
         displayKey: "T"
     )
+    static let defaultDraw = ShortcutConfig(
+        keyCode:    UInt32(kVK_ANSI_D),
+        carbonMods: UInt32(controlKey | optionKey),
+        displayKey: "D"
+    )
 
     /// Human-readable display string, e.g. "⌃⌥V"
     var displayString: String {
@@ -62,10 +67,12 @@ final class ShortcutStore: ObservableObject {
 
     @Published var voice: ShortcutConfig { didSet { persist() } }
     @Published var text:  ShortcutConfig { didSet { persist() } }
+    @Published var draw:  ShortcutConfig { didSet { persist() } }
 
     private init() {
         voice = Self.load("mira_shortcut_voice")?.validated(default: .defaultVoice) ?? .defaultVoice
         text  = Self.load("mira_shortcut_text")?.validated(default: .defaultText)  ?? .defaultText
+        draw  = Self.load("mira_shortcut_draw")?.validated(default: .defaultDraw)  ?? .defaultDraw
     }
 
     // MARK: - Private
@@ -73,6 +80,7 @@ final class ShortcutStore: ObservableObject {
     private func persist() {
         Self.save("mira_shortcut_voice", voice)
         Self.save("mira_shortcut_text",  text)
+        Self.save("mira_shortcut_draw",  draw)
         NotificationCenter.default.post(name: .miraShortcutsChanged, object: nil)
     }
 
