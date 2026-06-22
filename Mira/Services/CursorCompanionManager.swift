@@ -209,8 +209,13 @@ final class CursorCompanionManager {
             while true {
                 try? await Task.sleep(nanoseconds: 16_000_000)  // 60 fps — feels attached
                 guard let self, !Task.isCancelled else { return }
+                // Keep following as long as the bubble is visible. Do NOT gate on
+                // alphaValue: during the 0.2s fade-in alpha is still < 0.5 on the
+                // first ticks, which would kill the loop immediately and leave the
+                // bubble frozen at its spawn point (detaches as the cursor moves).
+                // Dismissal already stops the loop via hide() -> stopFollowing().
                 guard self.viewModel.state != .idle,
-                      let p = self.panel, p.alphaValue > 0.5 else {
+                      let p = self.panel, p.isVisible else {
                     self.stopFollowing()
                     return
                 }
@@ -263,7 +268,9 @@ final class CursorCompanionManager {
     private func position(for cursor: CGPoint, size: CGSize) -> CGPoint {
         let screen  = NSScreen.screens.first(where: { $0.frame.contains(cursor) }) ?? NSScreen.main!
         let visible = screen.visibleFrame
-        let offset: CGFloat = 20
+        // Gap between the cursor and the bubble's near edge. ~64pt ≈ half an inch
+        // on a 2x ~128 pt/inch display. Tune here to move the bubble closer/farther.
+        let offset: CGFloat = 64
 
         // Default: right of cursor, vertically centered on cursor
         var x = cursor.x + offset
@@ -297,11 +304,13 @@ final class CursorCompanionManager {
         switch state {
         case .idle:                            return CGSize(width: 1, height: 1)
         case .reply(let t):
-            // Estimate height based on character count at ~300pt wide, ~19pt per line
-            let charsPerLine: Double = 38
+            // Reply bubble is 240pt wide (see CursorCompanionView). Estimate height
+            // from char count at that width (~28 chars/line at 13pt); slightly
+            // over-estimate so the panel never clips the typewriter text.
+            let charsPerLine: Double = 28
             let lines = max(1, ceil(Double(t.count) / charsPerLine))
-            let h = lines * 22 + 32     // 22pt per line + padding
-            return CGSize(width: 300, height: h)
+            let h = lines * 22 + 34     // 22pt per line + padding
+            return CGSize(width: 240, height: h)
         case .agentRunning:                    return CGSize(width: 300, height: 90)
         case .question(_, let opts, _):        return CGSize(width: 300, height: CGFloat(56 + opts.count * 40))
         case .confirmation:                    return CGSize(width: 300, height: 108)

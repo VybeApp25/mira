@@ -46,8 +46,10 @@ struct CursorCompanionView: View {
                 errorCard(message: message, actions: actions)
             }
         }
-        // Reply card self-sizes; all other cards use 300pt wide
-        .frame(width: state.isReply ? nil : 300)
+        // Reply uses a defined 240pt width so the card fills its panel instead of
+        // self-sizing narrow and getting centered (which left a big dead-space gap
+        // between the cursor and the visible bubble). All other cards are 300pt.
+        .frame(width: state.isReply ? 240 : 300)
         .fixedSize(horizontal: false, vertical: true)
     }
 
