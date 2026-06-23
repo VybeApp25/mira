@@ -621,6 +621,7 @@ enum MiraToolService {
     // MARK: - Execution router
 
     static func execute(name: String, argsJSON: String) async -> String {
+        NSLog("[MiraTool] execute \(name) args=\(argsJSON)")
         let args = parse(argsJSON)
         switch name {
         case "save_content":        return await saveContent(args)
@@ -1048,7 +1049,10 @@ enum MiraToolService {
     /// nil on any failure so the caller falls back to keyboard search.
     private static func resolveSpotifyURI(query: String, track: String, artist: String) async -> String? {
         let jwt = SupabaseService.cachedAccessToken
-        guard MiraBackend.useProxy, !jwt.isEmpty else { return nil }  // needs a signed-in session
+        guard MiraBackend.useProxy, !jwt.isEmpty else {
+            NSLog("[MiraSpotify] resolve skipped — useProxy=\(MiraBackend.useProxy) jwtEmpty=\(jwt.isEmpty) (not signed in?)")
+            return nil
+        }
 
         var req = URLRequest(url: MiraBackend.spotifySearchURL)
         req.httpMethod = "POST"
@@ -1061,13 +1065,18 @@ enum MiraToolService {
 
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let body = String(data: data, encoding: .utf8) ?? ""
+            guard status == 200,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let uri = json["uri"] as? String, !uri.isEmpty else {
+                NSLog("[MiraSpotify] resolve failed — status=\(status) body=\(body)")
                 return nil
             }
+            NSLog("[MiraSpotify] resolved '\(track) \(artist) \(query)' → \(uri)")
             return uri
         } catch {
+            NSLog("[MiraSpotify] resolve network error — \(error.localizedDescription)")
             return nil
         }
     }
