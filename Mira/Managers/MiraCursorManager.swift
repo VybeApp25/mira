@@ -216,7 +216,19 @@ final class OverlayWindowManager {
     private func startTracking() {
         let t = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.model.cursorPosition = NSEvent.mouseLocation
+                guard let self else { return }
+                self.model.cursorPosition = NSEvent.mouseLocation
+                // Other apps re-show the system cursor whenever the pointer
+                // crosses their tracking areas (each sets its own NSCursor), so a
+                // one-time hide isn't enough — re-assert it every frame so only
+                // the custom cursor remains. The WindowServer drops this process's
+                // accumulated hide-count when Mira's connection ends (quit/crash),
+                // so there is no stuck-hidden cursor; deactivate() only runs at
+                // terminate. (CGCursorIsVisible, which would let us skip redundant
+                // calls, is unavailable on modern macOS.)
+                if self.active {
+                    CGDisplayHideCursor(kCGNullDirectDisplay)
+                }
             }
         }
         RunLoop.main.add(t, forMode: .common)
@@ -323,9 +335,14 @@ struct BlueCursorView: View {
     @ObservedObject private var accentService = AccentColorService.shared
     private var accent: Color { accentService.color }
 
+    // True for states where the indicator REPLACES the arrow at the pointer
+    // hot-spot (a smooth morph), vs. sitting beside it as a small status badge.
+    private var replacesArrow: Bool { state == .speaking }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Arrow — 32×32, tip at (3, 3)
+            // Arrow — 32×32, tip at (3, 3). Cross-fades out while Mira speaks so
+            // the waveform takes its place rather than appearing next to it.
             BlueArrowShape()
                 .fill(accent)
                 .frame(width: 32, height: 32)
@@ -335,27 +352,36 @@ struct BlueCursorView: View {
                         .frame(width: 32, height: 32)
                 )
                 .shadow(color: accent.opacity(0.65), radius: 8, x: 0, y: 0)
+                .opacity(replacesArrow ? 0 : 1)
+                .scaleEffect(replacesArrow ? 0.6 : 1, anchor: .topLeading)
 
-            // State indicator sits at the base of the arrow shaft
-            stateIndicator
+            // Speaking: the cursor itself becomes an animated accent waveform,
+            // centered on the pointer hot-spot (~frame 9,9) — not a side badge.
+            if replacesArrow {
+                BlueCursorWaveformView(color: accent)
+                    .offset(x: 1, y: 2)
+                    .transition(.scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity))
+            }
+
+            // Non-replacing status badges keep their spot at the arrow shaft base.
+            badgeIndicator
                 .offset(x: 20, y: 20)
         }
         .frame(width: 44, height: 44, alignment: .topLeading)
+        .animation(.easeInOut(duration: 0.22), value: state)
     }
 
     @ViewBuilder
-    private var stateIndicator: some View {
+    private var badgeIndicator: some View {
         switch state {
-        case .arrow:
-            EmptyView()
         case .thinking:
             BlueCursorSpinnerView(color: accent)
         case .stop:
             BlueCursorStopView(color: accent)
         case .listening:
             BlueCursorWaveformView(color: accent)
-        case .speaking:
-            BlueCursorWaveformView(color: accent)
+        case .arrow, .speaking:
+            EmptyView()
         }
     }
 }
