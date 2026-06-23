@@ -363,7 +363,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         )
 
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await MiraBackend.proxyData(for: req)
             guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let token = json["token"] as? String, !token.isEmpty else {
@@ -474,12 +474,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         // ── User transcript (requires input_audio_transcription in session config) ─
         case "conversation.item.input_audio_transcription.completed":
             let text = event["transcript"] as? String ?? ""
-            if !text.isEmpty {
+            if !text.isEmpty && !Self.isPhantomTranscript(text) {
                 userDraft = text
                 onUserMessage?(text)
                 // Fire Computer Use element detection in parallel with AI response.
                 // If a UI element is identified, PointToService animates to it.
                 triggerElementDetection(for: text)
+            } else if !text.isEmpty {
+                // Whisper hallucinated on noise/silence (VAD fired on ambient sound).
+                // Drop it silently and clear the buffer so the next turn starts clean.
+                NSLog("[MiraRealtime] dropped phantom transcript: \(text)")
+                emit(["type": "input_audio_buffer.clear"])
             }
 
         // ── Response lifecycle ────────────────────────────────────────────────────
@@ -812,7 +817,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let turnDetection: Any = isAlwaysOn
                 ? ([
                     "type":                "server_vad",
-                    "threshold":           0.5,
+                    // 0.65 (was 0.5): higher bar so ambient room noise / fans / typing
+                    // don't cross the speech threshold and auto-commit a phantom turn.
+                    // Lower toward 0.55 only if it starts missing soft-spoken starts.
+                    "threshold":           0.65,
                     "prefix_padding_ms":   300,
                     // Snappier continuous turn-taking — commit ~400ms after silence
                     // so replies come fast (HeyClicky-style). Bump back toward 500 if
@@ -825,6 +833,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             session["audio"] = [
                 "input": [
                     "format":        ["type": "audio/pcm", "rate": 24_000] as [String: Any],
+                    // Strip background noise before it reaches VAD + transcription.
+                    // near_field = mic close to the user (built-in mic / headset);
+                    // this is the biggest lever against "heard words when silent".
+                    "noise_reduction": ["type": "near_field"] as [String: Any],
                     // Pin transcription to English so short/ambiguous audio isn't
                     // mis-detected into another language (used for element detection).
                     "transcription": ["model": "whisper-1", "language": "en"] as [String: Any],
@@ -840,6 +852,28 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         }
 
         return ["type": "session.update", "session": session]
+    }
+
+    /// Whisper reliably hallucinates a small set of stock phrases when handed
+    /// near-silence or non-speech noise (the audio a too-eager VAD commits when
+    /// no one is actually talking). These are almost never real commands, so we
+    /// drop them rather than feed the model a turn it has to answer. Short, real
+    /// utterances ("yes", "no", "stop", "next") are deliberately NOT in this set.
+    private static let phantomTranscripts: Set<String> = [
+        "you", "thank you", "thanks", "thank you.", "thanks for watching",
+        "thanks for watching!", "thank you for watching", "bye", "bye.",
+        "okay", "ok", ".", "..", "...", "uh", "um", "hmm", "mm", "mhm",
+        "you're", "so", "yeah", "right", "i", "the", "a"
+    ]
+
+    static func isPhantomTranscript(_ raw: String) -> Bool {
+        // Normalize: lowercase, strip surrounding whitespace and trailing
+        // punctuation so "You." and "you" collapse to the same key.
+        let normalized = raw
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n.,!?…\"'-♪"))
+        if normalized.isEmpty { return true }
+        return phantomTranscripts.contains(normalized)
     }
 
     // MARK: - Audio capture (mic → PCM16 → WebSocket)
