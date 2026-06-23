@@ -820,7 +820,11 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                     // 0.65 (was 0.5): higher bar so ambient room noise / fans / typing
                     // don't cross the speech threshold and auto-commit a phantom turn.
                     // Lower toward 0.55 only if it starts missing soft-spoken starts.
-                    "threshold":           0.65,
+                    // NSDecimalNumber, not a Double literal: JSONSerialization renders
+                    // 0.65 as a Double as "0.65000000000000002" (17 places), which the
+                    // Realtime API rejects ("threshold: max decimal places exceeded").
+                    // NSDecimalNumber serializes as exactly "0.65".
+                    "threshold":           NSDecimalNumber(string: "0.65"),
                     "prefix_padding_ms":   300,
                     // Snappier continuous turn-taking — commit ~400ms after silence
                     // so replies come fast (HeyClicky-style). Bump back toward 500 if
