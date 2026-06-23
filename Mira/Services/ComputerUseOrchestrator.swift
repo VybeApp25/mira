@@ -227,7 +227,7 @@ final class ComputerUseOrchestrator: ObservableObject {
         req.httpBody = data
         req.timeoutInterval = 60
 
-        if let (respData, resp) = try? await URLSession.shared.data(for: req),
+        if let (respData, resp) = try? await MiraBackend.proxyData(for: req),
            (resp as? HTTPURLResponse)?.statusCode == 200,
            let json = try? JSONSerialization.jsonObject(with: respData) as? [String: Any],
            let content = json["content"] as? [[String: Any]] {
@@ -359,7 +359,7 @@ final class ComputerUseOrchestrator: ObservableObject {
         req.setValue("computer-use-2025-11-24", forHTTPHeaderField: "anthropic-beta")
         req.httpBody = data
 
-        guard let (respData, resp) = try? await URLSession.shared.data(for: req),
+        guard let (respData, resp) = try? await MiraBackend.proxyData(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: respData) as? [String: Any] else {
             return nil

@@ -121,7 +121,7 @@ final class VoicePreviewService: NSObject, ObservableObject {
             throw MiraError.api("Sign in to preview voices.")
         }
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
             throw MiraError.api("TTS: \(msg)")

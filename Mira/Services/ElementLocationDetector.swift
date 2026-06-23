@@ -191,7 +191,7 @@ final class ElementLocationDetector {
 
         do {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (data, response) = try await session.data(for: req)
+            let (data, response) = try await MiraBackend.proxyData(for: req, using: session)
 
             guard let http = response as? HTTPURLResponse,
                   (200...299).contains(http.statusCode) else {

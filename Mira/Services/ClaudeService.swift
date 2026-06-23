@@ -138,7 +138,7 @@ class ClaudeService {
         // ~40 tokens/sec is a conservative estimate for Sonnet; minimum 120 s.
         req.timeoutInterval = max(120, Double(maxTokens) / 40)
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if status == 200 {
             return try JSONDecoder().decode(APIResponse.self, from: data).text
@@ -237,7 +237,7 @@ class ClaudeService {
         req.setValue("2023-06-01",    forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
             throw MiraError.api(msg)
@@ -284,7 +284,7 @@ class ClaudeService {
         req.setValue("application/json",  forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
         }
@@ -359,7 +359,7 @@ class ClaudeService {
         req.setValue("application/json",  forHTTPHeaderField: "content-type")
         req.httpBody = try JSONEncoder().encode(body)
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
         }
@@ -444,7 +444,7 @@ class ClaudeService {
             let c = URLSessionConfiguration.default
             c.urlCache = nil; c.httpCookieStorage = nil; return c
         }())
-        let (byteStream, response) = try await session.bytes(for: req)
+        let (byteStream, response) = try await MiraBackend.proxyBytes(for: req, using: session)
 
         guard let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode) else {
@@ -504,7 +504,7 @@ class ClaudeService {
             let c = URLSessionConfiguration.default
             c.urlCache = nil; c.httpCookieStorage = nil; return c
         }())
-        let (byteStream, response) = try await session.bytes(for: req)
+        let (byteStream, response) = try await MiraBackend.proxyBytes(for: req, using: session)
         guard let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode) else {
             throw MiraError.api("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")

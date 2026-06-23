@@ -100,7 +100,7 @@ final class AssemblyAIStreamingService: ObservableObject {
         req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         req.addValue("Bearer \(MiraBackend.supabaseBearer)", forHTTPHeaderField: "Authorization")
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await MiraBackend.proxyData(for: req)
             guard (resp as? HTTPURLResponse)?.statusCode == 200,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let token = json["token"] as? String, !token.isEmpty else { return nil }

@@ -116,7 +116,7 @@ final class AssemblyAIService: ObservableObject {
         req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         req.httpBody = data
 
-        let (respData, resp) = try await URLSession.shared.data(for: req)
+        let (respData, resp) = try await MiraBackend.proxyData(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
             throw AssemblyAIError.uploadFailed(String(data: respData, encoding: .utf8) ?? "")
         }
@@ -147,7 +147,7 @@ final class AssemblyAIService: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (respData, resp) = try await URLSession.shared.data(for: req)
+        let (respData, resp) = try await MiraBackend.proxyData(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AssemblyAIError.submissionFailed(String(data: respData, encoding: .utf8) ?? "")
         }
@@ -170,7 +170,7 @@ final class AssemblyAIService: ObservableObject {
         let deadline = Date().addingTimeInterval(300) // 5-minute timeout
         while Date() < deadline {
             try await Task.sleep(nanoseconds: 3_000_000_000) // 3 s
-            let (data, _) = try await URLSession.shared.data(for: req)
+            let (data, _) = try await MiraBackend.proxyData(for: req)
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
             let status = json["status"] as? String ?? ""
             switch status {

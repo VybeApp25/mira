@@ -303,7 +303,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         req.httpBody = try JSONEncoder().encode(body)
         req.timeoutInterval = 5
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             throw MiraError.api("haiku-gate-\((resp as? HTTPURLResponse)?.statusCode ?? 0)")
         }
@@ -1208,7 +1208,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         req.httpBody = httpBody
         req.timeoutInterval = 30
 
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await MiraBackend.proxyData(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let json    = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]] else { return nil }
@@ -1266,7 +1266,7 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         req.httpBody = try JSONEncoder().encode(body)
         req.timeoutInterval = 12
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             throw MiraError.api("haiku-\((resp as? HTTPURLResponse)?.statusCode ?? 0)")
         }

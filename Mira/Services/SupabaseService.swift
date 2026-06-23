@@ -217,6 +217,23 @@ final class SupabaseService: ObservableObject {
         }
     }
 
+    /// Forces a token refresh in response to a server 401 — the token was rejected
+    /// even if our clock still considers it valid (skew, server-side revocation, a
+    /// refresh that lost a race). Single-flights with the proactive refresh so two
+    /// callers can't rotate the single-use refresh token twice. Returns true if a
+    /// usable session remains, so the caller knows whether retrying is worthwhile. A
+    /// dead refresh token signs out, so callers stop retrying into a 401 loop.
+    func refreshAfter401() async -> Bool {
+        guard session != nil else { return false }
+        do { try await singleFlightRefresh(); return session != nil }
+        catch {
+            if case SupabaseError.serverError(let code, _) = error, code == 400 || code == 401 {
+                signOut()
+            }
+            return false
+        }
+    }
+
     private func singleFlightRefresh() async throws {
         if let inFlight = refreshInFlight { return try await inFlight.value }
         let task = Task { try await self.refresh() }

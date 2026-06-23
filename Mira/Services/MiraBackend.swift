@@ -119,4 +119,50 @@ enum MiraBackend {
     /// Edge function that resolves a track/artist query to a playable Spotify URI
     /// via the Web API (Client Credentials). Keeps the Spotify client secret server-side.
     static var spotifySearchURL: URL { URL(string: "\(functionsBase)/spotify-search")! }
+
+    // MARK: - Reactive 401 retry
+    //
+    // Even with proactive refresh (SupabaseService's wake hook + poll keeping the JWT
+    // fresh), a proxy call can still land on a stale token — clock skew, a refresh
+    // that fired a moment too late, or a token revoked server-side. These wrappers
+    // send the request and, on a 401 in proxy mode, force a single token refresh and
+    // retry ONCE with the new Bearer. Every proxy edge function authenticates with
+    // `Authorization: Bearer <jwt>`, so the retry only rewrites that one header.
+    // Direct mode and non-401 responses pass straight through, so swapping a plain
+    // `URLSession.data/bytes(for:)` for these is behavior-preserving.
+
+    /// Buffered send with reactive 401 refresh-and-retry. Drop-in for
+    /// `session.data(for: req)` on any proxy-authorized request.
+    static func proxyData(for req: URLRequest,
+                          using session: URLSession = .shared) async throws -> (Data, URLResponse) {
+        let (data, resp) = try await session.data(for: req)
+        guard await shouldRetryAfter401(resp) else { return (data, resp) }
+        return try await session.data(for: reauthorized(req))
+    }
+
+    /// Streaming send with reactive 401 refresh-and-retry. Drop-in for
+    /// `session.bytes(for: req)`. The 401 is detected from the response status before
+    /// the body stream is consumed, so the discarded first attempt costs nothing.
+    static func proxyBytes(for req: URLRequest,
+                           using session: URLSession) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        let (stream, resp) = try await session.bytes(for: req)
+        guard await shouldRetryAfter401(resp) else { return (stream, resp) }
+        return try await session.bytes(for: reauthorized(req))
+    }
+
+    /// True when `resp` is a proxy-mode 401 AND a fresh token was just obtained — i.e.
+    /// the caller should retry. Force-refreshes the Supabase session (the token was
+    /// rejected even if our clock thinks it's still valid).
+    private static func shouldRetryAfter401(_ resp: URLResponse) async -> Bool {
+        guard useProxy, (resp as? HTTPURLResponse)?.statusCode == 401 else { return false }
+        return await SupabaseService.shared.refreshAfter401()
+    }
+
+    /// Copy of `req` with the Authorization header rewritten to the current
+    /// (just-refreshed) JWT.
+    private static func reauthorized(_ req: URLRequest) -> URLRequest {
+        var retry = req
+        retry.setValue("Bearer \(SupabaseService.cachedAccessToken)", forHTTPHeaderField: "Authorization")
+        return retry
+    }
 }

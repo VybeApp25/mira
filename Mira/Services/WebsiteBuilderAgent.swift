@@ -886,7 +886,7 @@ enum WebsiteBuilderAgent {
             var text: String { content.compactMap(\.text).joined() }
         }
 
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await MiraBackend.proxyData(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw MiraError.api(String(data: data, encoding: .utf8) ?? "Analysis failed")
         }
