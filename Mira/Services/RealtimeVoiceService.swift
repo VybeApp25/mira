@@ -461,6 +461,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                 playerNode.play()
                 emit(["type": "response.cancel"])
                 NSLog("[MiraRealtime] interruptCurrentResponse")
+                // A cancelled response never emits transcript.done, which is the
+                // only place that arms the bubble's auto-fade — so fade it here or
+                // the half-spoken caption is orphaned on screen.
+                CursorBubbleService.shared.finishStreaming()
             }
             userDraft = ""
             state     = .recording
@@ -583,7 +587,12 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                       || code == "input_audio_buffer_commit_empty"
                       || msg.contains("no active response")
                       || msg.contains("buffer too small")
-            if !benign { state = .error(msg) }
+            if !benign {
+                state = .error(msg)
+                // Error aborts the response before transcript.done — clear any
+                // partial caption so it doesn't stick to the cursor.
+                CursorBubbleService.shared.hide()
+            }
 
         default:
             break
@@ -1150,6 +1159,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         playerNode.stop()
         if playEngine.isRunning { playEngine.stop() }
+
+        // If the session dies mid-reply, transcript.done never fires — force the
+        // cursor caption off so it isn't orphaned after the socket closes.
+        CursorBubbleService.shared.hide()
     }
 
     // MARK: - Point-tag parsing
