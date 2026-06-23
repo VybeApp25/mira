@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 // MARK: - Supabase auth responses
 
@@ -98,7 +99,23 @@ final class SupabaseService: ObservableObject {
     private let anonKey = AppSecrets.supabaseAnonKey
     private let sessionKey = "mira_supabase_session"
 
-    private init() { loadSession() }
+    private init() {
+        loadSession()
+        observeSystemWake()
+    }
+
+    /// The access token expires ~1h after sign-in, and a run-loop `Timer` is
+    /// suspended while the Mac sleeps — so a token that lapses overnight has nothing
+    /// to renew it (`NSApplication.didBecomeActive` doesn't fire on wake, and a notch
+    /// utility is rarely brought frontmost). Listen for the real wake signal and
+    /// refresh immediately, before the next proxy/voice call can 401.
+    private func observeSystemWake() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.ensureFreshToken() }
+        }
+    }
 
     var isSignedIn: Bool { session != nil }
 
@@ -175,10 +192,12 @@ final class SupabaseService: ObservableObject {
     // The access token expires ~1h after sign-in, and nothing renewed it before —
     // so every proxy-gated feature (chat, voice, element grounding) silently 401'd
     // an hour after sign-in. These keep `cachedAccessToken` fresh transparently for
-    // all call sites: a one-shot timer fires ~2 min before expiry (re-armed by each
-    // refresh via the session didSet → scheduleAutoRefresh), and AppDelegate calls
-    // `ensureFreshToken()` at launch and on app reactivation (covers a token that
-    // expired while the app was closed or the machine slept).
+    // all call sites: a repeating timer polls `ensureFreshToken()` (a cheap no-op
+    // until the token is within `buffer` of expiry), `observeSystemWake()` refreshes
+    // on wake-from-sleep, and AppDelegate calls `ensureFreshToken()` at launch and on
+    // app reactivation. The poll is repeating rather than a single long-delay one-shot
+    // because a run-loop Timer is suspended during sleep — a 58-min one-shot fires far
+    // too late; a frequent repeating timer fires once promptly on wake and resumes.
 
     private var refreshTimer: Timer?
     private var refreshInFlight: Task<Void, Error>?
@@ -206,15 +225,16 @@ final class SupabaseService: ObservableObject {
         try await task.value
     }
 
-    /// Re-arms the pre-expiry refresh timer. Invoked from the session didSet, so
-    /// every sign-in / refresh / launch-restore schedules the next refresh.
+    /// (Re)starts the auto-refresh poll. Invoked from the session didSet, so every
+    /// sign-in / refresh / launch-restore (re)arms it; a nil session tears it down.
     private func scheduleAutoRefresh() {
         refreshTimer?.invalidate()
-        guard let s = session else { refreshTimer = nil; return }
-        let fireIn = max(1, s.expiresAt.timeIntervalSinceNow - 120)
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: fireIn, repeats: false) { [weak self] _ in
+        guard session != nil else { refreshTimer = nil; return }
+        let t = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in
             Task { await self?.ensureFreshToken() }
         }
+        t.tolerance = 30   // let the OS coalesce — this is a cheap liveness check
+        refreshTimer = t
     }
 
     // MARK: - Sign Out
