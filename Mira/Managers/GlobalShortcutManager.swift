@@ -25,6 +25,9 @@ extension Notification.Name {
     static let miraRequestCollapse        = Notification.Name("miraRequestCollapse")
     static let miraIslandHeightChanged    = Notification.Name("miraIslandHeightChanged")
     static let miraToggleAlwaysOn         = Notification.Name("miraToggleAlwaysOn")
+    // "Hey Mira" wake word enabled/disabled (Settings toggle) — NotchManager
+    // reads WakeWordService.isEnabledPreference and starts/pauses accordingly.
+    static let miraToggleWakeWord         = Notification.Name("miraToggleWakeWord")
     // Pin the island open (suppress hover auto-collapse) while a multi-step flow
     // needs the user to leave Mira and come back — e.g. the Knowledge Import
     // round-trip (copy prompt → another assistant → copy reply → back to Mira).

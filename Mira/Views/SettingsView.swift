@@ -39,6 +39,7 @@ struct SettingsView: View {
     @AppStorage("mira_autonomous_confirm_risky") private var autonomousConfirmRisky = true
     @AppStorage("mira_autonomy_engine") private var autonomyEngine = "auto"
     @AppStorage("mira_draw_context_enabled") private var drawContextEnabled = true
+    @AppStorage(WakeWordService.enabledKey) private var wakeWordEnabled = true
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
@@ -503,6 +504,30 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .tint(accent)
                 .labelsHidden()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\u{201C}Hey Mira\u{201D} wake word")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Listen in the background for \u{201C}Hey Mira\u{201D} and start a voice session hands-free.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $wakeWordEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
+                    .onChange(of: wakeWordEnabled) {
+                        NotificationCenter.default.post(name: .miraToggleWakeWord, object: nil)
+                    }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

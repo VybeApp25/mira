@@ -169,6 +169,25 @@ final class NotchManager {
                 }
             }
         }
+        // "Hey Mira" wake word toggle — the Settings switch persists
+        // WakeWordService.enabledKey, then posts this. start() self-gates on the
+        // preference, so we only need to (re)start when idle / tear down when off.
+        NotificationCenter.default.addObserver(forName: .miraToggleWakeWord, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if WakeWordService.isEnabledPreference {
+                    // Resume immediately only when idle; if the panel is open the
+                    // normal collapse path restarts it (and also self-gates).
+                    if self.animController.state != .expanded { self.wakeWord.start() }
+                    NSLog("[Mira] wake word enabled")
+                } else {
+                    self.wakeWordRestartWork?.cancel()
+                    self.wakeWordRestartWork = nil
+                    self.wakeWord.pause()
+                    NSLog("[Mira] wake word disabled")
+                }
+            }
+        }
     }
 
     private func expandForShortcut() {

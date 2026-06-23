@@ -11,6 +11,17 @@ final class WakeWordService: NSObject, ObservableObject {
 
     @Published private(set) var isListening = false
 
+    // User toggle (Settings → "Hey Mira" wake word). Defaults ON so existing
+    // behavior is preserved when the key was never written. start() self-gates
+    // on this, so every caller (launch + collapse-restart) becomes a no-op when
+    // the user has turned the wake word off.
+    static let enabledKey = "mira_wake_word_enabled"
+    static var isEnabledPreference: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: enabledKey)
+    }
+
     // Trigger phrases — includes common mishearings
     private let triggers = ["hey mira", "hey mirror", "hey mirra", "okay mira", "hi mira"]
 
@@ -24,6 +35,7 @@ final class WakeWordService: NSObject, ObservableObject {
 
     func start() {
         guard !enabled else { return }
+        guard Self.isEnabledPreference else { return }
         enabled = true
         Task { await requestPermissionAndBegin() }
     }
