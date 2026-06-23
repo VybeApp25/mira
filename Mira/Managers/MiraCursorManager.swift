@@ -1,5 +1,41 @@
 import AppKit
 import SwiftUI
+import Combine
+
+// MARK: - Background cursor hiding (private CoreGraphics SPI)
+// CGDisplayHideCursor only suppresses the system cursor while the calling app
+// is frontmost. Mira is an .accessory app and is never frontmost, so the hide
+// is a no-op by default. The private "SetsCursorInBackground" connection
+// property lifts that restriction, letting CGDisplayHideCursor work from the
+// background. Symbols are resolved via dlsym so a future macOS that drops them
+// degrades gracefully (the system cursor simply stays visible) instead of
+// failing to launch. The hide is reference-counted on this process's
+// WindowServer connection, so if Mira crashes the cursor reappears
+// automatically — there is no "stuck invisible cursor" failure mode.
+enum BackgroundCursorHider {
+    private typealias MainConnFn = @convention(c) () -> Int32
+    private typealias SetPropFn  = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+
+    /// Idempotent — evaluated once. Returns true if the property was set.
+    @discardableResult
+    static func enable() -> Bool { enabled }
+
+    private static let enabled: Bool = {
+        guard let handle = dlopen(nil, RTLD_NOW) else { return false }
+        defer { dlclose(handle) }
+        guard let connSym = dlsym(handle, "CGSMainConnectionID"),
+              let propSym = dlsym(handle, "CGSSetConnectionProperty") else {
+            NSLog("[Mira] background cursor hide unavailable (CGS symbols missing)")
+            return false
+        }
+        let mainConn = unsafeBitCast(connSym, to: MainConnFn.self)
+        let setProp  = unsafeBitCast(propSym, to: SetPropFn.self)
+        let cid = mainConn()
+        let err = setProp(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
+        NSLog("[Mira] SetsCursorInBackground => err=%d", err)
+        return err == 0
+    }()
+}
 
 // MARK: - Cursor states (matches HeyClicky's BlueCursorView states)
 
@@ -8,6 +44,7 @@ enum MiraCursorState: Equatable {
     case thinking    // spinner ring (processing)
     case stop        // square stop icon (interruptable)
     case listening   // waveform bars (voice active)
+    case speaking    // waveform bars while Mira talks — accent-tinted, animated
 }
 
 // MARK: - Shared overlay model
@@ -41,6 +78,7 @@ final class OverlayWindowManager {
     private var displayObserver: Any?
     private var active = false
     private var bubbleHideTask: Task<Void, Never>?
+    private var voiceStateCancellable: AnyCancellable?
 
     private init() {}
 
@@ -49,10 +87,29 @@ final class OverlayWindowManager {
     func activate() {
         guard !active else { return }
         active = true
+        // Lift the frontmost-only restriction so the hide below works from this
+        // background (.accessory) app — otherwise the system cursor stays visible
+        // alongside the custom blue cursor.
+        BackgroundCursorHider.enable()
         CGDisplayHideCursor(kCGNullDirectDisplay)
         buildOverlaysForAllScreens()
         startTracking()
         watchDisplayChanges()
+        observeVoiceState()
+    }
+
+    // Turn the cursor into an animated accent-colored waveform while Mira speaks,
+    // back to the arrow otherwise. setCursorState had no driver before this.
+    private func observeVoiceState() {
+        voiceStateCancellable = RealtimeVoiceService.shared.$state
+            .sink { [weak self] state in
+                guard let self else { return }
+                let next: MiraCursorState = (state == .speaking) ? .speaking : .arrow
+                guard self.model.cursorState != next else { return }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    self.model.cursorState = next
+                }
+            }
     }
 
     func deactivate() {
@@ -61,6 +118,9 @@ final class OverlayWindowManager {
         trackingTimer?.invalidate()
         trackingTimer = nil
         bubbleHideTask?.cancel()
+        voiceStateCancellable?.cancel()
+        voiceStateCancellable = nil
+        model.cursorState = .arrow
         if let obs = displayObserver {
             NotificationCenter.default.removeObserver(obs)
             displayObserver = nil
@@ -293,6 +353,8 @@ struct BlueCursorView: View {
         case .stop:
             BlueCursorStopView(color: accent)
         case .listening:
+            BlueCursorWaveformView(color: accent)
+        case .speaking:
             BlueCursorWaveformView(color: accent)
         }
     }
