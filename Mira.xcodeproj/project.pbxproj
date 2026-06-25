@@ -66,6 +66,7 @@
 		373C68AA6EF019FE3AC80567 /* WorkspaceReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77428E1C00142D230E8329 /* WorkspaceReview.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		39A20B41E671B958232ED793 /* AgentJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A402B112ABE83ADE3C4489E6 /* AgentJob.swift */; };
+		3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A266BE527831F1DF05489050 /* StripePurchaseService.swift */; };
 		3E2DB0D90E9E847491E02103 /* GuidanceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE4D9FFAA2573FD2BE0E42 /* GuidanceOverlayView.swift */; };
 		3FF94BFAEB99BBB0D83E4B11 /* imessage_read.py in Resources */ = {isa = PBXBuildFile; fileRef = B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */; };
 		3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F52A13C8B02EEA4701166A /* ResponseCardService.swift */; };
@@ -445,6 +446,7 @@
 		9F2FBF93E03147782BB5FBF5 /* HandoffService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffService.swift; sourceTree = "<group>"; };
 		9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIService.swift; sourceTree = "<group>"; };
 		A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceService.swift; sourceTree = "<group>"; };
+		A266BE527831F1DF05489050 /* StripePurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripePurchaseService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
 		A402B112ABE83ADE3C4489E6 /* AgentJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJob.swift; sourceTree = "<group>"; };
 		A5AB62B5302AD934D3ED258F /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
@@ -818,6 +820,7 @@
 				B78AD9EA6F1C38CE13EED661 /* SidecarSuggestionService.swift */,
 				6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */,
 				57C1C1240C045D738B98CC29 /* SkillStore.swift */,
+				A266BE527831F1DF05489050 /* StripePurchaseService.swift */,
 				3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */,
 				70F49814EE23560DC880AF05 /* SupabaseService.swift */,
 				93237F9C8CE985B51E1E1062 /* TaskAnnouncer.swift */,
@@ -979,6 +982,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+					FCE4BAB270C9879CEFDFA543 = {
+						DevelopmentTeam = 7FD7W8SX34;
+						ProvisioningStyle = Manual;
+					};
 				};
 			};
 			buildConfigurationList = 1C1A3E0DA6BA974807332677 /* Build configuration list for PBXProject "Mira" */;
@@ -1257,6 +1264,7 @@
 				E29BDEF21A1B2762999F9340 /* SkillsTabView.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				FCA9289DB0963ED16EAC692D /* StreamingMarkdownView.swift in Sources */,
+				3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */,
 				8A133C5A0C621D99DDBA8C8E /* SuccessObserver.swift in Sources */,
 				9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */,
 				7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */,
@@ -1356,7 +1364,7 @@
 				CODE_SIGN_IDENTITY = "Mira Dev";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 7FD7W8SX34;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Mira/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1378,9 +1386,10 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = Mira/Mira.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE;
+				DEVELOPMENT_TEAM = 7FD7W8SX34;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Mira/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1388,6 +1397,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp --options=runtime";
 				PRODUCT_BUNDLE_IDENTIFIER = com.trevonbarbour.mira;
 				PRODUCT_NAME = Mira;
 				SDKROOT = macosx;

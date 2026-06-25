@@ -1,14 +1,6 @@
 import SwiftUI
+import AuthenticationServices
 
-// Reusable email/password authentication form, backed by AccountService →
-// SupabaseService. A successful sign in / sign up establishes the Supabase
-// session whose JWT MiraBackend attaches to every proxy call, so this is the
-// gate that makes the app usable in proxy mode. See
-// docs/architecture/backend_secrets_proxy.md.
-//
-// Apple sign-in is intentionally omitted until the Apple provider is enabled
-// server-side (external_apple_enabled) — without it the id_token grant fails and
-// would leave a JWT-less local user that can't reach the proxy.
 struct AuthView: View {
     /// Compact = embedded in Settings (no big header); else onboarding styling.
     var compact: Bool = false
@@ -82,6 +74,28 @@ struct AuthView: View {
             .buttonStyle(.plain)
             .disabled(!canSubmit)
             .padding(.top, 14)
+
+            HStack(spacing: 10) {
+                Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
+                Text("or").font(.system(size: 11)).foregroundColor(.white.opacity(0.30))
+                Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
+            }
+            .padding(.top, 14)
+
+            SignInWithAppleButton(.continue, onRequest: { request in
+                request.requestedScopes = [.fullName, .email]
+            }, onCompletion: { result in
+                switch result {
+                case .success(let auth):
+                    AccountService.shared.handleAppleAuthorization(auth)
+                case .failure:
+                    break
+                }
+            })
+            .signInWithAppleButtonStyle(.white)
+            .frame(height: 42)
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .padding(.top, 8)
 
             Button {
                 withAnimation { mode = (mode == .signUp ? .signIn : .signUp); error = nil }

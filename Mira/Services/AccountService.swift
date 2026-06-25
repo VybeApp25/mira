@@ -55,16 +55,36 @@ final class AccountService: NSObject, ObservableObject {
 
     var isSignedIn: Bool { currentUser != nil }
 
-    // MARK: - Apple Sign In (macOS-native, no backend required)
+    // MARK: - Apple Sign In
 
-    func signInWithApple() {
-        let provider = ASAuthorizationAppleIDProvider()
-        let request = provider.createRequest()
-        request.requestedScopes = [.fullName, .email]
-
-        let controller = ASAuthorizationController(authorizationRequests: [request])
-        controller.delegate = self
-        controller.performRequests()
+    func handleAppleAuthorization(_ authorization: ASAuthorization) {
+        guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
+        let name = [cred.fullName?.givenName, cred.fullName?.familyName]
+            .compactMap { $0 }.joined(separator: " ")
+        Task { @MainActor in
+            guard let tokenData = cred.identityToken,
+                  let idToken = String(data: tokenData, encoding: .utf8) else {
+                authState = .signedOut
+                return
+            }
+            authState = .loading
+            do {
+                let s = try await SupabaseService.shared.signInWithApple(idToken: idToken)
+                let user = MiraUser(
+                    id: s.userId,
+                    email: s.email ?? cred.email,
+                    displayName: s.displayName ?? (name.isEmpty ? cred.email?.components(separatedBy: "@").first : name),
+                    avatarURL: nil,
+                    createdAt: Date()
+                )
+                saveUser(user)
+                authState = .signedIn(user)
+                PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+                await EntitlementService.shared.fetchAndApplyPlan()
+            } catch {
+                authState = .signedOut
+            }
+        }
     }
 
     // MARK: - Email/Password via Supabase
@@ -132,54 +152,3 @@ final class AccountService: NSObject, ObservableObject {
     }
 }
 
-// MARK: - Apple auth delegate
-
-extension AccountService: ASAuthorizationControllerDelegate {
-    nonisolated func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithAuthorization authorization: ASAuthorization
-    ) {
-        guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
-        let name = [cred.fullName?.givenName, cred.fullName?.familyName]
-            .compactMap { $0 }.joined(separator: " ")
-
-        Task { @MainActor in
-            // Try Supabase sign-in with Apple identity token first
-            if let tokenData = cred.identityToken,
-               let idToken = String(data: tokenData, encoding: .utf8),
-               let s = try? await SupabaseService.shared.signInWithApple(idToken: idToken) {
-                let user = MiraUser(
-                    id: s.userId,
-                    email: s.email ?? cred.email,
-                    displayName: s.displayName ?? (name.isEmpty ? cred.email?.components(separatedBy: "@").first : name),
-                    avatarURL: nil,
-                    createdAt: Date()
-                )
-                self.saveUser(user)
-                self.authState = .signedIn(user)
-                PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
-                await EntitlementService.shared.fetchAndApplyPlan()
-            } else {
-                // Fallback: local-only user (e.g. repeat Apple sign-in without fresh token)
-                let user = MiraUser(
-                    id: cred.user,
-                    email: cred.email,
-                    displayName: name.isEmpty ? cred.email?.components(separatedBy: "@").first : name,
-                    avatarURL: nil,
-                    createdAt: Date()
-                )
-                self.saveUser(user)
-                self.authState = .signedIn(user)
-            }
-        }
-    }
-
-    nonisolated func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithError error: Error
-    ) {
-        Task { @MainActor in
-            if self.authState == .loading { self.authState = .signedOut }
-        }
-    }
-}
