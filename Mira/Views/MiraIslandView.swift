@@ -200,11 +200,16 @@ struct MiraIslandView: View {
 
     private var pill: some View {
         ZStack {
-            if transparentPanes {
-                DS.Colors.background.opacity(0.75)
-                    .background(.ultraThinMaterial)
+            if isExpanded {
+                if transparentPanes {
+                    DS.Colors.background.opacity(0.75)
+                        .background(.ultraThinMaterial)
+                } else {
+                    DS.Colors.background
+                }
             } else {
-                DS.Colors.background
+                // Pure black matches the hardware notch exactly — any off-black creates a visible seam.
+                Color.black
             }
             if isExpanded {
                 expandedContent

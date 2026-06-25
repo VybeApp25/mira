@@ -90,6 +90,8 @@ final class VoicePreviewService: NSObject, ObservableObject {
             return
         }
         p.delegate = self
+        p.enableRate = true
+        p.rate = Float(MiraVoice.savedSpeed)
         p.prepareToPlay()
         player = p
         playingVoice = voice

@@ -36,7 +36,13 @@ enum NotchGeometryProvider {
 
     private static func realNotch(screen: NSScreen) -> NotchGeometry {
         let h = screen.safeAreaInsets.top          // notch height (e.g. ~37 pt)
-        let w = estimatedWidth(for: screen)
+        // Derive exact notch width from the auxiliary menu-bar areas Apple exposes.
+        // The notch occupies the gap between the left and right auxiliary areas.
+        let leftW  = screen.auxiliaryTopLeftArea?.width  ?? 0
+        let rightW = screen.auxiliaryTopRightArea?.width ?? 0
+        let w      = (leftW > 0 && rightW > 0)
+            ? screen.frame.width - leftW - rightW
+            : estimatedWidth(for: screen)
         // In Cocoa coords the notch bottom edge sits at screen.frame.maxY - h
         let bottomY = screen.frame.maxY - h
         return NotchGeometry(

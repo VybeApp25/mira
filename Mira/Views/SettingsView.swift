@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var saved         = false
     @State private var showOverride  = false
     @State private var selectedVoice: MiraVoice = MiraVoice.saved
+    @State private var voiceSpeed:    Double     = MiraVoice.savedSpeed
     @State private var recording:    RecordingTarget? = nil
     @State private var keyMonitor:    Any? = nil
     @State private var showTraces        = false
@@ -919,6 +920,27 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            // Speed slider
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Speed")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.65))
+                    Spacer()
+                    Text(voiceSpeed == 1.0 ? "Normal" : String(format: "%.2gx", voiceSpeed))
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .foregroundColor(accent)
+                }
+                Slider(value: $voiceSpeed, in: 0.5...2.0, step: 0.25) {
+                    EmptyView()
+                }
+                .accentColor(accent)
+                .onChange(of: voiceSpeed) { _, newVal in
+                    RealtimeVoiceService.shared.setSpeed(newVal)
+                }
+            }
+            .padding(.top, 6)
 
             Text("OpenAI Realtime API · gpt-4o-realtime-preview · Tap ▶ to hear a sample")
                 .font(.system(size: 10))

@@ -81,6 +81,9 @@ final class NotchManager {
         wakeWord.start()
         shortcutManager.start()
         BackgroundScheduler.shared.start()
+        // Pre-warm the Realtime WebSocket so the first PTT is instant.
+        // Mirrors HeyClicky's keep-warm behavior — session is healthy before the user speaks.
+        RealtimeVoiceService.shared.prewarm()
         MiraState.shared = miraState
         CronScheduler.shared.start()
         ExternalTriggerRunner.shared.rebuildWatchers()

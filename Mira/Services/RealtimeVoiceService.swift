@@ -57,6 +57,15 @@ enum MiraVoice: String, CaseIterable, Identifiable {
         get { MiraVoice(rawValue: UserDefaults.standard.string(forKey: "mira_voice") ?? "alloy") ?? .alloy }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "mira_voice") }
     }
+
+    /// Playback speed multiplier (0.5 – 2.0, default 1.0).
+    static var savedSpeed: Double {
+        get {
+            let v = UserDefaults.standard.double(forKey: "mira_voice_speed")
+            return v == 0 ? 1.0 : v
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "mira_voice_speed") }
+    }
 }
 
 // MARK: - State
@@ -109,9 +118,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     // MARK: Private — Audio playback (API → speakers)
 
-    private var playEngine = AVAudioEngine()
-    private var playerNode = AVAudioPlayerNode()
-    private let playFmt    = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1)!
+    private var playEngine    = AVAudioEngine()
+    private var playerNode    = AVAudioPlayerNode()
+    private var timePitchNode = AVAudioUnitTimePitch()
+    private let playFmt       = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1)!
 
     // MARK: Private — Tool call assembly
 
@@ -167,8 +177,11 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private var pttTailTask:      Task<Void, Never>?
     // True after session.updated — gates the PTT commit so audio is never sent to an unready socket
     private var sessionHealthy:   Bool               = false
-    // Keeps the WebSocket warm for 30s after a PTT response so next PTT skips cold-start
+    // Keeps the WebSocket warm for 3 min after a PTT response so next PTT skips cold-start
     private var idleTeardownTask: Task<Void, Never>?
+    // True while a background pre-warm session is open but mic is not yet started.
+    // Mirrors HeyClicky's "agent keep-warm flag" — session is healthy, mic is off.
+    private var isWarmStandby:    Bool               = false
 
     // MARK: - Public API
 
@@ -182,6 +195,20 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         retryCount       = 0
         state            = .connecting
         NSLog("[MiraRealtime] always-on start")
+        openSocket()
+    }
+
+    /// Pre-warm the Realtime WebSocket on app launch so the first PTT is instant.
+    /// Opens the connection silently — mic is NOT started, state stays .idle.
+    /// When PTT fires it finds a healthy session and begins recording immediately.
+    /// Mirrors HeyClicky's "agent keep-warm flag" / prewarm-Agent-Mode-session pattern.
+    func prewarm() {
+        guard !isAlwaysOn, webSocket == nil, !isWarmStandby else { return }
+        guard MiraBackend.useProxy || !AppSecrets.openAIKey.isEmpty else { return }
+        NSLog("[MiraRealtime] pre-warming session")
+        isWarmStandby   = true
+        shouldReconnect = false   // warm standby doesn't auto-reconnect on drop
+        retryCount      = 0
         openSocket()
     }
 
@@ -232,10 +259,16 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         if pttDrawCoupled { ScreenDrawController.shared.begin(mode: .voiceCoupled) }
 
         if webSocket != nil && sessionHealthy {
-            // Warm session — mic was stopped during idle; restart it and clear any stale buffer
+            // Warm session (or warm standby) — mic was stopped; restart it and clear any stale buffer.
+            isWarmStandby = false
             NSLog("[MiraRealtime] PTT begin: reusing healthy session")
             if !captureEngine.isRunning { startCapture() }
             emit(["type": "input_audio_buffer.clear"])
+            // Inject history on the first real turn of a pre-warmed session.
+            if !historyInjected {
+                historyInjected = true
+                injectConversationHistory()
+            }
             sendScreenSnapshot()
             state = .recording
         } else if webSocket != nil {
@@ -435,9 +468,15 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         // ── Step 2: config accepted — start mic, signal ready ────────────────────
         case "session.updated":
-            guard shouldReconnect else { teardown(); return }
+            guard shouldReconnect || isWarmStandby else { teardown(); return }
             retryCount     = 0
             sessionHealthy = true
+            if isWarmStandby {
+                // Warm standby: session is healthy but mic stays off until PTT fires.
+                // Don't inject history or change state — stay invisible until needed.
+                NSLog("[MiraRealtime] warm standby ready")
+                return
+            }
             if !captureEngine.isRunning { startCapture() }
             if !historyInjected {
                 historyInjected = true
@@ -971,12 +1010,22 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // MARK: - Audio playback (PCM16 from API → speakers)
 
     private func setupPlayback() {
-        playEngine = AVAudioEngine()
-        playerNode = AVAudioPlayerNode()
+        playEngine    = AVAudioEngine()
+        playerNode    = AVAudioPlayerNode()
+        timePitchNode = AVAudioUnitTimePitch()
+        timePitchNode.rate = Float(MiraVoice.savedSpeed)
         playEngine.attach(playerNode)
-        playEngine.connect(playerNode, to: playEngine.mainMixerNode, format: playFmt)
+        playEngine.attach(timePitchNode)
+        playEngine.connect(playerNode,    to: timePitchNode,          format: playFmt)
+        playEngine.connect(timePitchNode, to: playEngine.mainMixerNode, format: playFmt)
         try? playEngine.start()
         playerNode.play()
+    }
+
+    /// Update playback speed live (0.5 – 2.0). Persists the preference.
+    func setSpeed(_ speed: Double) {
+        MiraVoice.savedSpeed = speed
+        timePitchNode.rate   = Float(speed)
     }
 
     private func enqueueAudio(_ base64: String) {
@@ -1135,12 +1184,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private func scheduleIdleTeardown() {
         idleTeardownTask?.cancel()
         idleTeardownTask = Task {
-            try? await Task.sleep(nanoseconds: 30_000_000_000)  // 30s warm window
+            try? await Task.sleep(nanoseconds: 180_000_000_000)  // 3 min warm window
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard !self.isAlwaysOn else { return }
-                NSLog("[MiraRealtime] idle teardown — closing warm session")
+                NSLog("[MiraRealtime] idle teardown — closing warm session, will re-warm")
                 self.stop()
+                // Re-warm immediately so the next PTT is still instant
+                self.prewarm()
             }
         }
     }
@@ -1148,6 +1199,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private func teardown() {
         sessionHealthy  = false
         historyInjected = false
+        isWarmStandby   = false
         idleTeardownTask?.cancel()
         idleTeardownTask = nil
 
