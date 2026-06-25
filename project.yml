@@ -70,7 +70,7 @@ targets:
           CODE_SIGNING_ALLOWED: YES
           DEVELOPMENT_TEAM: "7FD7W8SX34"
         Release:
-          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"
           CODE_SIGNING_REQUIRED: YES
           DEVELOPMENT_TEAM: "7FD7W8SX34"
