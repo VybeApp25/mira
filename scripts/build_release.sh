@@ -85,25 +85,49 @@ echo "▶ Verifying signature…"
 codesign --verify --deep --strict "$APP" \
   || { echo "ERROR: Code signature verification failed."; exit 1; }
 
-# ── Zip ───────────────────────────────────────────────────────────────────────
+# ── Zip (for Sparkle appcast) ────────────────────────────────────────────────
 echo "▶ Packaging $ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
-# ── Notarize ──────────────────────────────────────────────────────────────────
-echo "▶ Notarizing (this takes 1–5 minutes)…"
+# ── Notarize zip ──────────────────────────────────────────────────────────────
+echo "▶ Notarizing zip (this takes 1–5 minutes)…"
 xcrun notarytool submit "$ZIP" \
   --apple-id "$APPLE_ID" \
   --password "$NOTARIZATION_PASSWORD" \
   --team-id "$TEAM" \
   --wait
 
-# ── Staple ────────────────────────────────────────────────────────────────────
+# ── Staple app + repackage zip ────────────────────────────────────────────────
 echo "▶ Stapling…"
 xcrun stapler staple "$APP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
+# ── DMG (for website download) ───────────────────────────────────────────────
+DMG="Mira-$VERSION.dmg"
+echo "▶ Creating $DMG…"
+create-dmg \
+  --volname "Mira" \
+  --volicon "$APP/Contents/Resources/AppIcon.icns" \
+  --window-pos 200 120 \
+  --window-size 600 400 \
+  --icon-size 128 \
+  --icon "Mira.app" 160 185 \
+  --hide-extension "Mira.app" \
+  --app-drop-link 440 185 \
+  "$DMG" "$APP"
+
+echo "▶ Notarizing $DMG…"
+xcrun notarytool submit "$DMG" \
+  --apple-id "$APPLE_ID" \
+  --password "$NOTARIZATION_PASSWORD" \
+  --team-id "$TEAM" \
+  --wait
+
+echo "▶ Stapling $DMG…"
+xcrun stapler staple "$DMG"
+
 echo ""
-echo "✅  $ZIP is ready."
+echo "✅  $ZIP (Sparkle) and $DMG (website) are ready."
 echo ""
 echo "Next steps:"
 echo "  1. Upload $ZIP to GitHub → Releases → v$VERSION"
