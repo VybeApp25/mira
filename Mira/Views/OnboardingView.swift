@@ -939,12 +939,15 @@ private struct DemoAgentStep: View {
 
 private struct PaywallStep: View {
     let onAdvance: () -> Void
-    @State private var hasVideo = false
+    @State private var hasVideo    = false
     @State private var player: AVPlayer?
+    @State private var purchasing: SubscriptionPlan? = nil
+    @State private var errorMsg: String? = nil
+
+    private let ultraAccent = Color(red: 0.75, green: 0.45, blue: 0.95)
 
     var body: some View {
         VStack(spacing: 0) {
-            // Video banner (paywall-intro.mp4) or static header
             if hasVideo, let player {
                 VideoPlayer(player: player)
                     .frame(height: 160)
@@ -956,35 +959,62 @@ private struct PaywallStep: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 10) {
+                    if let err = errorMsg {
+                        Text(err)
+                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 4)
+                    }
+
                     planCard(
                         name: "Free",
                         price: "$0",
                         features: ["5 agent tasks / month", "Voice & chat", "Screen guidance"],
-                        accent: Color.white.opacity(0.30),
-                        cta: "Start free"
+                        planAccent: Color.white.opacity(0.30),
+                        cta: "Start free",
+                        loading: false
                     ) { onAdvance() }
 
                     planCard(
                         name: "Pro",
                         price: "$19.99/mo",
-                        features: ["50 agent tasks / month", "Everything in Free", "Background agents", "Priority speed"],
-                        accent: accent,
-                        cta: "Upgrade to Pro"
-                    ) { onAdvance() }  // TODO: wire Stripe
+                        features: ["100 agent tasks / month", "Everything in Free", "Background agents", "Priority speed"],
+                        planAccent: accent,
+                        cta: "Upgrade to Pro",
+                        loading: purchasing == .pro
+                    ) { purchase(.pro) }
 
                     planCard(
                         name: "Ultra",
                         price: "$49.99/mo",
-                        features: ["Unlimited agent tasks", "Everything in Pro", "Multi-agent workflows", "Ultra speed"],
-                        accent: Color(red: 0.75, green: 0.45, blue: 0.95),
-                        cta: "Upgrade to Ultra"
-                    ) { onAdvance() }  // TODO: wire Stripe
+                        features: ["500 agent tasks / month", "Everything in Pro", "Multi-agent workflows", "Ultra speed"],
+                        planAccent: ultraAccent,
+                        cta: "Upgrade to Ultra",
+                        loading: purchasing == .ultra
+                    ) { purchase(.ultra) }
                 }
                 .padding(.horizontal, 28)
                 .padding(.vertical, 12)
             }
         }
         .onAppear { setupVideo() }
+    }
+
+    private func purchase(_ plan: SubscriptionPlan) {
+        guard purchasing == nil else { return }
+        errorMsg = nil
+        purchasing = plan
+        Task {
+            do {
+                try await StripePurchaseService.shared.startCheckout(plan: plan)
+                // Browser opened — advance so user isn't stuck on this screen.
+                // Plan update happens via Stripe webhook in the background.
+                onAdvance()
+            } catch {
+                errorMsg = error.localizedDescription
+            }
+            purchasing = nil
+        }
     }
 
     private var staticPaywallBanner: some View {
@@ -1006,7 +1036,8 @@ private struct PaywallStep: View {
     }
 
     private func planCard(name: String, price: String, features: [String],
-                          accent planAccent: Color, cta: String, action: @escaping () -> Void) -> some View {
+                          planAccent: Color, cta: String, loading: Bool,
+                          action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -1018,14 +1049,21 @@ private struct PaywallStep: View {
                         .foregroundColor(.white.opacity(0.45))
                 }
                 Spacer()
-                Button(cta) { action() }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(planAccent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(planAccent.opacity(0.14))
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
+                Button(action: action) {
+                    if loading {
+                        ProgressView().scaleEffect(0.65).frame(width: 60, height: 22)
+                    } else {
+                        Text(cta)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(planAccent)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(planAccent.opacity(0.14))
+                            .clipShape(Capsule())
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(loading)
             }
 
             Divider().background(Color.white.opacity(0.06))
