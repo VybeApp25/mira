@@ -1860,12 +1860,33 @@ struct SettingsView: View {
     // Analytics opt-out (Privacy Policy §6). Off = PostHogService sends nothing,
     // including identify/PII — the flag is read directly in PostHogService.send.
     private var privacySection: some View {
-        toggleRow(
-            icon: "chart.bar.xaxis",
-            title: "Share usage analytics",
-            subtitle: "Anonymous product analytics to improve Mira. Turn off to send nothing.",
-            binding: $analyticsEnabled
-        )
+        VStack(spacing: 6) {
+            toggleRow(
+                icon: "chart.bar.xaxis",
+                title: "Share usage analytics",
+                subtitle: "Anonymous product analytics to improve Mira. Turn off to send nothing.",
+                binding: $analyticsEnabled
+            )
+            Button {
+                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/privacy.html")!)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.raised.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text("Privacy Policy")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.45))
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func toggleRow(icon: String, title: String, subtitle: String, binding: Binding<Bool>) -> some View {
