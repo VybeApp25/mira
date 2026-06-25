@@ -42,6 +42,7 @@ final class AccountService: NSObject, ObservableObject {
                 createdAt: Date()
             )
             authState = .signedIn(user)
+            Task { await EntitlementService.shared.fetchAndApplyPlan() }
         } else {
             loadSavedUser()
         }
@@ -82,6 +83,7 @@ final class AccountService: NSObject, ObservableObject {
             saveUser(user)
             authState = .signedIn(user)
             PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+            await EntitlementService.shared.fetchAndApplyPlan()
         } catch {
             authState = .signedOut
             throw error
@@ -102,6 +104,7 @@ final class AccountService: NSObject, ObservableObject {
             saveUser(user)
             authState = .signedIn(user)
             PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+            await EntitlementService.shared.fetchAndApplyPlan()
         } catch {
             authState = .signedOut
             throw error
@@ -155,6 +158,7 @@ extension AccountService: ASAuthorizationControllerDelegate {
                 self.saveUser(user)
                 self.authState = .signedIn(user)
                 PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+                await EntitlementService.shared.fetchAndApplyPlan()
             } else {
                 // Fallback: local-only user (e.g. repeat Apple sign-in without fresh token)
                 let user = MiraUser(

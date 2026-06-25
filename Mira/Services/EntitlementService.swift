@@ -104,6 +104,18 @@ final class EntitlementService: ObservableObject {
         persist()
     }
 
+    // Fetch profiles.plan from Supabase and apply it locally
+    func fetchAndApplyPlan() async {
+        guard let data = try? await SupabaseService.shared.authedRequest(
+            path: "/rest/v1/profiles?select=plan&limit=1"
+        ) else { return }
+        struct Row: Decodable { let plan: String? }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data),
+              let raw = rows.first?.plan,
+              let fetched = SubscriptionPlan(rawValue: raw) else { return }
+        await MainActor.run { updatePlan(fetched) }
+    }
+
     private func persist() {
         UserDefaults.standard.set(plan.rawValue, forKey: planKey)
         // Keep legacy key in sync so old isPro checks still work
