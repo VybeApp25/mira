@@ -266,11 +266,12 @@ enum MiraToolService {
             "type": "function",
             "name": "run_shell_command",
             "description": """
-                Run a zsh shell command on the Mac. \
-                Use for: file management (mv, cp, mkdir, rm, ls, find), \
-                reading file contents (cat), system info (df, ps, system_profiler), \
-                running scripts, git commands, installing via brew, or any CLI task. \
-                Output capped at 2000 characters. Avoid commands that run indefinitely.
+                Run a zsh shell command silently in the background. \
+                Use for: reading files (cat), system info (df, ps), git commands, \
+                quick one-liner scripts, or any command that finishes fast and has no \
+                interactive output the user needs to watch. \
+                Output capped at 2000 characters. Do NOT use for installs, builds, or \
+                anything long-running — use run_in_terminal instead so the user sees progress.
                 """,
             "parameters": [
                 "type": "object",
@@ -278,6 +279,27 @@ enum MiraToolService {
                     "command": [
                         "type": "string",
                         "description": "Shell command to run, e.g. 'ls ~/Desktop', 'cat ~/notes.txt'"
+                    ]
+                ],
+                "required": ["command"]
+            ] as [String: Any]
+        ],
+        [
+            "type": "function",
+            "name": "run_in_terminal",
+            "description": """
+                Open a brand-new Terminal window and run a command visibly so the user \
+                can watch it. Use for: brew installs, npm/pip installs, builds, git clones, \
+                long-running scripts, or any command where the user said "run it in terminal" \
+                or should see the output live. Always opens a NEW window — never reuses an \
+                existing Terminal session. Returns immediately; the command runs in the window.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "command": [
+                        "type": "string",
+                        "description": "Shell command to run in the visible Terminal window"
                     ]
                 ],
                 "required": ["command"]
@@ -639,6 +661,7 @@ enum MiraToolService {
         case "run_shortcut":        return runShortcut(args)
         case "run_apple_script":    return runAppleScript(args)
         case "run_shell_command":   return await runShellCommand(args)
+        case "run_in_terminal":     return runInTerminal(args)
         case "set_volume":          return setVolume(args)
         case "adjust_brightness":   return adjustBrightness(args)
         case "toggle_mute":         return toggleMute(args)
@@ -1131,6 +1154,31 @@ enum MiraToolService {
                 }
             }
         }
+    }
+
+    // MARK: - run_in_terminal
+
+    private static func runInTerminal(_ args: [String: Any]) -> String {
+        guard let command = args["command"] as? String else { return "Missing command." }
+        // Escape backslashes and double-quotes so the command survives embedding in AppleScript
+        let escaped = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        // `do script` without an `in` clause always opens a new Terminal window,
+        // even when Terminal is already running (it never reuses an existing session).
+        let script = """
+            tell application "Terminal"
+                do script "\(escaped)"
+                activate
+            end tell
+            """
+        var err: NSDictionary?
+        NSAppleScript(source: script)?.executeAndReturnError(&err)
+        if let e = err {
+            let msg = e["NSAppleScriptErrorMessage"] as? String ?? e.description
+            return "Terminal error: \(msg)"
+        }
+        return "Running in Terminal."
     }
 
     // MARK: - set_volume
