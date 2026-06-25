@@ -74,3 +74,7 @@ targets:
           CODE_SIGN_IDENTITY: "Developer ID Application"
           CODE_SIGNING_REQUIRED: YES
           DEVELOPMENT_TEAM: "7FD7W8SX34"
+          # Prevent Xcode from injecting get-task-allow (debug-only entitlement
+          # that Apple's notarization service rejects in distribution builds).
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"

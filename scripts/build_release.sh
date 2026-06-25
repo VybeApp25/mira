@@ -51,6 +51,39 @@ xcodebuild \
 
 APP="$DERIVED/Build/Products/Release/Mira.app"
 ZIP="Mira-$VERSION.zip"
+SIGN_ID="Developer ID Application: Trevon Barbour ($TEAM)"
+ENTITLEMENTS="Mira/Mira.entitlements"
+
+# ── Re-sign Sparkle nested binaries ──────────────────────────────────────────
+# Sparkle ships pre-signed with its own cert from SPM; notarization requires
+# every nested binary to be signed with YOUR Developer ID + secure timestamp.
+# Sign innermost → outermost.
+echo "▶ Re-signing Sparkle sub-components…"
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for bin in \
+  "$SPARKLE/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" \
+  "$SPARKLE/XPCServices/Installer.xpc/Contents/MacOS/Installer" \
+  "$SPARKLE/XPCServices/Downloader.xpc" \
+  "$SPARKLE/XPCServices/Installer.xpc" \
+  "$SPARKLE/Updater.app/Contents/MacOS/Updater" \
+  "$SPARKLE/Updater.app" \
+  "$SPARKLE/Autoupdate" \
+  "$SPARKLE/Sparkle" \
+  "$APP/Contents/Frameworks/Sparkle.framework"; do
+  if [ -e "$bin" ]; then
+    codesign --force --sign "$SIGN_ID" --timestamp --options=runtime "$bin"
+  fi
+done
+
+# ── Re-sign main app with clean entitlements (strips injected get-task-allow) ─
+echo "▶ Re-signing Mira.app…"
+codesign --force --sign "$SIGN_ID" --timestamp --options=runtime \
+  --entitlements "$ENTITLEMENTS" "$APP"
+
+# ── Verify code signature (pre-notarization) ─────────────────────────────────
+echo "▶ Verifying signature…"
+codesign --verify --deep --strict "$APP" \
+  || { echo "ERROR: Code signature verification failed."; exit 1; }
 
 # ── Zip ───────────────────────────────────────────────────────────────────────
 echo "▶ Packaging $ZIP"
