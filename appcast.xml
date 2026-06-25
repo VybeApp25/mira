@@ -1,28 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  HOW TO PUBLISH AN UPDATE
-  ========================
-  1. Build a notarized Mira.app and zip it:
-         ditto -c -k --keepParent Mira.app Mira-X.Y.Z.zip
-
-  2. Sign the zip (private key is in your macOS Keychain as "Sparkle Key"):
-         ~/Library/Developer/Xcode/DerivedData/Mira-*/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update Mira-X.Y.Z.zip
-     Copy the sparkle:edSignature output value.
-
-  3. Upload Mira-X.Y.Z.zip to a GitHub Release (tag: vX.Y.Z).
-     Note the file size in bytes.
-
-  4. Add a new <item> block below (keep old items — Sparkle picks the latest by sparkle:version).
-     - sparkle:version must be a higher integer than the previous item
-     - sparkle:shortVersionString is the human-readable version shown in the update dialog
-     - sparkle:edSignature is the value from step 2
-     - length is the file size in bytes from step 3
-
-  5. Commit & push to main — Mira checks this file every hour automatically.
-
-  SIGNING KEY: generated 2026-06-10, stored in macOS Keychain as "Sparkle Key"
-  PUBLIC KEY:  2iBo+zLdYngL6mFsqVQCgTsWpJMjBULTaB5TtTsC/Bs=
--->
 <rss version="2.0"
      xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
      xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -37,15 +13,15 @@
       <sparkle:releaseNotesLink>
         https://github.com/VybeApp25/mira/releases/tag/v1.0.0
       </sparkle:releaseNotesLink>
-      <pubDate>Wed, 11 Jun 2026 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 25 Jun 2026 20:30:00 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <enclosure
         url="https://github.com/VybeApp25/mira/releases/download/v1.0.0/Mira-1.0.0.zip"
         sparkle:version="1"
         sparkle:shortVersionString="1.0.0"
-        length="0"
+        length="17115284"
         type="application/octet-stream"
-        sparkle:edSignature="REPLACE_WITH_OUTPUT_OF_sign_update"
+        sparkle:edSignature="h2+QSA2UW/UsSszVvCRSrJJYwrzFiaPNIk20AiTkS2rTUgpLlzPIAaGgidrWaXHtOeUR2V70HSvt+Z+Ffl5nCg=="
       />
     </item>
 
