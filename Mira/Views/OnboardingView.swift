@@ -15,6 +15,7 @@ private enum OnboardingStep: Equatable, Hashable {
     case intro
     case signIn
     case voicePersona
+    case knowledgeImport
     case discovery
     case permission(MiraPermission)
     case agentFolder
@@ -119,6 +120,7 @@ struct OnboardingView: View {
         case .intro:                  IntroStep(onAdvance: advance)
         case .signIn:                 SignInStep(onAdvance: advance)
         case .voicePersona:           VoicePersonaStep(onAdvance: advance)
+        case .knowledgeImport:        KnowledgeImportStep(onAdvance: advance)
         case .discovery:              DiscoveryStep(onAdvance: advance)
         case .permission(let perm):   PermissionStep(permission: perm, onAdvance: advance)
         case .agentFolder:            AgentFolderStep(onAdvance: advance)
@@ -131,7 +133,7 @@ struct OnboardingView: View {
     // MARK: - Navigation
 
     private func buildSteps() {
-        var s: [OnboardingStep] = [.intro, .signIn, .voicePersona, .discovery]
+        var s: [OnboardingStep] = [.intro, .signIn, .voicePersona, .knowledgeImport, .discovery]
         for p in svc.missingPermissions() { s.append(.permission(p)) }
         s.append(.agentFolder)
         s.append(.demoAgent)
@@ -425,6 +427,34 @@ private struct MiniWaveform: View {
 }
 
 // MARK: - Step 4: Discovery channel
+
+// MARK: - Step: Import Knowledge
+
+private struct KnowledgeImportStep: View {
+    let onAdvance: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            stepHeader(
+                title: "Let Mira know you.",
+                subtitle: "Import your profile from ChatGPT, Claude, or any AI you already use — so Mira starts knowing you on day one. Stays on this Mac, never shared."
+            )
+
+            Spacer()
+
+            KnowledgeImportView(embedded: true, onClose: onAdvance)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Button("Skip for now") { onAdvance() }
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.30))
+                .buttonStyle(.plain)
+                .padding(.bottom, 28)
+        }
+    }
+}
+
+// MARK: - Step: Discovery
 
 private struct DiscoveryStep: View {
     let onAdvance: () -> Void

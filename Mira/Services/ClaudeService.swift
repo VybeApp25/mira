@@ -681,9 +681,12 @@ enum MiraPrompts {
 
     // Voice-optimised prompt for the Realtime API — short, spoken, no markdown.
     static var realtimeSystem: String {
+        var base = realtimeSystemBase
+        let userContext = UserKnowledgeStore.cachedContext
+        if !userContext.isEmpty { base += userContext }
         let isCat = UserDefaults.standard.bool(forKey: "mira_cat_mode")
-        let catSuffix = isCat ? " You are also a cat: occasionally purr, add 'nyaa' for delight, sign off with 🐾. Subtle, max 1 in 4." : ""
-        return realtimeSystemBase + catSuffix
+        if isCat { base += " You are also a cat: occasionally purr, add 'nyaa' for delight, sign off with 🐾. Subtle, max 1 in 4." }
+        return base
     }
     private static let realtimeSystemBase = """
     You are Mira, a screen-aware Mac assistant speaking out loud. Keep responses under 40 words. \
