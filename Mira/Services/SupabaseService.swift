@@ -137,22 +137,33 @@ final class SupabaseService: ObservableObject {
 
     // MARK: - Sign Up
 
-    func signUp(email: String, password: String, name: String) async throws -> SupabaseSession {
-        let body: [String: Any] = [
-            "email": email,
-            "password": password,
-            "data": ["display_name": name]
-        ]
-        let auth = try await post(
-            path: "/auth/v1/signup",
-            body: body,
-            as: AuthResponse.self
-        )
-        let s = makeSession(from: auth)
-        save(s)
-        session = s
-        PostHogService.shared.capture("auth_sign_up", properties: ["method": "email"])
-        return s
+    // Returns nil when signup succeeded but email confirmation is required.
+    func signUp(email: String, password: String, name: String) async throws -> SupabaseSession? {
+        guard let url = URL(string: baseURL + "/auth/v1/signup") else { throw SupabaseError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "email": email, "password": password, "data": ["display_name": name]
+        ])
+        let (data, resp): (Data, URLResponse)
+        do { (data, resp) = try await URLSession.shared.data(for: req) }
+        catch { throw SupabaseError.network(error) }
+        if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
+                ?? String(data: data, encoding: .utf8) ?? "Server error"
+            throw SupabaseError.serverError(http.statusCode, msg)
+        }
+        if let auth = try? JSONDecoder().decode(AuthResponse.self, from: data) {
+            let s = makeSession(from: auth)
+            save(s); session = s
+            PostHogService.shared.capture("auth_sign_up", properties: ["method": "email"])
+            return s
+        }
+        // 200 with no access_token = signup accepted, email confirmation pending.
+        PostHogService.shared.capture("auth_sign_up", properties: ["method": "email", "status": "pending_confirmation"])
+        return nil
     }
 
     // MARK: - Apple ID token sign-in

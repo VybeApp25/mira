@@ -9,7 +9,7 @@ struct AuthView: View {
 
     @ObservedObject private var account = AccountService.shared
 
-    private enum Mode { case signIn, signUp }
+    private enum Mode { case signIn, signUp, confirmEmail }
     @State private var mode: Mode = .signUp
     @State private var email = ""
     @State private var password = ""
@@ -29,6 +29,45 @@ struct AuthView: View {
     }
 
     var body: some View {
+        if mode == .confirmEmail {
+            confirmEmailView
+        } else {
+            formView
+        }
+    }
+
+    private var confirmEmailView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "envelope.badge.checkmark")
+                .font(.system(size: 40))
+                .foregroundColor(accent)
+                .padding(.top, compact ? 8 : 24)
+            Text("Check your email")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+            Text("We sent a confirmation link to **\(email)**. Click it to activate your account, then come back and sign in.")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.50))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                withAnimation { mode = .signIn; error = nil }
+            } label: {
+                Text("Go to sign in")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 42)
+                    .background(accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .padding(.horizontal, compact ? 0 : 8)
+    }
+
+    private var formView: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !compact {
                 VStack(alignment: .leading, spacing: 4) {
@@ -151,14 +190,16 @@ struct AuthView: View {
         do {
             if mode == .signIn {
                 try await account.signIn(email: email.trimmingCharacters(in: .whitespaces), password: password)
+                // onAuthenticated fires via the authState onChange above.
             } else {
                 let display = name.trimmingCharacters(in: .whitespaces)
                 let fallback = email.components(separatedBy: "@").first ?? "there"
                 try await account.signUp(email: email.trimmingCharacters(in: .whitespaces),
                                          password: password,
                                          name: display.isEmpty ? fallback : display)
+                // Signup always requires email confirmation — show the check-email screen.
+                withAnimation { mode = .confirmEmail }
             }
-            // onAuthenticated fires via the authState onChange above.
         } catch {
             self.error = friendly(error)
         }

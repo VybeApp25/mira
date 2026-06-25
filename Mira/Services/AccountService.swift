@@ -113,7 +113,11 @@ final class AccountService: NSObject, ObservableObject {
     func signUp(email: String, password: String, name: String) async throws {
         authState = .loading
         do {
-            let s = try await SupabaseService.shared.signUp(email: email, password: password, name: name)
+            guard let s = try await SupabaseService.shared.signUp(email: email, password: password, name: name) else {
+                // Email confirmation required — not an error, just stay signed out.
+                authState = .signedOut
+                return
+            }
             let user = MiraUser(
                 id: s.userId,
                 email: s.email,
