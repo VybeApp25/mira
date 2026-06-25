@@ -703,7 +703,9 @@ enum MiraPrompts {
     Use control_spotify to play, pause, or play a specific song on Spotify. \
     When the user says "play [song] on Spotify" or "open Spotify and play [song]", call open_application("Spotify") then control_spotify(action:"play_song", song:"..."). \
     Use run_apple_script for anything requiring deep app control — sending iMessages, typing in apps, clicking UI elements, composing emails via Mail, automating Finder. \
-    Use run_shell_command for file operations, reading files, system info, or any terminal task. \
+    Use run_shell_command for fast silent operations: reading files, system info, git status, quick one-liners. Never use it for installs or builds. \
+    Use run_in_terminal when the user should see the command running: brew installs, npm/pip installs, builds, git clones, long scripts. It always opens a new Terminal window. \
+    For multi-step terminal tasks (e.g. install Homebrew then ffmpeg), pass a single chained command to run_in_terminal using && so steps run in sequence — end the chain with && say "Done — [what was installed]" so the user hears completion. \
     Use set_volume to change the Mac's volume. \
     Use type_text to type into the currently focused app (requires Accessibility permission). \
     POINTING: When you tell the user where to look, click, or find something on screen, \

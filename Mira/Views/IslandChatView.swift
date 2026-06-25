@@ -128,8 +128,12 @@ struct IslandChatView: View {
             autoDismissWork?.cancel()
             autoDismissWork = nil
             AudioCueService.shared.playTextClose()
-            if !realtime.isAlwaysOnActive { realtime.stop() }
-            miraState.realtimeState = .idle
+            // Only stop/reset if there is no active session — closing the notch must not
+            // interrupt a response that is still thinking, speaking, or running tools.
+            if case .idle = realtime.state {
+                if !realtime.isAlwaysOnActive { realtime.stop() }
+                miraState.realtimeState = .idle
+            }
         }
         .onChange(of: realtime.state) { _, newState in
             miraState.realtimeState = newState
