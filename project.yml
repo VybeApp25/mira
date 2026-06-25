@@ -68,10 +68,9 @@ targets:
           CODE_SIGN_IDENTITY: "Mira Dev"
           CODE_SIGNING_REQUIRED: YES
           CODE_SIGNING_ALLOWED: YES
-          DEVELOPMENT_TEAM: ""
+          DEVELOPMENT_TEAM: "7FD7W8SX34"
         Release:
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Developer ID Application"
           CODE_SIGNING_REQUIRED: YES
-          # Fill in: run `xcrun altool --list-apps` or check Xcode → Signing & Capabilities
-          DEVELOPMENT_TEAM: "YOUR_TEAM_ID_HERE"
+          DEVELOPMENT_TEAM: "7FD7W8SX34"
