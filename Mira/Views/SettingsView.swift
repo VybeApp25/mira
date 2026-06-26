@@ -1886,6 +1886,25 @@ struct SettingsView: View {
                 .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
+            Button {
+                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html")!)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text("Terms of Service")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.45))
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.25))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
         }
     }
 

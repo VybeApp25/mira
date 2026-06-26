@@ -136,6 +136,10 @@ struct AuthView: View {
             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             .padding(.top, 8)
 
+            if mode == .signUp {
+                legalBlurb
+            }
+
             Button {
                 withAnimation { mode = (mode == .signUp ? .signIn : .signUp); error = nil }
             } label: {
@@ -153,6 +157,34 @@ struct AuthView: View {
         .onChange(of: account.authState) { _, newValue in
             if case .signedIn = newValue { onAuthenticated() }
         }
+    }
+
+    private var legalBlurb: some View {
+        HStack(spacing: 0) {
+            Text("By creating an account you agree to our ")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.30))
+            Button("Terms") {
+                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html")!)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10))
+            .foregroundColor(.white.opacity(0.45))
+            Text(" and ")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.30))
+            Button("Privacy Policy") {
+                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/privacy.html")!)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10))
+            .foregroundColor(.white.opacity(0.45))
+            Text(".")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.30))
+        }
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     @ViewBuilder
