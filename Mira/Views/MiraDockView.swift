@@ -1,46 +1,39 @@
 import SwiftUI
 import AppKit
 import IOKit.ps
+import CoreLocation
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Widget type registry
+// MARK: - Widget registry
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum DockWidgetType: String, CaseIterable, Identifiable {
-    case clock       = "clock"
-    case weather     = "weather"
-    case nowPlaying  = "now_playing"
-    case battery     = "battery"
-    case appLauncher = "app_launcher"
-    case pomodoro    = "pomodoro"
-    case toggles     = "toggles"
-    case soundMeter  = "sound_meter"
-
+    case clock, weather, nowPlaying, battery, appLauncher, pomodoro, toggles, soundMeter
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .clock:       return "Clock"
-        case .weather:     return "Weather"
-        case .nowPlaying:  return "Now Playing"
-        case .battery:     return "Battery"
-        case .appLauncher: return "App Launcher"
-        case .pomodoro:    return "Pomodoro"
-        case .toggles:     return "Quick Toggles"
-        case .soundMeter:  return "Sound Meter"
+        case .clock:       "Clock"
+        case .weather:     "Weather"
+        case .nowPlaying:  "Now Playing"
+        case .battery:     "Battery"
+        case .appLauncher: "App Launcher"
+        case .pomodoro:    "Pomodoro"
+        case .toggles:     "Quick Toggles"
+        case .soundMeter:  "Sound Meter"
         }
     }
 
     var icon: String {
         switch self {
-        case .clock:       return "clock"
-        case .weather:     return "cloud.sun"
-        case .nowPlaying:  return "music.note"
-        case .battery:     return "battery.75"
-        case .appLauncher: return "square.grid.2x2"
-        case .pomodoro:    return "timer"
-        case .toggles:     return "toggles"
-        case .soundMeter:  return "waveform"
+        case .clock:       "clock"
+        case .weather:     "cloud.sun"
+        case .nowPlaying:  "music.note"
+        case .battery:     "battery.75"
+        case .appLauncher: "square.grid.2x2"
+        case .pomodoro:    "timer"
+        case .toggles:     "toggles"
+        case .soundMeter:  "waveform"
         }
     }
 }
@@ -49,7 +42,7 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
 // MARK: - Widget order persistence
 // ─────────────────────────────────────────────────────────────────────────────
 
-private let widgetOrderKey = "mira_dock_widget_order"
+private let widgetOrderKey = "mira_dock_widget_order_v2"
 
 private func loadWidgetOrder() -> [DockWidgetType] {
     guard let arr = UserDefaults.standard.stringArray(forKey: widgetOrderKey) else {
@@ -67,47 +60,27 @@ private func saveWidgetOrder(_ order: [DockWidgetType]) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct MiraDockView: View {
-    @State private var widgets:     [DockWidgetType] = loadWidgetOrder()
-    @State private var editMode     = false
-    @State private var showPicker   = false
-    @State private var expandedID:  DockWidgetType?   = nil
+    @State private var widgets:   [DockWidgetType] = loadWidgetOrder()
+    @State private var editMode   = false
+    @State private var showPicker = false
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Expanded detail panel (appears above clicked widget)
-            if let id = expandedID {
-                expandedPanel(for: id)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            // The bar itself
-            bar
-        }
-        .animation(.spring(response: 0.28, dampingFraction: 0.80), value: expandedID)
-        .onTapGesture { }   // absorb clicks so the panel doesn't close on bar tap
-        .background(
-            Color.clear.contentShape(Rectangle())
-                .onTapGesture { expandedID = nil }
-        )
-    }
-
-    // MARK: Bar
-
-    private var bar: some View {
         HStack(spacing: 5) {
             ForEach(widgets) { wtype in
-                widgetCard(wtype)
+                WidgetSlot(
+                    wtype:    wtype,
+                    editMode: editMode,
+                    onRemove: { remove(wtype) }
+                )
             }
 
-            // Add button
             Button {
                 showPicker.toggle()
-                expandedID = nil
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.35))
-                    .frame(width: 36, height: 56)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.3))
+                    .frame(width: 32, height: 60)
             }
             .buttonStyle(.plain)
             .popover(isPresented: $showPicker, arrowEdge: .top) {
@@ -118,58 +91,116 @@ struct MiraDockView: View {
         .frame(height: 72)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.06, green: 0.06, blue: 0.07).opacity(0.96))
-                .shadow(color: .black.opacity(0.6), radius: 24, y: -6)
+                .fill(Color(red: 0.06, green: 0.06, blue: 0.08).opacity(0.97))
+                .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
         )
         .contextMenu {
-            Button { withAnimation { editMode.toggle() } } label: {
-                Label(editMode ? "Done" : "Edit Dock", systemImage: editMode ? "checkmark" : "pencil")
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { editMode.toggle() }
+            } label: {
+                Label(editMode ? "Done Editing" : "Edit Dock",
+                      systemImage: editMode ? "checkmark.circle" : "pencil.circle")
             }
             Divider()
             Button("Restore Defaults") {
                 widgets = [.clock, .pomodoro, .nowPlaying, .battery, .toggles, .weather, .appLauncher]
                 saveWidgetOrder(widgets)
             }
+            Button("Hide Dock") { MiraDockManager.shared.hideDock() }
         }
     }
 
-    // MARK: Widget card wrapper
+    private func remove(_ wtype: DockWidgetType) {
+        withAnimation { widgets.removeAll { $0 == wtype } }
+        saveWidgetOrder(widgets)
+    }
 
-    @ViewBuilder
-    private func widgetCard(_ wtype: DockWidgetType) -> some View {
+    private func toggle(_ wtype: DockWidgetType) {
+        if widgets.contains(wtype) { remove(wtype) }
+        else { widgets.append(wtype); saveWidgetOrder(widgets) }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Widget slot (card wrapper + popover + edit badge)
+// ─────────────────────────────────────────────────────────────────────────────
+
+private struct WidgetSlot: View {
+    let wtype:    DockWidgetType
+    let editMode: Bool
+    let onRemove: () -> Void
+
+    @State private var showDetail = false
+    @ObservedObject private var pom = PomodoroService.shared
+
+    var body: some View {
         ZStack(alignment: .topLeading) {
             Button {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.78)) {
-                    expandedID = expandedID == wtype ? nil : wtype
+                if !editMode {
+                    handleTap()
                 }
             } label: {
-                widgetContent(wtype)
-                    .frame(height: 56)
-                    .background(cardBackground(for: wtype))
+                widgetContent
+                    .frame(height: 58)
+                    .background(cardBG)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
+            .popover(isPresented: $showDetail, arrowEdge: .top) {
+                detailContent
+                    .padding(16)
+                    .frame(minWidth: 260)
+                    .background(Color(red: 0.09, green: 0.09, blue: 0.11))
+            }
 
-            // Edit-mode remove button
+            // Edit-mode remove badge
             if editMode {
-                Button {
-                    withAnimation { remove(wtype) }
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.red)
-                        .background(Circle().fill(Color.white).padding(2))
+                Button(action: onRemove) {
+                    ZStack {
+                        Circle().fill(Color.white).frame(width: 16, height: 16)
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.red)
+                    }
                 }
                 .buttonStyle(.plain)
                 .offset(x: -6, y: -8)
+                .transition(.scale)
             }
         }
     }
 
-    // MARK: Widget content router
+    private var cardBG: some View {
+        Group {
+            if wtype == .pomodoro && pom.isRunning {
+                LinearGradient(
+                    colors: [Color(red: 0.0, green: 0.78, blue: 0.68),
+                             Color(red: 0.0, green: 0.55, blue: 0.90)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            } else {
+                Color.white.opacity(0.07)
+            }
+        }
+    }
+
+    private func handleTap() {
+        switch wtype {
+        case .clock:
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Calendar.app"))
+        case .weather:
+            if let url = URL(string: "weather://") {
+                if !NSWorkspace.shared.open(url) {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Weather.app"))
+                }
+            }
+        default:
+            showDetail.toggle()
+        }
+    }
 
     @ViewBuilder
-    private func widgetContent(_ wtype: DockWidgetType) -> some View {
+    private var widgetContent: some View {
         switch wtype {
         case .clock:       ClockWidget()
         case .weather:     WeatherWidget()
@@ -182,72 +213,26 @@ struct MiraDockView: View {
         }
     }
 
-    // MARK: Card background
-
-    private func cardBackground(for wtype: DockWidgetType) -> some View {
-        Group {
-            if wtype == .pomodoro, PomodoroService.shared.isRunning {
-                LinearGradient(
-                    colors: [Color(red: 0.0, green: 0.75, blue: 0.65),
-                             Color(red: 0.0, green: 0.60, blue: 0.85)],
-                    startPoint: .topLeading,
-                    endPoint:   .bottomTrailing
-                )
-            } else if expandedID == wtype {
-                Color.white.opacity(0.10)
-            } else {
-                Color.white.opacity(0.06)
-            }
-        }
-    }
-
-    // MARK: Expanded detail panels
-
     @ViewBuilder
-    private func expandedPanel(for wtype: DockWidgetType) -> some View {
-        VStack(spacing: 0) {
-            Group {
-                switch wtype {
-                case .pomodoro:   PomodoroDetailPanel()
-                case .weather:    WeatherDetailPanel()
-                case .toggles:    TogglesDetailPanel()
-                case .appLauncher: AppLauncherDetailPanel()
-                case .nowPlaying: NowPlayingDetailPanel()
-                default:          EmptyView()
-                }
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(red: 0.09, green: 0.09, blue: 0.11).opacity(0.97))
-                    .shadow(color: .black.opacity(0.5), radius: 16, y: 4)
-            )
+    private var detailContent: some View {
+        switch wtype {
+        case .pomodoro:    PomodoroDetailPanel()
+        case .weather:     WeatherDetailPanel()
+        case .toggles:     TogglesDetailPanel()
+        case .appLauncher: AppLauncherDetailPanel()
+        case .nowPlaying:  NowPlayingDetailPanel()
+        case .battery:     BatteryDetailPanel()
+        default:           Text(wtype.label).foregroundColor(.white.opacity(0.5))
         }
-        .frame(maxWidth: 340)
-        .padding(.bottom, 80)
-        .padding(.leading, 10)
-    }
-
-    // MARK: Edit helpers
-
-    private func remove(_ wtype: DockWidgetType) {
-        widgets.removeAll { $0 == wtype }
-        saveWidgetOrder(widgets)
-        if expandedID == wtype { expandedID = nil }
-    }
-
-    private func toggle(_ wtype: DockWidgetType) {
-        if widgets.contains(wtype) { remove(wtype) }
-        else { widgets.append(wtype); saveWidgetOrder(widgets) }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Widget picker popover
+// MARK: - Widget picker
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct WidgetPickerPopover: View {
-    let active: [DockWidgetType]
+    let active:   [DockWidgetType]
     let onToggle: (DockWidgetType) -> Void
 
     var body: some View {
@@ -255,16 +240,12 @@ private struct WidgetPickerPopover: View {
             Text("Widgets")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.7))
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-                .padding(.bottom, 8)
-
+                .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 8)
             Divider().opacity(0.1)
-
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 2) {
+                VStack(spacing: 1) {
                     ForEach(DockWidgetType.allCases) { wtype in
-                        let isOn = active.contains(wtype)
+                        let on = active.contains(wtype)
                         Button { onToggle(wtype) } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: wtype.icon)
@@ -275,15 +256,10 @@ private struct WidgetPickerPopover: View {
                                     .font(.system(size: 12))
                                     .foregroundColor(.white.opacity(0.85))
                                 Spacer()
-                                if isOn {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.blue)
-                                }
+                                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.blue) }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(isOn ? Color.white.opacity(0.05) : Color.clear)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(on ? Color.white.opacity(0.05) : Color.clear)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)
@@ -292,37 +268,36 @@ private struct WidgetPickerPopover: View {
                 .padding(6)
             }
         }
-        .frame(width: 220, height: 280)
-        .background(Color(red: 0.1, green: 0.1, blue: 0.12))
+        .frame(width: 210, height: 270)
+        .background(Color(red: 0.1, green: 0.1, blue: 0.13))
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Clock Widget
+// MARK: - Clock
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct ClockWidget: View {
     @State private var now = Date()
-    private let timer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+    private let t = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(now, format: .dateTime.hour().minute())
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .monospacedDigit()
+                .foregroundColor(.white).monospacedDigit()
             Text(now, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.white.opacity(0.45))
         }
         .padding(.horizontal, 14)
         .frame(width: 130)
-        .onReceive(timer) { now = $0 }
+        .onReceive(t) { now = $0 }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Pomodoro Widget + Detail Panel
+// MARK: - Pomodoro
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct PomodoroWidget: View {
@@ -333,264 +308,203 @@ private struct PomodoroWidget: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(timeString)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundColor(pom.isRunning ? .white : .white.opacity(0.85))
-                    .monospacedDigit()
+                    .foregroundColor(.white).monospacedDigit()
                 Text(subLabel)
                     .font(.system(size: 10))
                     .foregroundColor(pom.isRunning ? .white.opacity(0.7) : .white.opacity(0.35))
             }
-
-            HStack(spacing: 6) {
-                Button {
-                    pom.isRunning ? pom.pause() : pom.start()
-                } label: {
+            HStack(spacing: 5) {
+                Button { pom.isRunning ? pom.pause() : pom.start() } label: {
                     Image(systemName: pom.isRunning ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(pom.isRunning ? .white : .white.opacity(0.7))
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle().fill(pom.isRunning ? Color.white.opacity(0.2) : Color.white.opacity(0.1))
-                        )
-                }
-                .buttonStyle(.plain)
-
+                        .font(.system(size: 13))
+                        .foregroundColor(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(pom.isRunning ? 0.2 : 0.12)))
+                }.buttonStyle(.plain)
                 Button { pom.skip() } label: {
                     Image(systemName: "forward.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.55))
+                        .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(0.08)))
-                }
-                .buttonStyle(.plain)
+                }.buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .frame(width: 200)
     }
 
-    private var timeString: String {
-        let m = pom.secondsLeft / 60
-        let s = pom.secondsLeft % 60
-        return String(format: "%d:%02d", m, s)
-    }
-
+    private var timeString: String { String(format: "%d:%02d", pom.secondsLeft/60, pom.secondsLeft%60) }
     private var subLabel: String {
         switch pom.phase {
-        case .focus:      return "Focus · \(pom.completed + 1)/\(pom.sessionsPerSet)"
-        case .shortBreak: return "Short Break"
-        case .longBreak:  return "Long Break"
+        case .focus:      "Focus · \(pom.completed % pom.sessionsPerSet + 1)/\(pom.sessionsPerSet)"
+        case .shortBreak: "Short Break"
+        case .longBreak:  "Long Break"
         }
     }
 }
 
 private struct PomodoroDetailPanel: View {
     @ObservedObject private var pom = PomodoroService.shared
-    @State private var focusMins = 25
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Pomodoro")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                Text("Pomodoro").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.8))
                 Spacer()
-                Button("Reset") { pom.reset() }
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.4))
-                    .buttonStyle(.plain)
+                Button("Reset") { pom.reset() }.font(.system(size: 11)).foregroundColor(.white.opacity(0.35)).buttonStyle(.plain)
             }
-
-            // Progress ring
             ZStack {
-                let total = Double(pom.focusMins * 60)
-                let remaining = Double(pom.secondsLeft)
-                let progress = pom.phase == .focus ? (1 - remaining / total) : (1 - remaining / max(1, total))
-
-                Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 5)
-                Circle()
-                    .trim(from: 0, to: CGFloat(progress))
-                    .stroke(Color(red: 0.0, green: 0.85, blue: 0.70), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                let total    = Double(pom.focusMins * 60)
+                let progress = pom.phase == .focus ? (1 - Double(pom.secondsLeft) / max(1, total)) : 0
+                Circle().stroke(Color.white.opacity(0.08), lineWidth: 5)
+                Circle().trim(from: 0, to: CGFloat(progress))
+                    .stroke(Color(red: 0, green: 0.85, blue: 0.70), style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1), value: pom.secondsLeft)
-
-                VStack(spacing: 2) {
-                    let m = pom.secondsLeft / 60
-                    let s = pom.secondsLeft % 60
-                    Text(String(format: "%d:%02d", m, s))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .monospacedDigit()
-                    Text(phaseName)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.45))
+                VStack(spacing: 1) {
+                    Text(String(format: "%d:%02d", pom.secondsLeft/60, pom.secondsLeft%60))
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(.white).monospacedDigit()
+                    Text(phaseName).font(.system(size: 10)).foregroundColor(.white.opacity(0.4))
                 }
             }
-            .frame(width: 120, height: 120)
-            .frame(maxWidth: .infinity)
+            .frame(width: 120, height: 120).frame(maxWidth: .infinity)
 
-            // Session dots
             HStack(spacing: 6) {
                 ForEach(0..<pom.sessionsPerSet, id: \.self) { i in
                     Circle()
                         .fill(i < pom.completed % pom.sessionsPerSet
-                              ? Color(red: 0.0, green: 0.85, blue: 0.70)
+                              ? Color(red: 0, green: 0.85, blue: 0.70)
                               : Color.white.opacity(0.15))
                         .frame(width: 8, height: 8)
                 }
                 Spacer()
-                Text("\(pom.completed) done")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.3))
+                Text("\(pom.completed) done").font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
             }
-
-            // Focus duration stepper
             HStack {
-                Text("Focus")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.5))
+                Text("Focus").font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
                 Spacer()
-                Stepper("\(pom.focusMins) min", value: Binding(
-                    get: { pom.focusMins },
-                    set: { pom.setFocusMins($0) }
-                ), in: 5...60, step: 5)
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.8))
-                .labelsHidden()
-                Text("\(pom.focusMins) min")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 40, alignment: .trailing)
+                Stepper(value: Binding(get: { pom.focusMins }, set: { pom.setFocusMins($0) }), in: 5...60, step: 5) {
+                    Text("\(pom.focusMins) min").font(.system(size: 11, weight: .medium)).foregroundColor(.white.opacity(0.7))
+                }
             }
         }
     }
 
     private var phaseName: String {
-        switch pom.phase {
-        case .focus:      return "Focus"
-        case .shortBreak: return "Short Break"
-        case .longBreak:  return "Long Break"
-        }
+        switch pom.phase { case .focus: "Focus"; case .shortBreak: "Short Break"; case .longBreak: "Long Break" }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Battery Widget
+// MARK: - Battery
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct BatteryWidget: View {
-    @State private var percent  = 100
-    @State private var charging = false
-    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    @State private var pct = 100; @State private var charging = false
+    private let t = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
             Circle().stroke(Color.white.opacity(0.08), lineWidth: 5)
-            Circle()
-                .trim(from: 0, to: CGFloat(percent) / 100)
+            Circle().trim(from: 0, to: CGFloat(pct)/100)
                 .stroke(ringColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.6), value: percent)
+                .rotationEffect(.degrees(-90)).animation(.easeInOut(duration: 0.6), value: pct)
             VStack(spacing: 0) {
-                Text("\(percent)")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                if charging {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 7))
-                        .foregroundColor(.yellow)
-                }
+                Text("\(pct)").font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundColor(.white)
+                if charging { Image(systemName: "bolt.fill").font(.system(size: 7)).foregroundColor(.yellow) }
             }
         }
-        .frame(width: 50, height: 50)
-        .frame(width: 68)
-        .onAppear { updateBattery() }
-        .onReceive(timer) { _ in updateBattery() }
+        .frame(width: 48, height: 48).frame(width: 68)
+        .onAppear { read() }.onReceive(t) { _ in read() }
     }
 
     private var ringColor: Color {
-        if charging    { return .green }
-        if percent <= 20 { return .red }
-        if percent <= 40 { return .orange }
-        return Color(red: 0.2, green: 0.9, blue: 0.4)
+        charging ? .green : pct <= 20 ? .red : pct <= 40 ? .orange : Color(red: 0.2, green: 0.9, blue: 0.4)
     }
 
-    private func updateBattery() {
-        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let list = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef],
+    private func read() {
+        guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
               let src  = list.first,
-              let info = IOPSGetPowerSourceDescription(snapshot, src)?.takeUnretainedValue() as? [String: Any]
+              let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
         else { return }
-        percent  = info[kIOPSCurrentCapacityKey] as? Int ?? percent
+        pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
         charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
     }
 }
 
+private struct BatteryDetailPanel: View {
+    @State private var pct = 100; @State private var charging = false
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Battery").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.8))
+            Text("\(pct)%").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundColor(.white)
+            Text(charging ? "Charging" : "On Battery").font(.system(size: 12)).foregroundColor(.white.opacity(0.4))
+        }
+        .onAppear {
+            guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+                  let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
+                  let src  = list.first,
+                  let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
+            else { return }
+            pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
+            charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Weather Widget + Detail Panel
+// MARK: - Weather (auto-detects location via wttr.in IP)
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct WeatherWidget: View {
     @StateObject private var svc = WeatherService()
-
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: svc.weather.sfSymbol)
-                .font(.system(size: 20))
-                .foregroundColor(.white.opacity(0.7))
+            Image(systemName: svc.weather.sfSymbol).font(.system(size: 18)).foregroundColor(.white.opacity(0.7))
             VStack(alignment: .leading, spacing: 1) {
                 Text(svc.isLoaded ? "\(svc.weather.tempF)°" : "--")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                Text(svc.isLoaded ? svc.weather.location : "Loading…")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.4))
-                    .lineLimit(1)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded)).foregroundColor(.white)
+                Text(svc.isLoaded ? svc.weather.location : "—")
+                    .font(.system(size: 9)).foregroundColor(.white.opacity(0.4)).lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .frame(width: 120)
+        .padding(.horizontal, 10).frame(width: 114)
         .onAppear { svc.fetch() }
     }
 }
 
 private struct WeatherDetailPanel: View {
     @StateObject private var svc = WeatherService()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: svc.weather.sfSymbol)
-                    .font(.system(size: 28))
-                    .foregroundColor(.white.opacity(0.7))
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 12) {
+                Image(systemName: svc.weather.sfSymbol).font(.system(size: 36)).foregroundColor(.white.opacity(0.6))
+                VStack(alignment: .leading, spacing: 3) {
                     Text("\(svc.weather.tempF)°F")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                    Text(svc.weather.condition)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.45))
+                        .font(.system(size: 32, weight: .semibold, design: .rounded)).foregroundColor(.white)
+                    Text(svc.weather.condition).font(.system(size: 12)).foregroundColor(.white.opacity(0.45))
+                    Text(svc.weather.location).font(.system(size: 10)).foregroundColor(.white.opacity(0.3))
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("H: \(svc.weather.highF)°")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-                    Text("L: \(svc.weather.lowF)°")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("H \(svc.weather.highF)°").font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
+                    Text("L \(svc.weather.lowF)°").font(.system(size: 11)).foregroundColor(.white.opacity(0.35))
                 }
             }
-            Text(svc.weather.location)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.3))
+            Button("Open Weather App") {
+                if let u = URL(string: "weather://") { _ = NSWorkspace.shared.open(u) }
+            }
+            .font(.system(size: 11)).foregroundColor(.blue).buttonStyle(.plain)
         }
         .onAppear { svc.fetch() }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Now Playing Widget + Detail Panel
+// MARK: - Now Playing (Spotify via MediaRemote)
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct NowPlayingWidget: View {
@@ -598,363 +512,305 @@ private struct NowPlayingWidget: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Album art
-            if let art = np.info.artwork {
-                Image(nsImage: art)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "music.note")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.2))
-                    )
-            }
-
+            artView.frame(width: 40, height: 40)
             if np.info.hasContent {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(np.info.title)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Text(np.info.artist)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.5))
-                        .lineLimit(1)
+                    Text(np.info.title).font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white).lineLimit(1)
+                    Text(np.info.artist).font(.system(size: 10)).foregroundColor(.white.opacity(0.5)).lineLimit(1)
                 }
-                .frame(width: 90, alignment: .leading)
-
-                HStack(spacing: 8) {
-                    Button { np.previousTrack() } label: {
-                        Image(systemName: "backward.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button { np.togglePlayPause() } label: {
-                        Image(systemName: np.info.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button { np.nextTrack() } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                }
+                .frame(width: 86, alignment: .leading)
+                controls
             } else {
-                Text("Nothing playing")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
+                Text("Nothing playing").font(.system(size: 10)).foregroundColor(.white.opacity(0.25))
             }
         }
-        .padding(.horizontal, 10)
-        .frame(minWidth: 200, maxWidth: 240)
+        .padding(.horizontal, 10).frame(minWidth: 200, maxWidth: 240)
+        .onAppear { NowPlayingService.shared.start() }
+    }
+
+    private var artView: some View {
+        Group {
+            if let art = np.info.artwork {
+                Image(nsImage: art).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 7))
+            } else {
+                RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.08))
+                    .overlay(Image(systemName: "music.note").font(.system(size: 14)).foregroundColor(.white.opacity(0.2)))
+            }
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 8) {
+            btn("backward.fill", size: 11)  { np.previousTrack() }
+            btn(np.info.isPlaying ? "pause.fill" : "play.fill", size: 14) { np.togglePlayPause() }
+            btn("forward.fill",  size: 11)  { np.nextTrack() }
+        }
+    }
+
+    private func btn(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: size)).foregroundColor(.white.opacity(size > 12 ? 1 : 0.6))
+        }.buttonStyle(.plain)
     }
 }
 
 private struct NowPlayingDetailPanel: View {
     @ObservedObject private var np = NowPlayingService.shared
-
     var body: some View {
         HStack(spacing: 14) {
             if let art = np.info.artwork {
-                Image(nsImage: art)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                Image(nsImage: art).resizable().scaledToFill()
+                    .frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 12))
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text(np.info.title.isEmpty ? "Nothing Playing" : np.info.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                Text(np.info.artist)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.45))
+                    .font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
+                Text(np.info.artist).font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
                 HStack(spacing: 14) {
-                    Button { np.previousTrack() } label: {
-                        Image(systemName: "backward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6))
-                    }.buttonStyle(.plain)
-                    Button { np.togglePlayPause() } label: {
-                        Image(systemName: np.info.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)).foregroundColor(.white)
-                    }.buttonStyle(.plain)
-                    Button { np.nextTrack() } label: {
-                        Image(systemName: "forward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6))
-                    }.buttonStyle(.plain)
+                    Button { np.previousTrack() } label: { Image(systemName: "backward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
+                    Button { np.togglePlayPause() } label: { Image(systemName: np.info.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)).foregroundColor(.white) }.buttonStyle(.plain)
+                    Button { np.nextTrack() }      label: { Image(systemName: "forward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
                 }
             }
         }
+        .onAppear { NowPlayingService.shared.start() }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - App Launcher Widget + Detail Panel
+// MARK: - App Launcher (full /Applications bubble)
 // ─────────────────────────────────────────────────────────────────────────────
-
-private let pinnedAppsKey = "mira_dock_pinned_apps"
-
-private func defaultPinnedApps() -> [String] {
-    ["com.apple.Safari", "com.apple.Music", "com.apple.Notes", "com.apple.finder"]
-}
 
 private struct AppLauncherWidget: View {
     @State private var apps: [(id: String, icon: NSImage?)] = []
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.fixed(26)), GridItem(.fixed(26))], spacing: 4) {
-            ForEach(apps.prefix(4), id: \.id) { app in
-                Button { launch(app.id) } label: {
+        LazyVGrid(columns: [GridItem(.fixed(24)), GridItem(.fixed(24))], spacing: 4) {
+            ForEach(pinnedApps().prefix(4), id: \.self) { bID in
+                let icon = apps.first(where: { $0.id == bID })?.icon
+                Button { launch(bID) } label: {
                     Group {
-                        if let icon = app.icon {
-                            Image(nsImage: icon).resizable().scaledToFit()
-                        } else {
-                            Image(systemName: "app").font(.system(size: 16)).foregroundColor(.white.opacity(0.3))
-                        }
+                        if let ic = icon { Image(nsImage: ic).resizable().scaledToFit() }
+                        else { Image(systemName: "app").font(.system(size: 14)).foregroundColor(.white.opacity(0.3)) }
                     }
-                    .frame(width: 26, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
+                    .frame(width: 24, height: 24).clipShape(RoundedRectangle(cornerRadius: 6))
+                }.buttonStyle(.plain)
             }
         }
-        .padding(8)
-        .frame(width: 90)
-        .onAppear { loadApps() }
+        .padding(8).frame(width: 84)
+        .onAppear { loadPinned() }
     }
 
-    private func loadApps() {
-        let ids = UserDefaults.standard.stringArray(forKey: pinnedAppsKey) ?? defaultPinnedApps()
-        apps = ids.map { id in
+    private func loadPinned() {
+        apps = pinnedApps().map { id in
             let path = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)?.path ?? ""
             let icon = NSWorkspace.shared.icon(forFile: path)
             return (id: id, icon: icon.isValid ? icon : nil)
         }
     }
 
-    private func launch(_ bundleID: String) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+    private func launch(_ id: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: .init(), completionHandler: nil)
     }
 }
 
+private func pinnedApps() -> [String] {
+    UserDefaults.standard.stringArray(forKey: "mira_dock_pinned_apps")
+        ?? ["com.apple.Safari", "com.apple.Music", "com.apple.Notes", "com.apple.finder"]
+}
+
+// Full app launcher panel — all installed apps with search
 private struct AppLauncherDetailPanel: View {
-    @State private var apps: [(id: String, name: String, icon: NSImage?)] = []
+    @State private var allApps: [(name: String, url: URL, icon: NSImage?)] = []
+    @State private var query = ""
+
+    private var filtered: [(name: String, url: URL, icon: NSImage?)] {
+        query.isEmpty ? allApps : allApps.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Pinned Apps")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 56))], spacing: 10) {
-                ForEach(apps, id: \.id) { app in
-                    Button { launch(app.id) } label: {
-                        VStack(spacing: 4) {
-                            Group {
-                                if let icon = app.icon {
-                                    Image(nsImage: icon).resizable().scaledToFit()
-                                } else {
-                                    Image(systemName: "app").font(.system(size: 24)).foregroundColor(.white.opacity(0.3))
-                                }
-                            }
-                            .frame(width: 44, height: 44)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            Text(app.name)
-                                .font(.system(size: 9))
-                                .foregroundColor(.white.opacity(0.5))
-                                .lineLimit(1)
-                        }
-                    }
-                    .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundColor(.white.opacity(0.35))
+                TextField("Search apps…", text: $query)
+                    .textFieldStyle(.plain).font(.system(size: 12)).foregroundColor(.white)
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.25)) }.buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color.white.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.bottom, 8)
+
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 60, maximum: 80))], spacing: 10) {
+                    ForEach(filtered, id: \.url) { app in
+                        Button {
+                            NSWorkspace.shared.openApplication(at: app.url, configuration: .init(), completionHandler: nil)
+                        } label: {
+                            VStack(spacing: 4) {
+                                Group {
+                                    if let ic = app.icon { Image(nsImage: ic).resizable().scaledToFit() }
+                                    else { Image(systemName: "app").font(.system(size: 24)).foregroundColor(.white.opacity(0.3)) }
+                                }
+                                .frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 10))
+                                Text(app.name).font(.system(size: 9)).foregroundColor(.white.opacity(0.55)).lineLimit(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 4)
+            }
         }
+        .frame(width: 320, height: 340)
         .onAppear { loadApps() }
     }
 
     private func loadApps() {
-        let ids = UserDefaults.standard.stringArray(forKey: pinnedAppsKey) ?? defaultPinnedApps()
-        apps = ids.compactMap { id in
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
-            let path = url.path
-            let icon = NSWorkspace.shared.icon(forFile: path)
-            let name = url.deletingPathExtension().lastPathComponent
-            return (id: id, name: name, icon: icon.isValid ? icon : nil)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fm  = FileManager.default
+            let dirs: [URL] = [
+                URL(fileURLWithPath: "/Applications"),
+                URL(fileURLWithPath: "/System/Applications"),
+                URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications")
+            ]
+            var apps: [(name: String, url: URL, icon: NSImage?)] = []
+            for dir in dirs {
+                guard let items = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
+                for url in items where url.pathExtension == "app" {
+                    let name = url.deletingPathExtension().lastPathComponent
+                    let icon = NSWorkspace.shared.icon(forFile: url.path)
+                    apps.append((name: name, url: url, icon: icon.isValid ? icon : nil))
+                }
+            }
+            let sorted = apps.sorted { $0.name < $1.name }
+            DispatchQueue.main.async { self.allApps = sorted }
         }
-    }
-
-    private func launch(_ bundleID: String) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: .init(), completionHandler: nil)
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Quick Toggles Widget + Detail Panel
+// MARK: - Quick Toggles (WiFi + DND moon)
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct QuickTogglesWidget: View {
-    @State private var darkMode   = isDarkMode()
-    @State private var wifiOn     = true
-    @State private var dndOn      = false
+    @AppStorage("mira_wifi_on")  private var wifiOn  = true
+    @AppStorage("mira_dnd_on")   private var dndOn   = false
+    @AppStorage("mira_bt_on")    private var btOn    = true
 
     var body: some View {
-        HStack(spacing: 6) {
-            toggleCircle(icon: "wifi", label: "Wi-Fi", color: .blue, on: wifiOn) {
-                toggleWifi()
-            }
-            toggleCircle(icon: "moon.fill", label: "Dark", color: .purple, on: darkMode) {
-                toggleDarkMode()
-                darkMode = isDarkMode()
-            }
-            toggleCircle(icon: "bell.slash.fill", label: "DND", color: .gray, on: dndOn) {
-                dndOn.toggle()
-            }
+        HStack(spacing: 5) {
+            circle("wifi",             color: .blue,   on: wifiOn)  { toggleWifi()  }
+            circle("moon.zzz.fill",    color: .indigo, on: dndOn)   { toggleDND()   }
+            circle("bluetooth",        color: .blue,   on: btOn)    { toggleBT()    }
         }
-        .padding(.horizontal, 8)
-        .frame(width: 118)
+        .padding(.horizontal, 8).frame(width: 110)
     }
 
-    private func toggleCircle(icon: String, label: String, color: Color, on: Bool, action: @escaping () -> Void) -> some View {
+    private func circle(_ icon: String, color: Color, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 13))
-                .foregroundColor(on ? .white : .white.opacity(0.35))
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(on ? color : Color.white.opacity(0.08)))
-        }
-        .buttonStyle(.plain)
-        .help(label)
+                .foregroundColor(on ? .white : .white.opacity(0.3))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(on ? color : Color.white.opacity(0.07)))
+        }.buttonStyle(.plain)
     }
 
     private func toggleWifi() {
         wifiOn.toggle()
-        let state = wifiOn ? "on" : "off"
-        shell("networksetup -setairportpower en0 \(state)")
+        shell("networksetup -setairportpower en0 \(wifiOn ? "on" : "off")")
     }
 
-    private func toggleDarkMode() {
-        shell("osascript -e 'tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode'")
+    private func toggleDND() {
+        dndOn.toggle()
+        // macOS 13+ Focus DND via defaults
+        shell("defaults -currentHost write com.apple.notificationcenterui dndEnabledDisplaySleep -bool \(dndOn)")
+        shell("defaults -currentHost write com.apple.notificationcenterui dndMirroring -bool \(dndOn)")
+        shell("killall NotificationCenter 2>/dev/null; true")
     }
-}
 
-private func isDarkMode() -> Bool {
-    UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+    private func toggleBT() {
+        btOn.toggle()
+        shell("blueutil --power \(btOn ? 1 : 0) 2>/dev/null || true")
+    }
 }
 
 private struct TogglesDetailPanel: View {
-    @State private var darkMode = isDarkMode()
-    @State private var wifiOn   = true
-    @State private var btOn     = true
-    @State private var dndOn    = false
-
-    private let toggleItems: [(String, String, Color, String)] = [
-        ("Wi-Fi",      "wifi",              .blue,   "wifi"),
-        ("Bluetooth",  "bluetooth",         .blue,   "bt"),
-        ("Dark Mode",  "moon.fill",         .purple, "dark"),
-        ("Focus",      "moon.circle.fill",  .orange, "focus"),
-    ]
+    @AppStorage("mira_wifi_on") private var wifiOn = true
+    @AppStorage("mira_dnd_on")  private var dndOn  = false
+    @AppStorage("mira_bt_on")   private var btOn   = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Quick Toggles")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
-
-            VStack(spacing: 6) {
-                panelRow("Wi-Fi", icon: "wifi", color: .blue, on: wifiOn) {
-                    wifiOn.toggle()
-                    let s = wifiOn ? "on" : "off"
-                    shell("networksetup -setairportpower en0 \(s)")
-                }
-                panelRow("Dark Mode", icon: "moon.fill", color: .purple, on: darkMode) {
-                    darkMode.toggle()
-                    shell("osascript -e 'tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode'")
-                }
-                panelRow("Do Not Disturb", icon: "bell.slash.fill", color: .gray, on: dndOn) {
-                    dndOn.toggle()
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Quick Toggles").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.8))
+            row("Wi-Fi",          icon: "wifi",          color: .blue,   on: $wifiOn) { shell("networksetup -setairportpower en0 \(wifiOn ? "on" : "off")") }
+            row("Do Not Disturb", icon: "moon.zzz.fill", color: .indigo, on: $dndOn) {
+                shell("defaults -currentHost write com.apple.notificationcenterui dndEnabledDisplaySleep -bool \(dndOn)")
+                shell("killall NotificationCenter 2>/dev/null; true")
             }
+            row("Bluetooth",      icon: "bluetooth",     color: .blue,   on: $btOn)  { shell("blueutil --power \(btOn ? 1 : 0) 2>/dev/null || true") }
+            row("Dark Mode",      icon: "moon.fill",     color: .purple,
+                on: Binding(get: { isDark() }, set: { _ in toggleDark() })) { }
         }
     }
 
-    private func panelRow(_ label: String, icon: String, color: Color, on: Bool, action: @escaping () -> Void) -> some View {
+    private func row(_ label: String, icon: String, color: Color, on: Binding<Bool>, onToggle: @escaping () -> Void) -> some View {
         HStack {
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.6))
-                .frame(width: 24)
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.8))
+            Image(systemName: icon).font(.system(size: 13)).foregroundColor(.white.opacity(0.6)).frame(width: 24)
+            Text(label).font(.system(size: 12)).foregroundColor(.white.opacity(0.8))
             Spacer()
-            Toggle("", isOn: Binding(get: { on }, set: { _ in action() }))
-                .toggleStyle(.switch)
-                .tint(color)
-                .labelsHidden()
+            Toggle("", isOn: on).toggleStyle(.switch).tint(color).labelsHidden()
+                .onChange(of: on.wrappedValue) { _, _ in onToggle() }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color.white.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius: 8))
     }
+
+    private func isDark() -> Bool { UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark" }
+    private func toggleDark() { shell("osascript -e 'tell application \"System Events\" to tell appearance preferences to set dark mode to not dark mode'") }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARK: - Sound Meter Widget
+// MARK: - Sound Meter
 // ─────────────────────────────────────────────────────────────────────────────
 
 private struct SoundMeterWidget: View {
     @ObservedObject private var np = NowPlayingService.shared
-    @State private var levels: [CGFloat] = Array(repeating: 0.3, count: 8)
-    @State private var task: Task<Void, Never>?
+    @State private var levels: [CGFloat] = Array(repeating: 0.25, count: 8)
+    @State private var animTask: Task<Void, Never>?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(0..<8, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(barColor(i))
-                    .frame(width: 4, height: max(4, levels[i] * 44))
-                    .animation(.easeInOut(duration: 0.15), value: levels[i])
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(barColor(levels[i]))
+                    .frame(width: 4, height: max(4, levels[i] * 40))
+                    .animation(.easeInOut(duration: 0.14), value: levels[i])
             }
         }
-        .frame(width: 68)
-        .onAppear { startAnimating() }
-        .onDisappear { task?.cancel() }
-        .onChange(of: np.info.isPlaying) { _, _ in }
+        .frame(width: 62)
+        .onAppear  { startAnim() }
+        .onDisappear { animTask?.cancel() }
     }
 
-    private func barColor(_ i: Int) -> Color {
-        let h = levels[i]
-        if h > 0.75 { return Color(red: 0.2, green: 0.9, blue: 0.4) }
-        if h > 0.5  { return Color(red: 0.2, green: 0.9, blue: 0.4).opacity(0.8) }
-        return Color(red: 0.2, green: 0.9, blue: 0.4).opacity(0.5)
+    private func barColor(_ h: CGFloat) -> Color {
+        Color(red: 0.15, green: Double(0.7 + h * 0.25), blue: 0.4)
     }
 
-    private func startAnimating() {
-        task = Task {
+    private func startAnim() {
+        animTask = Task {
             while !Task.isCancelled {
                 let playing = await MainActor.run { np.info.isPlaying }
                 await MainActor.run {
-                    withAnimation {
-                        if playing {
-                            levels = (0..<8).map { _ in CGFloat.random(in: 0.15...1.0) }
-                        } else {
-                            levels = levels.map { max(0.05, $0 * 0.6) }
-                        }
+                    levels = (0..<8).map { _ in
+                        playing ? CGFloat.random(in: 0.12...1.0) : max(0.05, levels[Int.random(in: 0..<8)] * 0.55)
                     }
                 }
-                try? await Task.sleep(nanoseconds: 120_000_000)
+                try? await Task.sleep(nanoseconds: 110_000_000)
             }
         }
     }
@@ -966,10 +822,10 @@ private struct SoundMeterWidget: View {
 
 @discardableResult
 private func shell(_ cmd: String) -> Int32 {
-    let p = Process()
-    p.launchPath = "/bin/zsh"
-    p.arguments  = ["-c", cmd]
-    try? p.run()
-    p.waitUntilExit()
-    return p.terminationStatus
+    let p = Process(); p.launchPath = "/bin/zsh"; p.arguments = ["-c", cmd]
+    try? p.run(); p.waitUntilExit(); return p.terminationStatus
+}
+
+private func isDark() -> Bool {
+    UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
 }
