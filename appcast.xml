@@ -4,24 +4,22 @@
      xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>Mira Updates</title>
-    <link>https://raw.githubusercontent.com/VybeApp25/mira/main/appcast.xml</link>
+    <link>https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/appcast.xml</link>
     <description>Mira update feed</description>
     <language>en</language>
 
     <item>
       <title>Version 1.0.0</title>
-      <sparkle:releaseNotesLink>
-        https://github.com/VybeApp25/mira/releases/tag/v1.0.0
-      </sparkle:releaseNotesLink>
-      <pubDate>Wed, 25 Jun 2026 20:30:00 +0000</pubDate>
+      <pubDate>Fri, 26 Jun 2026 13:22:52 -0400</pubDate>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
       <enclosure
-        url="https://github.com/VybeApp25/mira/releases/download/v1.0.0/Mira-1.0.0.zip"
+        url="https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/Mira-1.0.0.zip"
         sparkle:version="1"
         sparkle:shortVersionString="1.0.0"
-        length="17135204"
+        length="17151136"
         type="application/octet-stream"
-        sparkle:edSignature="grnOvtXdHpSaV9Gx1azIHQSUKLVklNv4ItAo+yQy8T/YS2eDR7K9uzeAErrrX4SA28jzEyi2/uizxViGtKdjCA=="
+        sparkle:edSignature="/WR2oG+SuolDO4rr2+B1WlKg4gtXqn05U/37B6CALuXAHT6h5tLMVn9BVpH/jvoi2gq1OtsHxIyKqeQX+B78Aw=="
       />
     </item>
 

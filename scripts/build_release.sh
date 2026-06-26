@@ -1,6 +1,6 @@
 #!/bin/bash
 # Mira release build script
-# Usage: APPLE_ID=you@email.com NOTARIZATION_PASSWORD=xxxx-xxxx-xxxx-xxxx ./scripts/build_release.sh
+# Usage: API_ISSUER=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ./scripts/build_release.sh
 #
 # Prerequisites:
 #   1. Developer ID Application cert in Keychain
@@ -8,6 +8,8 @@
 #   3. Generate Sparkle keys once: ./Sparkle/bin/generate_keys
 #      → paste public key into project.yml SUPublicEDKey
 #      → keep private key safe (never commit it)
+#   4. App Store Connect API key at ~/Downloads/AuthKey_MML9PK7Y5L.p8
+#      Find Issuer ID: App Store Connect → Users and Access → Integrations → App Store Connect API
 #
 # After running:
 #   1. Upload Mira-X.Y.Z.zip to GitHub Releases
@@ -19,8 +21,9 @@ set -euo pipefail
 # ── Config ──────────────────────────────────────────────────────────────────
 SCHEME="Mira"
 DERIVED="build_release"
-APPLE_ID="${APPLE_ID:?Set APPLE_ID env var}"
-NOTARIZATION_PASSWORD="${NOTARIZATION_PASSWORD:?Set NOTARIZATION_PASSWORD env var}"
+API_KEY="${API_KEY:-$HOME/Downloads/AuthKey_44WN756492.p8}"
+API_KEY_ID="${API_KEY_ID:-44WN756492}"
+API_ISSUER="${API_ISSUER:-37bf5512-2ca0-470e-ac5f-cb5dca0a086d}"
 
 # ── Version from Info.plist ──────────────────────────────────────────────────
 # Read the version directly from Info.plist — the project sets
@@ -92,9 +95,9 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 # ── Notarize zip ──────────────────────────────────────────────────────────────
 echo "▶ Notarizing zip (this takes 1–5 minutes)…"
 xcrun notarytool submit "$ZIP" \
-  --apple-id "$APPLE_ID" \
-  --password "$NOTARIZATION_PASSWORD" \
-  --team-id "$TEAM" \
+  --key "$API_KEY" \
+  --key-id "$API_KEY_ID" \
+  --issuer "$API_ISSUER" \
   --wait
 
 # ── Staple app + repackage zip ────────────────────────────────────────────────
@@ -104,7 +107,7 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 
 # ── DMG (for website download) ───────────────────────────────────────────────
 DMG="Mira-$VERSION.dmg"
-echo "▶ Creating $DMG…"
+echo "▶ Creating ${DMG}..."
 create-dmg \
   --volname "Mira" \
   --volicon "$APP/Contents/Resources/AppIcon.icns" \
@@ -118,9 +121,9 @@ create-dmg \
 
 echo "▶ Notarizing $DMG…"
 xcrun notarytool submit "$DMG" \
-  --apple-id "$APPLE_ID" \
-  --password "$NOTARIZATION_PASSWORD" \
-  --team-id "$TEAM" \
+  --key "$API_KEY" \
+  --key-id "$API_KEY_ID" \
+  --issuer "$API_ISSUER" \
   --wait
 
 echo "▶ Stapling $DMG…"

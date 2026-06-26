@@ -39,7 +39,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/VybeApp25/mira/main/appcast.xml</string>
+	<string>https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>2iBo+zLdYngL6mFsqVQCgTsWpJMjBULTaB5TtTsC/Bs=</string>
 </dict>
