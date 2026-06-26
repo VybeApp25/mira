@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, agents, learn, settings, crons }
+enum IslandTab: Equatable { case home, agents, learn, settings, crons, labs }
 
 // MARK: - Main island view
 
@@ -132,12 +132,18 @@ struct MiraIslandView: View {
             pill
         }
         .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
-            if let tab = notif.object as? IslandTab, [IslandTab.home, .agents].contains(tab) {
+            if let tab = notif.object as? IslandTab {
                 withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
             } else if let str = notif.userInfo?["tab"] as? String {
-                if str == "agents" { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents } }
-                else               { withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   } }
+                switch str {
+                case "agents": withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents }
+                case "labs":   withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs   }
+                default:       withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   }
+                }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
+            withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs }
         }
         // Keep the hover zone in sync with the per-tab panel height — without
         // this, moving the cursor into the lower half of a tall tab collapses it.
@@ -592,6 +598,7 @@ struct MiraIslandView: View {
         HStack(spacing: 4) {
             navTab(icon: "house.fill",         label: "Home",     tab: .home)
             navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
+            navTab(icon: "sparkles",           label: "Labs",     tab: .labs)
             navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
             navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
             navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
@@ -673,6 +680,9 @@ struct MiraIslandView: View {
                 capture:   capture,
                 voice:     voice
             )
+        case .labs:
+            LabsTabView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .learn:
             LessonsTabView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

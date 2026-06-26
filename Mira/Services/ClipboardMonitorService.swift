@@ -129,6 +129,22 @@ final class ClipboardMonitorService: ObservableObject {
         persist()
     }
 
+    func setReminder(_ date: Date?, for item: ClipboardItem) {
+        guard let i = history.firstIndex(where: { $0.id == item.id }) else { return }
+        if let old = history[i].reminderDate, old != date {
+            ClipReminderService.shared.cancel(itemID: item.id)
+        }
+        history[i].reminderDate = date
+        if let date {
+            ClipReminderService.shared.schedule(item: history[i], at: date)
+        }
+        persist()
+    }
+
+    func item(id: UUID) -> ClipboardItem? {
+        history.first { $0.id == id }
+    }
+
     func clear(keepPinned: Bool = true) {
         history = keepPinned ? history.filter { $0.isPinned } : []
         persist()

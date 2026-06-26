@@ -7,11 +7,11 @@ import Carbon
 //
 // Requires Accessibility permission — Mira already requests this.
 
-final class TextExpansionService {
+final class TextExpansionService: ObservableObject {
     static let shared = TextExpansionService()
 
     private let udKey = "mira.textExpansions"
-    private(set) var expansions: [TextExpansion] = []
+    @Published private(set) var expansions: [TextExpansion] = []
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?

@@ -17,6 +17,8 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var copiedAt: Date
     var isPinned: Bool = false
     var label: String?
+    var reminderDate: Date?
+    var isQueued: Bool = false
 
     enum Kind: String, Codable {
         case text, url, code, image, color, file

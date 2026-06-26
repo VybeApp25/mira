@@ -44,6 +44,7 @@
 		240843308092A906750786AC /* AgentHUDWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */; };
 		2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */; };
 		246CD9DE07245F8D216E9905 /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */; };
+		24C340E30867418C85FA2608 /* MultiCopyQueueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */; };
 		24F66A36C54D673F2CD4D6CF /* PointFollowUpService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */; };
 		250780C8440697BF5B6D976E /* skill-down.wav in Resources */ = {isa = PBXBuildFile; fileRef = BCF4DFA486AA4A00D7530DEF /* skill-down.wav */; };
 		25BD88D576E3FA08502969B6 /* codex.md in Resources */ = {isa = PBXBuildFile; fileRef = AFCF5F2FCD6F8E8F960408E8 /* codex.md */; };
@@ -84,6 +85,7 @@
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		4C80776FEC563AEB1E99B9A9 /* enter.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3593098536F17182B92491AE /* enter.mp3 */; };
 		4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */; };
+		4DFF8C79BB43C1DE7A8D6939 /* ClipReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */; };
 		4EE2ACF2D09E4434510DB330 /* excalidraw.md in Resources */ = {isa = PBXBuildFile; fileRef = 5B22AFE60CB6F6E579CEDC91 /* excalidraw.md */; };
 		4F4EDACACD01FB5FFA7DCC8B /* PendingDrawnContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */; };
 		4F78913E764350E22C107F25 /* AgentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */; };
@@ -92,6 +94,7 @@
 		5170064F0268D08C8AB32BD4 /* WebsiteHealthAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 463BF5B30736DAB269B90717 /* WebsiteHealthAgent.swift */; };
 		517B1FCD0D9E9895B50469C3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C8CBB3FF39C09431B7076 /* main.swift */; };
 		533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */; };
+		539186D476B22718BF46614A /* LabsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C2D7EBEB08D7C2F8FE0193 /* LabsTabView.swift */; };
 		54CD8C2E16FA6C1653F4BF9E /* OffscreenRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */; };
 		55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */; };
 		55224EC730920EFD365C934D /* OutputEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */; };
@@ -349,6 +352,7 @@
 		3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsTabView.swift; sourceTree = "<group>"; };
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
 		40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportView.swift; sourceTree = "<group>"; };
+		418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCopyQueueService.swift; sourceTree = "<group>"; };
 		42036566FF695AD6554E8E01 /* AgentOutputsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutputsView.swift; sourceTree = "<group>"; };
 		441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputRoute.swift; sourceTree = "<group>"; };
 		4486101C5C80FCD26BD6F11C /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
@@ -444,6 +448,7 @@
 		9344C492836BA77D4C12BD69 /* clicky-text-close.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-text-close.wav"; sourceTree = "<group>"; };
 		93C538A7CDB7D083498C2377 /* ExternalTriggerRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalTriggerRunner.swift; sourceTree = "<group>"; };
 		93DBC03A1DAE3A288E46D27D /* HoverDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverDetectionService.swift; sourceTree = "<group>"; };
+		94C2D7EBEB08D7C2F8FE0193 /* LabsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabsTabView.swift; sourceTree = "<group>"; };
 		94EB42557307F47F93C50C46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		979DE80CA67152EBCA55AC4D /* MiraToolService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraToolService.swift; sourceTree = "<group>"; };
 		99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputEntry.swift; sourceTree = "<group>"; };
@@ -502,6 +507,7 @@
 		C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		C5DE79D342341087305D2696 /* pdf_extract.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pdf_extract.py; sourceTree = "<group>"; };
 		C651FB15781FEA6544A06C24 /* PostHogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostHogService.swift; sourceTree = "<group>"; };
+		C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipReminderService.swift; sourceTree = "<group>"; };
 		C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraMCPServer.swift; sourceTree = "<group>"; };
 		C8380501F27005CAEAA4B607 /* netlify.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = netlify.md; sourceTree = "<group>"; };
 		C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexComputerUseService.swift; sourceTree = "<group>"; };
@@ -771,6 +777,7 @@
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */,
+				C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */,
 				4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */,
 				C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */,
 				80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */,
@@ -811,6 +818,7 @@
 				C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */,
 				979DE80CA67152EBCA55AC4D /* MiraToolService.swift */,
 				6C32360D76CD7D9599499DCA /* MisoTTSService.swift */,
+				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
 				4486101C5C80FCD26BD6F11C /* OnboardingService.swift */,
@@ -934,6 +942,7 @@
 				A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */,
 				202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */,
 				40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */,
+				94C2D7EBEB08D7C2F8FE0193 /* LabsTabView.swift */,
 				2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */,
 				A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */,
 				54D4739EA771EF0C39908A69 /* MiraIslandView.swift */,
@@ -1154,6 +1163,7 @@
 				68AB75F8085FC784C9D39C07 /* ClarificationCard.swift in Sources */,
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
+				4DFF8C79BB43C1DE7A8D6939 /* ClipReminderService.swift in Sources */,
 				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,
 				96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */,
 				D89568F2308BBB94C70027B3 /* ClipboardMonitorService.swift in Sources */,
@@ -1218,6 +1228,7 @@
 				E14FBAF9DC017FE43C87FCA7 /* IslandChatView.swift in Sources */,
 				D39FB3D62ED7EB5B5C31CB1C /* KnowledgeImportPrompts.swift in Sources */,
 				6B44686F1F7AE50B7A3ECFBE /* KnowledgeImportView.swift in Sources */,
+				539186D476B22718BF46614A /* LabsTabView.swift in Sources */,
 				2D1B1E425C97F6E5434DE441 /* LearnerModel.swift in Sources */,
 				DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */,
 				96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */,
@@ -1236,6 +1247,7 @@
 				ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */,
 				D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */,
 				633E12D061864B837775754C /* MisoTTSService.swift in Sources */,
+				24C340E30867418C85FA2608 /* MultiCopyQueueService.swift in Sources */,
 				D8F7DE0D6CBE08338593A56F /* NotchGeometryProvider.swift in Sources */,
 				FE2C1FD8706A8BEB3631B71C /* NotchHUDController.swift in Sources */,
 				91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */,

@@ -50,9 +50,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         IntegrationContextService.shared.restoreFromDefaults()
         PostHogService.shared.capture("app_launched")
 
-        // Clipboard history + text expansion
+        // Clipboard history + text expansion + clip reminders
         ClipboardMonitorService.shared.start()
         TextExpansionService.shared.start()
+        ClipReminderService.shared.requestPermission()
 
         // Custom dock (restores enabled state from previous launch)
         MiraDockManager.shared.restoreIfEnabled()
