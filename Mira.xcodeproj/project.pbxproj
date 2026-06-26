@@ -147,6 +147,7 @@
 		8138AB293018E2F1876422E3 /* PublishingAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */; };
 		81855163613BB6A2B99E016C /* CodexComputerUseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */; };
 		81B72B55F15CE2D344BEA7B1 /* clicky-text-receive.wav in Resources */ = {isa = PBXBuildFile; fileRef = 52FA32F20FF203E1260D29E0 /* clicky-text-receive.wav */; };
+		825330BA14EA4E341A1E7CDE /* PomodoroService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */; };
 		825EC947F9C5C17BF1B8C8F6 /* MiraIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D4739EA771EF0C39908A69 /* MiraIslandView.swift */; };
 		8515B0E439F051BCA9860043 /* MiraCursorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */; };
 		86381236CFAE5F4DD5A0A433 /* ChatWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C90C43741638A1900574C /* ChatWidgetView.swift */; };
@@ -296,6 +297,7 @@
 		04F1B30EBD78983473632ED6 /* ProjectModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectModels.swift; sourceTree = "<group>"; };
 		07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionManager.swift; sourceTree = "<group>"; };
 		077436ECE19C7096BAC241EC /* BriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingView.swift; sourceTree = "<group>"; };
+		0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroService.swift; sourceTree = "<group>"; };
 		08509CD2EF20373C6E2B3DE4 /* CodexLiveOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLiveOverlay.swift; sourceTree = "<group>"; };
 		088180F819F6CAD079F973DB /* googledrive.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googledrive.md; sourceTree = "<group>"; };
 		08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRouter.swift; sourceTree = "<group>"; };
@@ -830,6 +832,7 @@
 				F71BBE7E8D7EEA7B8AE4D74C /* PointToService.swift */,
 				B06B0C92C98D179DE8BF3C3D /* PolicyEngine.swift */,
 				8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */,
+				0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */,
 				C651FB15781FEA6544A06C24 /* PostHogService.swift */,
 				FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */,
 				5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */,
@@ -1272,6 +1275,7 @@
 				5BC999BCDF2CB2E5859ED059 /* PolicyEngine.swift in Sources */,
 				75CB230870D4445F41C4E423 /* PolicyRecommendation.swift in Sources */,
 				BE920249C6E6429E497C7954 /* PolicyWeightStore.swift in Sources */,
+				825330BA14EA4E341A1E7CDE /* PomodoroService.swift in Sources */,
 				956F2F42D976FA6EC4E2E24C /* PostHogService.swift in Sources */,
 				2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */,
 				DEB927FF2923FA768D56E060 /* ProjectEngine.swift in Sources */,
