@@ -2,6 +2,13 @@ import Foundation
 import AuthenticationServices
 import Combine
 
+enum MiraAuthError: LocalizedError {
+    case deviceAlreadyRegistered
+    var errorDescription: String? {
+        "A free account already exists on this Mac. Sign in to that account, or upgrade to Pro to use Mira on multiple devices."
+    }
+}
+
 // MARK: - User
 
 struct MiraUser: Codable, Equatable {
@@ -81,6 +88,7 @@ final class AccountService: NSObject, ObservableObject {
                 authState = .signedIn(user)
                 PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
                 await EntitlementService.shared.fetchAndApplyPlan()
+                await registerDevice(DeviceFingerprintService.deviceHash, jwt: s.accessToken)
             } catch {
                 authState = .signedOut
             }
@@ -104,6 +112,7 @@ final class AccountService: NSObject, ObservableObject {
             authState = .signedIn(user)
             PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
             await EntitlementService.shared.fetchAndApplyPlan()
+            Task { await registerDevice(DeviceFingerprintService.deviceHash, jwt: s.accessToken) }
         } catch {
             authState = .signedOut
             throw error
@@ -113,6 +122,14 @@ final class AccountService: NSObject, ObservableObject {
     func signUp(email: String, password: String, name: String) async throws {
         authState = .loading
         do {
+            // Block signup if a free account already exists on this device
+            let deviceHash = DeviceFingerprintService.deviceHash
+            let available = await checkDeviceAvailable(deviceHash)
+            guard available else {
+                authState = .signedOut
+                throw MiraAuthError.deviceAlreadyRegistered
+            }
+
             guard let s = try await SupabaseService.shared.signUp(email: email, password: password, name: name) else {
                 // Email confirmation required — not an error, just stay signed out.
                 authState = .signedOut
@@ -129,9 +146,44 @@ final class AccountService: NSObject, ObservableObject {
             authState = .signedIn(user)
             PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
             await EntitlementService.shared.fetchAndApplyPlan()
+            Task { await registerDevice(deviceHash, jwt: s.accessToken) }
         } catch {
             authState = .signedOut
             throw error
+        }
+    }
+
+    // MARK: - Device lock
+
+    private func checkDeviceAvailable(_ hash: String) async -> Bool {
+        guard let url = URL(string: AppSecrets.supabaseURL + "/functions/v1/check-device") else { return true }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["device_hash": hash])
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let available = json["available"] as? Bool else { return true }
+        return available
+    }
+
+    // Fire-and-forget after sign-in. If the server returns 409 (another free account
+    // owns this device), we sign the user out so they can't use Mira on this Mac.
+    private func registerDevice(_ hash: String, jwt: String) async {
+        guard let url = URL(string: AppSecrets.supabaseURL + "/functions/v1/register-device") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["device_hash": hash])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { return }
+        if http.statusCode == 409 {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String ?? ""
+            if msg == "device_already_registered" {
+                await MainActor.run { signOut() }
+            }
         }
     }
 

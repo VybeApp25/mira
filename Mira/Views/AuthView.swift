@@ -238,6 +238,7 @@ struct AuthView: View {
     }
 
     private func friendly(_ error: Error) -> String {
+        if error is MiraAuthError { return error.localizedDescription }
         let msg = error.localizedDescription.lowercased()
         if msg.contains("invalid login") || msg.contains("credentials") {
             return "Wrong email or password."

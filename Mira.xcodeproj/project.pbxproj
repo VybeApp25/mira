@@ -139,6 +139,7 @@
 		7C99EFBDAFDA988D7D688D23 /* UserKnowledgeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29A4049793E083EAA037BB4 /* UserKnowledgeStore.swift */; };
 		7D4BE077CAA4A185EC3507EA /* diagram_gen.py in Resources */ = {isa = PBXBuildFile; fileRef = 8887E72ED18B616336B6B36E /* diagram_gen.py */; };
 		7FC3E90009139606A47CB42F /* TaskRunLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */; };
+		80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */; };
 		8138AB293018E2F1876422E3 /* PublishingAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */; };
 		81855163613BB6A2B99E016C /* CodexComputerUseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */; };
 		81B72B55F15CE2D344BEA7B1 /* clicky-text-receive.wav in Resources */ = {isa = PBXBuildFile; fileRef = 52FA32F20FF203E1260D29E0 /* clicky-text-receive.wav */; };
@@ -479,6 +480,7 @@
 		B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorBubbleService.swift; sourceTree = "<group>"; };
 		BADFDB17A53387AA9FBC4867 /* CorrelationInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrelationInsight.swift; sourceTree = "<group>"; };
 		BC9CF063FC8B8DFB1344B119 /* CronModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronModels.swift; sourceTree = "<group>"; };
+		BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceFingerprintService.swift; sourceTree = "<group>"; };
 		BCEA05CCCFB420E9E8DA1824 /* agent-done.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "agent-done.mp3"; sourceTree = "<group>"; };
 		BCF4DFA486AA4A00D7530DEF /* skill-down.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "skill-down.wav"; sourceTree = "<group>"; };
 		BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureService.swift; sourceTree = "<group>"; };
@@ -768,6 +770,7 @@
 				CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */,
 				B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */,
 				07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */,
+				BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */,
 				C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */,
 				08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */,
 				724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */,
@@ -1157,6 +1160,7 @@
 				604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */,
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
+				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
 				4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */,
 				57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,
