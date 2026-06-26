@@ -49,6 +49,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = UpdateService.shared   // starts Sparkle background update checks
         IntegrationContextService.shared.restoreFromDefaults()
         PostHogService.shared.capture("app_launched")
+
+        // Clipboard history + text expansion
+        ClipboardMonitorService.shared.start()
+        TextExpansionService.shared.start()
         _ = AppContextService.shared       // start frontmost-app observer
         _ = SidecarSuggestionService.shared // start dwell tracker
         SkillCatalog.shared.refresh()      // seed built-in skill bundles + scan

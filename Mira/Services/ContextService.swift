@@ -64,6 +64,10 @@ final class ContextService {
             let c = clip.count > 300 ? String(clip.prefix(300)) + "…" : clip
             ctxLines.append("Clipboard: \(c)")
         }
+        // Recent clipboard history (last 3 text items from the monitor)
+        if let recent = ClipboardMonitorService.shared.recentTextContext(max: 3) {
+            ctxLines.append(recent)
+        }
         if let pct = ctx.batteryPercent {
             ctxLines.append("Battery: \(pct)% (\(ctx.batteryCharging ? "charging" : "on battery"))")
         }

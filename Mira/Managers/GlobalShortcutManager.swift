@@ -5,6 +5,7 @@ import Carbon
 
 extension Notification.Name {
     static let miraActivateVoice          = Notification.Name("miraActivateVoice")
+    static let miraShowClipboard          = Notification.Name("miraShowClipboard")
     static let miraActivateText           = Notification.Name("miraActivateText")
     static let miraVoiceChanged           = Notification.Name("miraVoiceChanged")
     static let miraShortcutsChanged       = Notification.Name("miraShortcutsChanged")
@@ -68,6 +69,10 @@ private func miraHotKeyHandler(
             if !isRelease {
                 NotificationCenter.default.post(name: .miraDrawModeToggled, object: nil)
             }
+        case 4:
+            if !isRelease {
+                NotificationCenter.default.post(name: .miraShowClipboard, object: nil)
+            }
         default: break
         }
     }
@@ -80,10 +85,11 @@ private func miraHotKeyHandler(
 /// Call start() once; call update() whenever ShortcutStore changes.
 final class GlobalShortcutManager {
 
-    private var voiceRef:   EventHotKeyRef?
-    private var textRef:    EventHotKeyRef?
-    private var drawRef:    EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
+    private var voiceRef:     EventHotKeyRef?
+    private var textRef:      EventHotKeyRef?
+    private var drawRef:      EventHotKeyRef?
+    private var clipboardRef: EventHotKeyRef?
+    private var handlerRef:   EventHandlerRef?
 
     // "MIRA" encoded as OSType
     private static let sig: OSType = 0x4D495241
@@ -117,6 +123,11 @@ final class GlobalShortcutManager {
         apply(ShortcutStore.shared.voice, id: 1, into: &voiceRef)
         apply(ShortcutStore.shared.text,  id: 2, into: &textRef)
         apply(ShortcutStore.shared.draw,  id: 3, into: &drawRef)
+        // ⌃⌘V — clipboard history panel (hardcoded, not user-configurable yet)
+        var clipHKID = EventHotKeyID(signature: Self.sig, id: 4)
+        // keyCode 9 = V, carbonMods = cmdKey | controlKey
+        RegisterEventHotKey(9, UInt32(cmdKey | controlKey),
+                            clipHKID, GetApplicationEventTarget(), 0, &clipboardRef)
     }
 
     private func apply(_ config: ShortcutConfig, id: UInt32, into ref: inout EventHotKeyRef?) {
@@ -126,11 +137,13 @@ final class GlobalShortcutManager {
     }
 
     private func unregisterAll() {
-        if let r = voiceRef { UnregisterEventHotKey(r) }
-        if let r = textRef  { UnregisterEventHotKey(r) }
-        if let r = drawRef  { UnregisterEventHotKey(r) }
-        voiceRef = nil
-        textRef  = nil
-        drawRef  = nil
+        if let r = voiceRef     { UnregisterEventHotKey(r) }
+        if let r = textRef      { UnregisterEventHotKey(r) }
+        if let r = drawRef      { UnregisterEventHotKey(r) }
+        if let r = clipboardRef { UnregisterEventHotKey(r) }
+        voiceRef     = nil
+        textRef      = nil
+        drawRef      = nil
+        clipboardRef = nil
     }
 }

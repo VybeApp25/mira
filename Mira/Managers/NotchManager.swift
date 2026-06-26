@@ -128,6 +128,9 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraDrawModeToggled, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { ScreenDrawController.shared.toggleStandalone() }
         }
+        NotificationCenter.default.addObserver(forName: .miraShowClipboard, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { ClipboardHistoryPanel.shared.toggle() }
+        }
         // Auto-collapse requested (post-PTT or post-text-response dismiss)
         NotificationCenter.default.addObserver(forName: .miraRequestCollapse, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.animController.collapse() }
