@@ -35,6 +35,7 @@
 		17F483123B853BA0E27F0E1D /* googledocs.md in Resources */ = {isa = PBXBuildFile; fileRef = 216189A0F0FB6DEF096C0C03 /* googledocs.md */; };
 		1C441AC730240E409B811592 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 2431817516872C328A6D2900 /* Sparkle */; };
 		1CE085A40C3A4AD15B479924 /* ThreadsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FFDEBB61B4AF55FFBA61E1 /* ThreadsTabView.swift */; };
+		2056FD97981A02D2AF4288E8 /* MiraDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */; };
 		206924BFA4E8C16546C096CA /* google-workspace.md in Resources */ = {isa = PBXBuildFile; fileRef = D0C51B0CE61AD6DDE4EA2B06 /* google-workspace.md */; };
 		21420C753E74EF0F2F60B5B8 /* CursorBubbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */; };
 		21C11CB603C81EEA0B101A39 /* powerpoint.md in Resources */ = {isa = PBXBuildFile; fileRef = EB0848094B0493DE9157E662 /* powerpoint.md */; };
@@ -161,6 +162,7 @@
 		956F2F42D976FA6EC4E2E24C /* PostHogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C651FB15781FEA6544A06C24 /* PostHogService.swift */; };
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
 		95F87A68B83C57A85CFDDB0D /* HoverSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */; };
+		96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */; };
 		96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */; };
 		98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */; };
 		999F596800BE317B7DD15FB4 /* CorrelationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D5BB4ABB1EFCD6F34122C /* CorrelationEngine.swift */; };
@@ -185,14 +187,17 @@
 		A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0ACABB44793DCD72302E5A /* AudioCueService.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
 		AC5F21D2A9DF9427A994CD2D /* clicky-surprised.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3465E66B867774E10F24114C /* clicky-surprised.wav */; };
+		AF7A6CDDCB51435673C76AFF /* MiraDockManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8506C01C5CD09C0B3FF5EFB2 /* MiraDockManager.swift */; };
 		B02EC5F6583A5FB39B327426 /* GuidanceEvidenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2C73BB04A46AD3A823F5A9 /* GuidanceEvidenceService.swift */; };
 		B07910E3464FCC8CF14C2852 /* CoordinatorSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26A0E1791C3F80BB04E5A24 /* CoordinatorSimulation.swift */; };
 		B0A1CA510C4F53004BBC02A8 /* TriggerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7490BE99AE4331B0DA9BF7BE /* TriggerModels.swift */; };
 		B101A7E87F46F83E807086BE /* SkillCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */; };
 		B56FAF42D5DBCD92116DD1D9 /* PythonSkillRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174A45383DCADC992E1A009B /* PythonSkillRunner.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
+		B651A578C12204C7F51ECFB9 /* TextExpansionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC85C65ED890060037FF65B8 /* TextExpansionService.swift */; };
 		B67F17EFCB9B3D38E0590E0D /* QualityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A1297EEE877A44731A4D04 /* QualityStore.swift */; };
 		B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BAF16D6CB27982CEA34F14 /* ContextService.swift */; };
+		B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */; };
 		B84A1AE6B16D765C51D2D8BA /* github-issues.md in Resources */ = {isa = PBXBuildFile; fileRef = 4EFFBF922DC370825297F52C /* github-issues.md */; };
 		B91B57492F7E09F4C0A1B48B /* googlecalendar.md in Resources */ = {isa = PBXBuildFile; fileRef = 7855C1B7B22D68EA3409F341 /* googlecalendar.md */; };
 		B9346FC64CCF6A05E8DA358D /* skill-up.wav in Resources */ = {isa = PBXBuildFile; fileRef = EF8119ECAE1C7A35BEE1D5B7 /* skill-up.wav */; };
@@ -231,6 +236,7 @@
 		D6BC0011333BD8D5DC98B090 /* ActionChipService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B535DE12D73CC125D81565 /* ActionChipService.swift */; };
 		D71BD504ABE216221A704300 /* sheet_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 801F97A114C64C4844285987 /* sheet_rw.py */; };
 		D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979DE80CA67152EBCA55AC4D /* MiraToolService.swift */; };
+		D89568F2308BBB94C70027B3 /* ClipboardMonitorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */; };
 		D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7668116B1E1B08C2A630FA1 /* SettingsView.swift */; };
 		D8F7DE0D6CBE08338593A56F /* NotchGeometryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */; };
 		D9000B1F5D5817FE0E25FB6C /* ProjectEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */; };
@@ -420,6 +426,7 @@
 		8261E0EB0C3813433E9281F9 /* AnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationController.swift; sourceTree = "<group>"; };
 		83B706458B64024088E8769D /* ActionChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipsView.swift; sourceTree = "<group>"; };
 		847AFAFC451130DC3C6A6545 /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
+		8506C01C5CD09C0B3FF5EFB2 /* MiraDockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDockManager.swift; sourceTree = "<group>"; };
 		86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicLevelMonitor.swift; sourceTree = "<group>"; };
 		872DD8FFE16217C9024800BE /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
 		87E309308F9E87012D71CB8A /* TeachingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingModels.swift; sourceTree = "<group>"; };
@@ -446,6 +453,7 @@
 		9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		9F2FBF93E03147782BB5FBF5 /* HandoffService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffService.swift; sourceTree = "<group>"; };
 		9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIService.swift; sourceTree = "<group>"; };
+		A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDockView.swift; sourceTree = "<group>"; };
 		A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceService.swift; sourceTree = "<group>"; };
 		A266BE527831F1DF05489050 /* StripePurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripePurchaseService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
@@ -487,9 +495,11 @@
 		BE3D56CFC79D44D585294CE6 /* github-auth.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "github-auth.md"; sourceTree = "<group>"; };
 		BEF6665B0465EE94AD47A55B /* CodexService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexService.swift; sourceTree = "<group>"; };
 		BF8712738938AEA845880976 /* HoverPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverPreferences.swift; sourceTree = "<group>"; };
+		C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryView.swift; sourceTree = "<group>"; };
 		C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
 		C2173DE466719E2BE730C2CC /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementLocationDetector.swift; sourceTree = "<group>"; };
+		C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		C5DE79D342341087305D2696 /* pdf_extract.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pdf_extract.py; sourceTree = "<group>"; };
 		C651FB15781FEA6544A06C24 /* PostHogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostHogService.swift; sourceTree = "<group>"; };
 		C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraMCPServer.swift; sourceTree = "<group>"; };
@@ -498,6 +508,8 @@
 		CA6D17DC1DC375321372EDEA /* QuotaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaService.swift; sourceTree = "<group>"; };
 		CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationCanvasService.swift; sourceTree = "<group>"; };
 		CB38BBEE5A82A00325431A23 /* docx_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = docx_rw.py; sourceTree = "<group>"; };
+		CC85C65ED890060037FF65B8 /* TextExpansionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextExpansionService.swift; sourceTree = "<group>"; };
+		CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitorService.swift; sourceTree = "<group>"; };
 		CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexHUD.swift; sourceTree = "<group>"; };
 		CECF49A88AB42C914BD34504 /* computer-use.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "computer-use.md"; sourceTree = "<group>"; };
 		CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronScheduler.swift; sourceTree = "<group>"; };
@@ -667,6 +679,7 @@
 				A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */,
 				3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */,
 				628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */,
+				8506C01C5CD09C0B3FF5EFB2 /* MiraDockManager.swift */,
 				3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */,
 				7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */,
 				401567F80D6C5B2881BDD843 /* NotchManager.swift */,
@@ -757,6 +770,7 @@
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
+				CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */,
 				4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */,
 				C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */,
 				80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */,
@@ -830,6 +844,7 @@
 				5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */,
 				2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */,
 				AEA51C6434233B46081A0496 /* TelemetryService.swift */,
+				CC85C65ED890060037FF65B8 /* TextExpansionService.swift */,
 				9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */,
 				B29A4049793E083EAA037BB4 /* UserKnowledgeStore.swift */,
 				D113AC6430C7DCCF0D20698D /* VoicePreviewService.swift */,
@@ -851,6 +866,7 @@
 				376F1CDCA756B5368F057786 /* AgentTaskStore.swift */,
 				641B7CB66B672FC642BC96AE /* AttentionDirective.swift */,
 				3D3263BDB62DACABB0645CE6 /* CausalInsight.swift */,
+				C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */,
 				94EB42557307F47F93C50C46 /* ConversationStore.swift */,
 				54EE6C76840A879706154B2F /* CoordinationModels.swift */,
 				BADFDB17A53387AA9FBC4867 /* CorrelationInsight.swift */,
@@ -906,6 +922,7 @@
 				077436ECE19C7096BAC241EC /* BriefingView.swift */,
 				689C90C43741638A1900574C /* ChatWidgetView.swift */,
 				4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */,
+				C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */,
 				CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */,
 				1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */,
 				E8E353B5F50827A17EDA25AB /* CronsTabView.swift */,
@@ -918,6 +935,7 @@
 				202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */,
 				40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */,
 				2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */,
+				A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */,
 				54D4739EA771EF0C39908A69 /* MiraIslandView.swift */,
 				6AAB411962D3D66F94EE5483 /* MiraPanel.swift */,
 				D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */,
@@ -1136,6 +1154,9 @@
 				68AB75F8085FC784C9D39C07 /* ClarificationCard.swift in Sources */,
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
+				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,
+				96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */,
+				D89568F2308BBB94C70027B3 /* ClipboardMonitorService.swift in Sources */,
 				6566B080D5E57E3C8C7B22A5 /* CodexBridgeConfig.swift in Sources */,
 				81855163613BB6A2B99E016C /* CodexComputerUseService.swift in Sources */,
 				A27ED327A6F5061ED6D27309 /* CodexHUD.swift in Sources */,
@@ -1205,6 +1226,8 @@
 				6662E3A1A711180F0D5F6856 /* MiraApp.swift in Sources */,
 				2FDF8D290B3689B7EB3F13AE /* MiraBackend.swift in Sources */,
 				8515B0E439F051BCA9860043 /* MiraCursorManager.swift in Sources */,
+				AF7A6CDDCB51435673C76AFF /* MiraDockManager.swift in Sources */,
+				2056FD97981A02D2AF4288E8 /* MiraDockView.swift in Sources */,
 				825EC947F9C5C17BF1B8C8F6 /* MiraIslandView.swift in Sources */,
 				F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */,
 				344D95E382740D9C5F18B221 /* MiraMCPServer.swift in Sources */,
@@ -1277,6 +1300,7 @@
 				F8DA8ED87428CC67DCC7B272 /* TeachingHUD.swift in Sources */,
 				15D42BA945FF15778CA644D8 /* TeachingModels.swift in Sources */,
 				99C4AE57D626422B87B1FAD3 /* TelemetryService.swift in Sources */,
+				B651A578C12204C7F51ECFB9 /* TextExpansionService.swift in Sources */,
 				1CE085A40C3A4AD15B479924 /* ThreadsTabView.swift in Sources */,
 				F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */,
 				1504C28D46A624009B19A06D /* ToolTraceView.swift in Sources */,

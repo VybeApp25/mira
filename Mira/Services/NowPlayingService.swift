@@ -13,6 +13,7 @@ struct NowPlayingInfo {
 /// Reads now-playing metadata from any app (Spotify, Apple Music, YouTube Music, etc.)
 /// via the MediaRemote private framework loaded at runtime — no link-time dependency.
 final class NowPlayingService: ObservableObject {
+    static let shared = NowPlayingService()
     @Published var info = NowPlayingInfo()
 
     private var timer: Timer?

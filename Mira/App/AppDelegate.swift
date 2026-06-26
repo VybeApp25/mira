@@ -53,6 +53,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Clipboard history + text expansion
         ClipboardMonitorService.shared.start()
         TextExpansionService.shared.start()
+
+        // Custom dock (restores enabled state from previous launch)
+        MiraDockManager.shared.restoreIfEnabled()
         _ = AppContextService.shared       // start frontmost-app observer
         _ = SidecarSuggestionService.shared // start dwell tracker
         SkillCatalog.shared.refresh()      // seed built-in skill bundles + scan

@@ -106,6 +106,7 @@ struct SettingsView: View {
                             pointFollowUpSection
                             guideCursorSection
                             autonomousSection
+                            dockSection
                         }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
@@ -1157,6 +1158,41 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .tint(accent)
                     .labelsHidden()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    // MARK: - Dock section
+
+    @ViewBuilder
+    private var dockSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Mira Dock", systemImage: "dock.rectangle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Replace native Dock")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Hides the macOS Dock and shows Mira's widget shelf with clock, weather, apps, battery, and now playing.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { MiraDockManager.shared.isEnabled },
+                    set: { MiraDockManager.shared.isEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                .tint(accent)
+                .labelsHidden()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
