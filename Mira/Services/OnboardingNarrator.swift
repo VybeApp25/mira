@@ -63,7 +63,7 @@ final class OnboardingNarrator: ObservableObject {
 
     // Fixed voice used for all onboarding narration regardless of the
     // user's saved preference (which they set in Settings after setup).
-    private static let onboardingVoice: MiraVoice = .shimmer
+    private static let onboardingVoice: MiraVoice = .marin
 
     // MARK: - OpenAI TTS (requires sign-in)
 
