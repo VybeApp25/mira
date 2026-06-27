@@ -61,10 +61,14 @@ final class OnboardingNarrator: ObservableObject {
         isSpeaking = false
     }
 
+    // Fixed voice used for all onboarding narration regardless of the
+    // user's saved preference (which they set in Settings after setup).
+    private static let onboardingVoice: MiraVoice = .shimmer
+
     // MARK: - OpenAI TTS (requires sign-in)
 
     private func speakOpenAIAsync(_ text: String) async {
-        let voice  = MiraVoice.saved
+        let voice  = Self.onboardingVoice
         let cached = cacheURL(text: text, voice: voice)
 
         let data: Data
