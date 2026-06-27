@@ -32,6 +32,8 @@ final class NotchOnboardingManager: ObservableObject {
         step                  = .welcome
         animController.isOnboarding      = true
         animController.currentExpandedH  = 270
+        // Silence the always-on realtime voice so it can't interrupt narration
+        RealtimeVoiceService.shared.disconnectAlwaysOn()
         // expandForShortcut() is wired in NotchManager via .miraOnboardingStarted
         NotificationCenter.default.post(name: .miraOnboardingStarted, object: nil)
         flowTask = Task { await runFlow() }
