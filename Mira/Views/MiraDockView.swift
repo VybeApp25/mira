@@ -65,48 +65,54 @@ struct MiraDockView: View {
     @State private var showPicker = false
 
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(widgets) { wtype in
-                WidgetSlot(
-                    wtype:    wtype,
-                    editMode: editMode,
-                    onRemove: { remove(wtype) }
-                )
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            HStack(spacing: 5) {
+                ForEach(widgets) { wtype in
+                    WidgetSlot(
+                        wtype:    wtype,
+                        editMode: editMode,
+                        onRemove: { remove(wtype) }
+                    )
+                }
+
+                Button {
+                    showPicker.toggle()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.3))
+                        .frame(width: 32, height: 60)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showPicker, arrowEdge: .top) {
+                    WidgetPickerPopover(active: widgets) { toggle($0) }
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 72)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color(red: 0.06, green: 0.06, blue: 0.08).opacity(0.97))
+                    .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
+            )
+            .contextMenu {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { editMode.toggle() }
+                } label: {
+                    Label(editMode ? "Done Editing" : "Edit Dock",
+                          systemImage: editMode ? "checkmark.circle" : "pencil.circle")
+                }
+                Divider()
+                Button("Restore Defaults") {
+                    widgets = [.clock, .pomodoro, .nowPlaying, .battery, .toggles, .weather, .appLauncher]
+                    saveWidgetOrder(widgets)
+                }
+                Button("Hide Dock") { MiraDockManager.shared.hideDock() }
             }
 
-            Button {
-                showPicker.toggle()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
-                    .frame(width: 32, height: 60)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showPicker, arrowEdge: .top) {
-                WidgetPickerPopover(active: widgets) { toggle($0) }
-            }
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 72)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.06, green: 0.06, blue: 0.08).opacity(0.97))
-                .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
-        )
-        .contextMenu {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { editMode.toggle() }
-            } label: {
-                Label(editMode ? "Done Editing" : "Edit Dock",
-                      systemImage: editMode ? "checkmark.circle" : "pencil.circle")
-            }
-            Divider()
-            Button("Restore Defaults") {
-                widgets = [.clock, .pomodoro, .nowPlaying, .battery, .toggles, .weather, .appLauncher]
-                saveWidgetOrder(widgets)
-            }
-            Button("Hide Dock") { MiraDockManager.shared.hideDock() }
+            Spacer(minLength: 0)
         }
     }
 
@@ -509,35 +515,61 @@ private struct WeatherDetailPanel: View {
 
 private struct NowPlayingWidget: View {
     @ObservedObject private var np = NowPlayingService.shared
+    @State private var tick = false
+    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(spacing: 8) {
             artView.frame(width: 40, height: 40)
             if np.info.hasContent {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(np.info.title).font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.white).lineLimit(1)
-                    Text(np.info.artist).font(.system(size: 10)).foregroundColor(.white.opacity(0.5)).lineLimit(1)
+                    Text(np.info.artist).font(.system(size: 9)).foregroundColor(.white.opacity(0.5)).lineLimit(1)
+                    progressBar
                 }
-                .frame(width: 86, alignment: .leading)
+                .frame(width: 90, alignment: .leading)
                 controls
             } else {
                 Text("Nothing playing").font(.system(size: 10)).foregroundColor(.white.opacity(0.25))
             }
         }
-        .padding(.horizontal, 10).frame(minWidth: 200, maxWidth: 240)
+        .padding(.horizontal, 10).frame(minWidth: 210, maxWidth: 250)
         .onAppear { NowPlayingService.shared.start() }
+        .onReceive(tickTimer) { _ in tick.toggle() }  // 1s redraw to animate progress
     }
 
     private var artView: some View {
         Group {
             if let art = np.info.artwork {
-                Image(nsImage: art).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 7))
+                Image(nsImage: art).resizable().scaledToFill()
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
             } else {
                 RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.08))
                     .overlay(Image(systemName: "music.note").font(.system(size: 14)).foregroundColor(.white.opacity(0.2)))
             }
         }
+    }
+
+    private var progressBar: some View {
+        let progress = np.info.progress
+        let pos  = np.info.currentPosition
+        let dur  = np.info.duration
+        return HStack(spacing: 4) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.12)).frame(height: 2)
+                    Capsule().fill(Color.white.opacity(0.65))
+                        .frame(width: geo.size.width * CGFloat(progress), height: 2)
+                }
+            }
+            .frame(height: 2)
+            Text(formatTime(dur > 0 ? dur - pos : 0))
+                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                .foregroundColor(.white.opacity(0.35))
+                .frame(width: 28, alignment: .trailing)
+        }
+        .id(tick)  // force redraw each tick so progress animates
     }
 
     private var controls: some View {
@@ -553,28 +585,81 @@ private struct NowPlayingWidget: View {
             Image(systemName: icon).font(.system(size: size)).foregroundColor(.white.opacity(size > 12 ? 1 : 0.6))
         }.buttonStyle(.plain)
     }
+
+    private func formatTime(_ s: Double) -> String {
+        let t = Int(max(0, s))
+        return String(format: "-%d:%02d", t / 60, t % 60)
+    }
 }
 
 private struct NowPlayingDetailPanel: View {
     @ObservedObject private var np = NowPlayingService.shared
+    @State private var tick = false
+    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                artView
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(np.info.title.isEmpty ? "Nothing Playing" : np.info.title)
+                        .font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
+                    Text(np.info.artist).font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
+                    controls
+                }
+            }
+            if np.info.duration > 0 { detailProgress }
+        }
+        .onAppear { NowPlayingService.shared.start() }
+        .onReceive(tickTimer) { _ in tick.toggle() }
+    }
+
+    private var artView: some View {
+        Group {
             if let art = np.info.artwork {
                 Image(nsImage: art).resizable().scaledToFill()
                     .frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(np.info.title.isEmpty ? "Nothing Playing" : np.info.title)
-                    .font(.system(size: 13, weight: .semibold)).foregroundColor(.white).lineLimit(2)
-                Text(np.info.artist).font(.system(size: 11)).foregroundColor(.white.opacity(0.45))
-                HStack(spacing: 14) {
-                    Button { np.previousTrack() } label: { Image(systemName: "backward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
-                    Button { np.togglePlayPause() } label: { Image(systemName: np.info.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)).foregroundColor(.white) }.buttonStyle(.plain)
-                    Button { np.nextTrack() }      label: { Image(systemName: "forward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
-                }
+            } else {
+                RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08))
+                    .frame(width: 72, height: 72)
+                    .overlay(Image(systemName: "music.note").font(.system(size: 24)).foregroundColor(.white.opacity(0.2)))
             }
         }
-        .onAppear { NowPlayingService.shared.start() }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 14) {
+            Button { np.previousTrack() } label: { Image(systemName: "backward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
+            Button { np.togglePlayPause() } label: { Image(systemName: np.info.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 20)).foregroundColor(.white) }.buttonStyle(.plain)
+            Button { np.nextTrack() }      label: { Image(systemName: "forward.fill").font(.system(size: 16)).foregroundColor(.white.opacity(0.6)) }.buttonStyle(.plain)
+        }
+    }
+
+    private var detailProgress: some View {
+        let pos  = np.info.currentPosition
+        let dur  = np.info.duration
+        let prog = np.info.progress
+        return VStack(spacing: 4) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.10)).frame(height: 3)
+                    Capsule().fill(Color.white.opacity(0.70))
+                        .frame(width: geo.size.width * CGFloat(prog), height: 3)
+                }
+            }
+            .frame(height: 3)
+            HStack {
+                Text(formatTime(pos)).font(.system(size: 9, design: .monospaced)).foregroundColor(.white.opacity(0.35))
+                Spacer()
+                Text(formatTime(dur)).font(.system(size: 9, design: .monospaced)).foregroundColor(.white.opacity(0.35))
+            }
+        }
+        .id(tick)
+    }
+
+    private func formatTime(_ s: Double) -> String {
+        let t = Int(max(0, s))
+        return String(format: "%d:%02d", t / 60, t % 60)
     }
 }
 
@@ -703,9 +788,9 @@ private struct QuickTogglesWidget: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            circle("wifi",             color: .blue,   on: wifiOn)  { toggleWifi()  }
-            circle("moon.zzz.fill",    color: .indigo, on: dndOn)   { toggleDND()   }
-            circle("bluetooth",        color: .blue,   on: btOn)    { toggleBT()    }
+            circle("wifi",                          color: .blue,   on: wifiOn)  { toggleWifi()  }
+            circle("moon.zzz.fill",              color: .indigo, on: dndOn)   { toggleDND()   }
+            circle("dot.radiowaves.left.and.right", color: .blue,   on: btOn)    { toggleBT()    }
         }
         .padding(.horizontal, 8).frame(width: 110)
     }
@@ -752,7 +837,7 @@ private struct TogglesDetailPanel: View {
                 shell("defaults -currentHost write com.apple.notificationcenterui dndEnabledDisplaySleep -bool \(dndOn)")
                 shell("killall NotificationCenter 2>/dev/null; true")
             }
-            row("Bluetooth",      icon: "bluetooth",     color: .blue,   on: $btOn)  { shell("blueutil --power \(btOn ? 1 : 0) 2>/dev/null || true") }
+            row("Bluetooth",      icon: "dot.radiowaves.left.and.right", color: .blue, on: $btOn) { shell("blueutil --power \(btOn ? 1 : 0) 2>/dev/null || true") }
             row("Dark Mode",      icon: "moon.fill",     color: .purple,
                 on: Binding(get: { isDark() }, set: { _ in toggleDark() })) { }
         }

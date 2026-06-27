@@ -124,6 +124,7 @@ struct SettingsView: View {
                             usageSection
                             toolActivityButton
                         }
+
                     }
                     .padding(18)
                 }
@@ -221,9 +222,25 @@ struct SettingsView: View {
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
+            Button {
+                DispatchQueue.main.async { NSApplication.shared.terminate(nil) }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "power")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Quit")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(.red.opacity(0.8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.red.opacity(0.1))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
             Button("Done") {
                 if embedded {
-                    // dismiss() is a no-op outside a sheet — go back to Home
                     NotificationCenter.default.post(name: .miraTabSelected, object: IslandTab.home)
                 } else {
                     dismiss()

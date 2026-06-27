@@ -64,8 +64,10 @@ final class MiraDockManager {
             p.hasShadow          = false
             // .fullScreenAuxiliary keeps the dock on all spaces including full-screen ones
             p.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-            // Use a level above .statusBar so it renders over full-screen apps
-            p.level              = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)) + 1)
+            // statusBar+1 (26) sits above normal app windows and the native Dock (20)
+            // but below the cursor overlay (screenSaver+1 ≈ 1001) so the custom
+            // blue cursor remains visible when hovering over the dock.
+            p.level              = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
             p.contentView        = NSHostingView(rootView: MiraDockView())
             panel = p
         } else {

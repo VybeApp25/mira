@@ -119,6 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         RealtimeVoiceService.shared.disconnectAlwaysOn()
         MiraCursorManager.shared.deactivate()
         AgentHUDWindowManager.shared.stop()
+        MiraDockManager.shared.disable()   // restore native Dock autohide + killall Dock
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
