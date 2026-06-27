@@ -1,27 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0"
-     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
-     xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>Mira Updates</title>
-    <link>https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/appcast.xml</link>
-    <description>Mira update feed</description>
-    <language>en</language>
-
-    <item>
-      <title>Version 1.0.0</title>
-      <pubDate>Fri, 26 Jun 2026 13:22:52 -0400</pubDate>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-      <enclosure
-        url="https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/Mira-1.0.0.zip"
-        sparkle:version="1"
-        sparkle:shortVersionString="1.0.0"
-        length="17151136"
-        type="application/octet-stream"
-        sparkle:edSignature="/WR2oG+SuolDO4rr2+B1WlKg4gtXqn05U/37B6CALuXAHT6h5tLMVn9BVpH/jvoi2gq1OtsHxIyKqeQX+B78Aw=="
-      />
-    </item>
-
-  </channel>
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Mira</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Fri, 26 Jun 2026 12:21:29 -0400</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/Mira-1.0.0.zip" length="17681766" type="application/octet-stream" sparkle:edSignature="VctGwR2Fy7H96iquWCfFBiGuz1gY2/PXQsnN2UE3wkA1ErRzNK0DwdR6dJW/kvo3nsyVL8it0TgVHMY7i6OMDw=="/>
+        </item>
+    </channel>
 </rss>
