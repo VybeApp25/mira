@@ -14,13 +14,14 @@ serve(async (req) => {
 
     const body = new URLSearchParams({
       "mode":                          "subscription",
+      "payment_method_types[0]":       "card",
       "line_items[0][price]":          priceId,
       "line_items[0][quantity]":       "1",
       "client_reference_id":           user.userId,
       "metadata[plan]":                plan,
       "metadata[user_id]":             user.userId,
-      "success_url":                   "https://github.com/VybeApp25/mira?upgrade=success",
-      "cancel_url":                    "https://github.com/VybeApp25/mira?upgrade=cancelled",
+      "success_url":                   "https://miraapp.ai?upgrade=success",
+      "cancel_url":                    "https://miraapp.ai?upgrade=cancelled",
       "allow_promotion_codes":         "true",
     });
 
