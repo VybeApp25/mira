@@ -48,6 +48,10 @@ final class NotchOnboardingManager: ObservableObject {
     // MARK: - Flow
 
     private func runFlow() async {
+        // Kill the always-on realtime voice so it can't speak over the narration.
+        // Called here (inside the Task) so it runs after expandForShortcut() fires.
+        RealtimeVoiceService.shared.disconnectAlwaysOn()
+
         let narrator = OnboardingNarrator.shared
         let svc      = OnboardingService.shared
 
