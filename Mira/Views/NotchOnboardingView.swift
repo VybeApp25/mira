@@ -47,9 +47,44 @@ struct NotchOnboardingView: View {
     private var stepContent: some View {
         switch manager.step {
         case .welcome:
-            Text("Getting you set up…")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.35))
+            demoCard(
+                icon: "sparkles",
+                color: Color(red: 0.55, green: 0.38, blue: 1.0),
+                headline: "Meet Mira",
+                subtitle: "The AI that lives in your notch\nand actually does things."
+            )
+
+        case .voice:
+            demoCard(
+                icon: "mic.fill",
+                color: Color(red: 0.28, green: 0.72, blue: 1.0),
+                headline: "Voice, always on",
+                subtitle: "Hold ⌃⌥ anywhere to talk.\nNo switching apps. No typing."
+            )
+
+        case .screenGuidance:
+            demoCard(
+                icon: "cursorarrow.rays",
+                color: Color(red: 1.0, green: 0.65, blue: 0.20),
+                headline: "I see your screen",
+                subtitle: "Draw on anything and ask me.\nI'll walk you through it."
+            )
+
+        case .autonomy:
+            demoCard(
+                icon: "hand.tap.fill",
+                color: Color(red: 0.20, green: 0.85, blue: 0.60),
+                headline: "I take over",
+                subtitle: "I click, type, and navigate\nyour Mac for you — live."
+            )
+
+        case .agents:
+            demoCard(
+                icon: "gearshape.2.fill",
+                color: Color(red: 1.0, green: 0.35, blue: 0.50),
+                headline: "Background agents",
+                subtitle: "Build sites, research, batch tasks.\nI work while you do other things."
+            )
 
         case .signIn:
             VStack(spacing: 10) {
@@ -103,6 +138,28 @@ struct NotchOnboardingView: View {
                     .foregroundColor(.white)
             }
         }
+    }
+
+    private func demoCard(icon: String, color: Color, headline: String, subtitle: String) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 52, height: 52)
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(color)
+            }
+            Text(headline)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+            Text(subtitle)
+                .font(.system(size: 11.5))
+                .foregroundColor(.white.opacity(0.50))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func permissionRow(icon: String, label: String, granted: Bool) -> some View {

@@ -13,7 +13,7 @@ final class NotchOnboardingManager: ObservableObject {
     private init() {}
 
     enum Step: Equatable {
-        case welcome, signIn, microphone, screenRecording, accessibility, done
+        case welcome, voice, screenGuidance, autonomy, agents, signIn, microphone, screenRecording, accessibility, done
     }
 
     @Published private(set) var isActive    = false
@@ -51,21 +51,47 @@ final class NotchOnboardingManager: ObservableObject {
 
         // Welcome
         step = .welcome
-        await narrator.speakAndWait("Hey — I'm Mira. I live right here in your notch, always ready to help. Let me get you set up in about a minute.")
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        await narrator.speakAndWait("Hey — I'm Mira. I live right here in your Mac's notch, always one hold away. I'm the AI that actually does things — not just answers questions. Let me show you what I mean.")
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+
+        // Demo: Voice
+        step = .voice
+        await narrator.speakAndWait("My voice is always on. Hold Control-Option anywhere on your Mac and I wake up instantly, ready to listen. Ask me to write an email, summarise what's on your screen, set a reminder, look something up — I'll answer and act. No switching apps, no typing, no waiting.")
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        guard !Task.isCancelled else { return }
+
+        // Demo: Screen Guidance
+        step = .screenGuidance
+        await narrator.speakAndWait("I can see exactly what you're looking at too. Hold Control-Option-V and draw on your screen to show me anything — a button you can't find, a form that's confusing, a chart you want explained. I'll point to the exact thing and walk you through it step by step, in any app.")
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        guard !Task.isCancelled else { return }
+
+        // Demo: Autonomy
+        step = .autonomy
+        await narrator.speakAndWait("Here's where I'm different from every other assistant. I can actually take over your Mac and do things for you. Fill out a form. Click through a settings screen. Navigate a complex workflow. You describe the task, I execute it — you watch it happen in real time, or go grab a coffee while I handle it.")
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        guard !Task.isCancelled else { return }
+
+        // Demo: Agents
+        step = .agents
+        await narrator.speakAndWait("And for bigger projects, I run background agents. Ask me to build a landing page, research competitors, process a batch of files, or connect your tools. I'll spin up an agent, work in the background, and report back when it's done. I'm always working, even when you're not watching.")
+        try? await Task.sleep(nanoseconds: 300_000_000)
         guard !Task.isCancelled else { return }
 
         // Sign in
         if !AccountService.shared.isSignedIn {
             step = .signIn
             animController?.currentExpandedH = 420
-            await narrator.speakAndWait("First, let's get you signed in so I can power up for you.")
+            await narrator.speakAndWait("Alright — let's get you set up. First, sign in or create your account. I handle all the AI keys behind the scenes, so you never have to manage them yourself.")
             while !AccountService.shared.isSignedIn && !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
             guard !Task.isCancelled else { return }
             animController?.currentExpandedH = 270
-            await narrator.speakAndWait("Perfect. You're in.")
+            await narrator.speakAndWait("Perfect. You're in. Let's get my permissions sorted so I can actually do all of that.")
+        } else {
+            await narrator.speakAndWait("Alright — let's finish getting me set up so I can do all of that for you.")
         }
         guard !Task.isCancelled else { return }
 
@@ -113,7 +139,7 @@ final class NotchOnboardingManager: ObservableObject {
 
         // Done
         step = .done
-        await narrator.speakAndWait("You're all set. Voice, screen guidance, and chat are ready to go. And depending on the plan you subscribe to, I can do a whole lot more — run agents in the background, connect your apps, and handle tasks for you. I'm right here whenever you need me.")
+        await narrator.speakAndWait("You're all set — and I'm ready to go. Hover the notch to open me anytime, or hold Control-Option to talk. And everything I just showed you? That's just the beginning. Depending on the plan you're on, I can run full background agents, connect your apps, and handle entire workflows for you. I'm right here whenever you need me.")
         try? await Task.sleep(nanoseconds: 1_400_000_000)
 
         finishOnboarding()
