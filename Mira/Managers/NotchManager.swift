@@ -144,10 +144,13 @@ final class NotchManager {
         }
         // Pin/unpin the island open for multi-step flows (e.g. Knowledge Import).
         // Reference-counted so nested/overlapping pins don't unpin prematurely.
-        NotificationCenter.default.addObserver(forName: .miraPinIsland, object: nil, queue: .main) { [weak self] note in
-            MainActor.assumeIsolated {
+        // IMPORTANT: queue:nil + DispatchQueue.main.async (not OperationQueue.main) so the
+        // handler fires even while NSMenu is running its event-tracking run loop.
+        // OperationQueue.main is blocked during NSEventTrackingRunLoopMode; GCD is not.
+        NotificationCenter.default.addObserver(forName: .miraPinIsland, object: nil, queue: nil) { [weak self] note in
+            let pinned = (note.userInfo?["pinned"] as? Bool) ?? false
+            DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                let pinned = (note.userInfo?["pinned"] as? Bool) ?? false
                 if pinned {
                     self.pinCount += 1
                     // Cancel any in-flight collapse and keep the panel up.

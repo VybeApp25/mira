@@ -8,37 +8,43 @@ final class ClipboardHistoryPanel: NSPanel {
 
     private init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 580),
-            styleMask:   [.titled, .closable, .fullSizeContentView, .nonactivatingPanel],
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
+            styleMask:   [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing:     .buffered,
             defer:       false
         )
-        isFloatingPanel      = true
-        titlebarAppearsTransparent = true
-        titleVisibility      = .hidden
+        titlebarAppearsTransparent  = true
+        titleVisibility             = .hidden
         isMovableByWindowBackground = true
-        backgroundColor      = .clear
-        isOpaque             = false
-        level                = .floating
-        collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        contentView          = NSHostingView(rootView: ClipboardHistoryView())
+        backgroundColor             = .clear
+        isOpaque                    = false
+        level                       = .floating
+        // NSPanel defaults hidesOnDeactivate=true, which closes the window whenever
+        // a context menu or other popup steals key status. Disable it.
+        hidesOnDeactivate           = false
+        collectionBehavior         = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        minSize                    = NSSize(width: 640, height: 460)
+        contentView                = NSHostingView(rootView: ClipboardHistoryView())
     }
 
     func toggle() {
-        if isVisible { close() } else { show() }
+        if isVisible { orderOut(nil) } else { show() }
     }
 
     private func show() {
+        // Collapse the island so it doesn't sit on top of this window
+        NotificationCenter.default.post(name: .miraRequestCollapse, object: nil)
+
         if let screen = NSScreen.main {
-            let sw = screen.visibleFrame.width
-            let sh = screen.visibleFrame.height
-            let ox = screen.visibleFrame.minX
-            let oy = screen.visibleFrame.minY
+            let f = screen.visibleFrame
             setFrameOrigin(NSPoint(
-                x: ox + (sw - frame.width) / 2,
-                y: oy + (sh - frame.height) / 2
+                x: f.minX + (f.width  - frame.width)  / 2,
+                y: f.minY + (f.height - frame.height) / 2
             ))
         }
+        // Activate the app so makeKeyAndOrderFront actually brings the window front.
+        // The island runs as a non-activating panel, so the app may not be active.
+        NSApp.activate(ignoringOtherApps: true)
         makeKeyAndOrderFront(nil)
     }
 }
@@ -46,261 +52,326 @@ final class ClipboardHistoryPanel: NSPanel {
 // MARK: - Main view
 
 struct ClipboardHistoryView: View {
-    @ObservedObject private var monitor = ClipboardMonitorService.shared
-    @State private var query = ""
-    @State private var selected: UUID?
-    @State private var confirmClear = false
 
-    private var filtered: [ClipboardItem] {
-        if query.isEmpty { return monitor.history }
-        let q = query.lowercased()
-        return monitor.history.filter {
-            ($0.text ?? "").lowercased().contains(q) ||
-            ($0.ocrText ?? "").lowercased().contains(q) ||
-            ($0.label ?? "").lowercased().contains(q) ||
-            ($0.displayTitle).lowercased().contains(q) ||
-            ($0.sourceApp ?? "").lowercased().contains(q)
+    @ObservedObject private var monitor = ClipboardMonitorService.shared
+    @ObservedObject private var queue   = MultiCopyQueueService.shared
+
+    @State private var query       = ""
+    @State private var activeTab   = FilterTab.all
+    @State private var pastedIDs   = Set<UUID>()
+    @State private var ocrItem:    ClipboardItem? = nil
+    @State private var reminderItem: ClipboardItem? = nil
+
+    // MARK: Filter model
+
+    enum FilterTab: String, CaseIterable, Identifiable {
+        case all       = "History"
+        case favorites = "Favorites"
+        case text      = "Text"
+        case images    = "Images"
+        case colors    = "Colors"
+        case urls      = "URLs"
+        case code      = "Code"
+        case files     = "Files"
+
+        var id: String { rawValue }
+
+        var starIcon: String? { self == .favorites ? "star.fill" : nil }
+
+        func count(in history: [ClipboardItem]) -> Int {
+            switch self {
+            case .all:       return history.count
+            case .favorites: return history.filter { $0.isPinned }.count
+            case .text:      return history.filter { $0.kind == .text  }.count
+            case .images:    return history.filter { $0.kind == .image }.count
+            case .colors:    return history.filter { $0.kind == .color }.count
+            case .urls:      return history.filter { $0.kind == .url   }.count
+            case .code:      return history.filter { $0.kind == .code  }.count
+            case .files:     return history.filter { $0.kind == .file  }.count
+            }
+        }
+
+        func filter(_ items: [ClipboardItem]) -> [ClipboardItem] {
+            switch self {
+            case .all:       return items
+            case .favorites: return items.filter { $0.isPinned }
+            case .text:      return items.filter { $0.kind == .text  }
+            case .images:    return items.filter { $0.kind == .image }
+            case .colors:    return items.filter { $0.kind == .color }
+            case .urls:      return items.filter { $0.kind == .url   }
+            case .code:      return items.filter { $0.kind == .code  }
+            case .files:     return items.filter { $0.kind == .file  }
+            }
         }
     }
+
+    private var filtered: [ClipboardItem] {
+        var items = activeTab.filter(monitor.history)
+        if !query.isEmpty {
+            let q = query.lowercased()
+            items = items.filter {
+                ($0.text     ?? "").lowercased().contains(q) ||
+                ($0.ocrText  ?? "").lowercased().contains(q) ||
+                ($0.label    ?? "").lowercased().contains(q) ||
+                $0.displayTitle.lowercased().contains(q) ||
+                ($0.sourceApp ?? "").lowercased().contains(q)
+            }
+        }
+        return items
+    }
+
+    // MARK: Body
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
+            // Frosted glass background matching notch island style
+            ClipWindowBackground()
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
-                Divider().opacity(0.15)
+                topBar
+                filterStrip
+                Divider().opacity(0.08)
                 if filtered.isEmpty {
                     emptyState
                 } else {
-                    list
+                    cardGrid
                 }
-                Divider().opacity(0.15)
-                footer
+                statusBar
+            }
+
+            // Overlays
+            if let item = ocrItem {
+                ImageDetailOverlay(
+                    item:      item,
+                    onDismiss: { withAnimation(.easeInOut(duration: 0.15)) { ocrItem = nil } },
+                    onPaste:   { pasteItem(item) }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .zIndex(10)
+            }
+            if let item = reminderItem {
+                ReminderPickerView(
+                    item:      item,
+                    onDismiss: { withAnimation(.easeInOut(duration: 0.15)) { reminderItem = nil } }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .zIndex(11)
             }
         }
-        .frame(width: 480, height: 580)
+        .animation(.easeInOut(duration: 0.15), value: ocrItem?.id)
+        .animation(.easeInOut(duration: 0.15), value: reminderItem?.id)
     }
 
-    // MARK: Header
+    // MARK: Top bar
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "clipboard")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-            TextField("Search clips…", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
-            if !query.isEmpty {
-                Button { query = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.3))
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            // Traffic lights sit in the real title bar — add a spacer so search doesn't crowd them
+            Spacer().frame(width: 72)
+
+            // Centered search pill
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.35))
+                TextField("Search clipboard…", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white)
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.white.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(maxWidth: 400)
+
+            Spacer()
+
+            // Toolbar buttons
+            HStack(spacing: 6) {
+                toolbarBtn(icon: "star") {
+                    withAnimation(.easeInOut(duration: 0.15)) { activeTab = .favorites }
+                }
+                toolbarBtn(icon: "square.grid.2x2") { }
+                Divider()
+                    .frame(height: 16)
+                    .opacity(0.25)
+                Button {
+                    monitor.clear(keepPinned: true)
+                } label: {
+                    Text("Clear")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.07))
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 
-    // MARK: List
+    private func toolbarBtn(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.45))
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
 
-    private var list: some View {
-        ScrollView {
-            LazyVStack(spacing: 1) {
-                ForEach(filtered) { item in
-                    ClipboardRow(item: item, isSelected: selected == item.id)
-                        .onTapGesture {
-                            selected = item.id
-                            pasteItem(item)
-                        }
-                        .contextMenu { contextMenu(for: item) }
+    // MARK: Filter strip (collection tabs)
+
+    private var filterStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(FilterTab.allCases) { tab in
+                    let count = tab.count(in: monitor.history)
+                    if tab == .all || tab == .favorites || count > 0 {
+                        filterPill(tab: tab, count: count)
+                    }
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
     }
 
-    // MARK: Context menu
-
-    @ViewBuilder
-    private func contextMenu(for item: ClipboardItem) -> some View {
-        Button {
-            pasteItem(item)
-        } label: { Label("Paste", systemImage: "doc.on.clipboard") }
-
-        Button {
-            monitor.copyToPasteboard(item)
-        } label: { Label("Copy", systemImage: "doc.on.doc") }
-
-        Divider()
-
-        Button {
-            monitor.togglePin(item)
+    private func filterPill(tab: FilterTab, count: Int) -> some View {
+        let isActive = activeTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { activeTab = tab }
         } label: {
-            Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+            HStack(spacing: 5) {
+                if let icon = tab.starIcon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .medium))
+                }
+                Text(tab.rawValue)
+                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(isActive ? .white.opacity(0.65) : .white.opacity(0.3))
+                }
+            }
+            .foregroundColor(isActive ? .white : .white.opacity(0.5))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                isActive
+                    ? DS.Colors.accent
+                    : Color.white.opacity(0.07),
+                in: Capsule()
+            )
         }
-
-        Button {
-            askLabel(for: item)
-        } label: { Label("Add Label…", systemImage: "tag") }
-
-        Divider()
-
-        Button(role: .destructive) {
-            monitor.delete(item)
-        } label: { Label("Delete", systemImage: "trash") }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: isActive)
     }
 
-    // MARK: Footer
+    // MARK: Card grid
 
-    private var footer: some View {
+    private var cardGrid: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 190, maximum: 300), spacing: 8)],
+                spacing: 8
+            ) {
+                ForEach(filtered) { item in
+                    ClipCard(
+                        item:          item,
+                        isHighlighted: false,
+                        inQueue:       queue.queue.contains { $0.id == item.id },
+                        justPasted:    pastedIDs.contains(item.id),
+                        onPaste: {
+                            if item.kind == .image {
+                                withAnimation(.easeInOut(duration: 0.15)) { ocrItem = item }
+                            } else {
+                                pasteItem(item)
+                            }
+                        },
+                        onAskReminder: {
+                            withAnimation(.easeInOut(duration: 0.15)) { reminderItem = item }
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    // MARK: Status bar
+
+    private var statusBar: some View {
         HStack {
-            Text("\(monitor.history.count) clips")
+            Text("\(filtered.count) of \(monitor.history.count) clips")
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(.white.opacity(0.25))
             Spacer()
-            Button {
-                confirmClear = true
-            } label: {
-                Text("Clear All")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            .buttonStyle(.plain)
-            .confirmationDialog("Clear clipboard history?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear All", role: .destructive) { monitor.clear() }
-                Button("Keep Pinned", role: .destructive) { monitor.clear(keepPinned: true) }
-            }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
+        .background(Color.black.opacity(0.15))
     }
 
     // MARK: Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Image(systemName: "clipboard")
-                .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.15))
-            Text(query.isEmpty ? "Copy something to get started." : "No results for \"\(query)\"")
-                .font(.system(size: 12))
+                .font(.system(size: 40))
+                .foregroundColor(.white.opacity(0.1))
+            Text(query.isEmpty ? "Nothing here yet — copy something" : "No results for \"\(query)\"")
+                .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.3))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: Actions
+    // MARK: Paste action
 
     private func pasteItem(_ item: ClipboardItem) {
         monitor.copyToPasteboard(item)
+        pastedIDs.insert(item.id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { pastedIDs.remove(item.id) }
         ClipboardHistoryPanel.shared.close()
-        // Brief delay so the target app is frontmost before we inject ⌘V
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             let src = CGEventSource(stateID: .combinedSessionState)
-            CGEvent(keyboardEventSource: src, virtualKey: 9, keyDown: true)?.apply { $0.flags = .maskCommand }
+            CGEvent(keyboardEventSource: src, virtualKey: 9, keyDown: true)?.apply  { $0.flags = .maskCommand }
             CGEvent(keyboardEventSource: src, virtualKey: 9, keyDown: false)?.apply { $0.flags = .maskCommand }
-        }
-    }
-
-    private func askLabel(for item: ClipboardItem) {
-        let alert = NSAlert()
-        alert.messageText = "Label this clip"
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        let tf = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        tf.stringValue = item.label ?? ""
-        tf.placeholderString = "e.g. Work email, API key…"
-        alert.accessoryView = tf
-        if alert.runModal() == .alertFirstButtonReturn {
-            monitor.setLabel(tf.stringValue, for: item)
         }
     }
 }
 
-// MARK: - Row
+// MARK: - Window background (dark glass matching island)
 
-private struct ClipboardRow: View {
-    let item: ClipboardItem
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            // Thumbnail or icon
-            if item.kind == .image, let data = item.imageData, let img = NSImage(data: data) {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            } else {
-                Image(systemName: item.icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(kindColor)
-                    .frame(width: 36, height: 36)
-                    .background(kindColor.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    if item.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                    if let label = item.label {
-                        Text(label)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                }
-                Text(item.displayTitle)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
-                    .lineLimit(1)
-                if let snippet = item.snippet {
-                    Text(snippet)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                if let app = item.sourceApp {
-                    Text(app)
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.25))
-                }
-                Text(item.copiedAt, style: .relative)
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.2))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(isSelected ? Color.white.opacity(0.06) : Color.clear)
-        .contentShape(Rectangle())
+private struct ClipWindowBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material     = .hudWindow
+        v.blendingMode = .behindWindow
+        v.state        = .active
+        v.wantsLayer   = true
+        v.layer?.backgroundColor = NSColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 0.92).cgColor
+        return v
     }
-
-    private var kindColor: Color {
-        switch item.kind {
-        case .text:  return .white
-        case .url:   return .blue
-        case .code:  return .green
-        case .image: return .purple
-        case .color: return .orange
-        case .file:  return .yellow
-        }
-    }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - CGEvent helper
