@@ -1,14 +1,8 @@
 # Mira — Privacy Policy
 
-**DRAFT — needs review by a licensed attorney before publication.** This is an
-engineering-accurate starting point describing what the app actually does (mapped
-from the codebase), not legal advice. Fill the bracketed placeholders, have
-counsel review, then host it at a stable URL and link it from the app + App Store
-/ download page.
-
-**Effective date:** [DATE]
-**Provider:** [LEGAL ENTITY NAME] ("Mira", "we", "us")
-**Contact:** [PRIVACY CONTACT EMAIL]
+**Effective date:** June 27, 2026
+**Provider:** Trevon Barbour ("Mira", "we", "us")
+**Contact:** trevonbarbour@gmail.com
 
 ---
 
@@ -33,8 +27,8 @@ what is collected, where it goes, and your choices.
 
 **Account & billing:**
 - **Account data** — email and authentication credentials, managed by our auth
-  provider (Supabase). Plan/subscription status. [If/when payments ship: handled
-  by Stripe; we do not store full card numbers.]
+  provider (Supabase). Plan/subscription status. Payments are handled by Stripe;
+  we do not store full card numbers.
 
 **Automatically collected:**
 - **Product analytics** — feature usage events and, if you are signed in, your
@@ -75,13 +69,15 @@ through our backend so that only the content needed for your request is sent.
 - **Calendars** — to show and reference your events.
 - **Apple Events / Automation** — to read the active browser tab and assist
   across apps.
+
 You can grant or revoke each in System Settings → Privacy & Security. Revoking a
 permission disables the related feature.
 
 ## 6. Your choices and rights
-- **Analytics opt-out** — [describe the in-app toggle / mechanism].
+- **Analytics opt-out** — Open Mira → Settings → Advanced → toggle off "Share
+  usage analytics." This stops all PostHog events including identity data.
 - **Disconnect integrations** — Settings → Integrations → Disconnect.
-- **Delete your account/data** — contact [PRIVACY CONTACT EMAIL]; we will delete
+- **Delete your account/data** — contact trevonbarbour@gmail.com; we will delete
   account and server-side data we hold. Local data is removed by deleting
   `~/Library/Application Support/Mira/` (or uninstalling).
 - **Access/correction & regional rights** — depending on your location (e.g.
@@ -90,10 +86,10 @@ permission disables the related feature.
   them.
 
 ## 7. Data retention
-Account and plan data: kept while your account is active. Analytics: [retention
-window]. Server-side request metering: [retention window]; we do **not** store
-the content of your AI requests server-side beyond what's needed to fulfill them.
-Local data: until you delete it.
+Account and plan data: kept while your account is active. Analytics: 12 months.
+Server-side request metering: 90 days; we do **not** store the content of your
+AI requests server-side beyond what's needed to fulfill them. Local data: until
+you delete it.
 
 ## 8. Security
 Secrets and provider API keys are held server-side, not in the app. Traffic is
@@ -102,8 +98,9 @@ perfectly secure; we work to protect your data and will notify you of breaches a
 required by law.
 
 ## 9. Children
-Mira is not directed to children under [13/16] and we do not knowingly collect
-their data.
+Mira is not directed to children under 13 and we do not knowingly collect their
+data. If you believe a child under 13 has provided us personal information,
+contact us and we will delete it.
 
 ## 10. International transfers
 Your data may be processed in the United States and other countries where we or
@@ -114,4 +111,4 @@ We may update this policy; material changes will be notified in-app or by email,
 and the effective date above will change.
 
 ## 12. Contact
-[LEGAL ENTITY NAME], [ADDRESS]. Questions: [PRIVACY CONTACT EMAIL].
+Trevon Barbour, Atlanta, Georgia, United States. Questions: trevonbarbour@gmail.com

@@ -1,19 +1,15 @@
 # Mira — Terms of Service
 
-**DRAFT — needs review by a licensed attorney before publication.** Engineering-
-accurate starting point, not legal advice. Fill placeholders, have counsel
-review, host at a stable URL, and require acceptance at sign-up.
-
-**Effective date:** [DATE]
-**Provider:** [LEGAL ENTITY NAME] ("Mira", "we", "us")
-**Contact:** [SUPPORT EMAIL]
+**Effective date:** June 27, 2026
+**Provider:** Trevon Barbour ("Mira", "we", "us")
+**Contact:** trevonbarbour@gmail.com
 
 ---
 
 ## 1. Acceptance
 By creating an account or using Mira, you agree to these Terms and to the
 [Privacy Policy](PRIVACY.md). If you don't agree, don't use the app. You must be
-at least [13/16/18] and able to form a binding contract.
+at least 13 years old and able to form a binding contract.
 
 ## 2. The service
 Mira is a macOS assistant that observes your screen and audio (with your
@@ -47,9 +43,11 @@ You agree not to:
   inaccurate or incomplete. Don't rely on it for professional, legal, medical,
   or financial advice. You're responsible for verifying results before acting.
 
-## 6. Payments (if/when enabled)
-Paid plans are billed through [Stripe] on the cadence shown at purchase. [Renewal,
-cancellation, and refund terms]. Taxes may apply. Prices may change with notice.
+## 6. Payments
+Paid plans are billed monthly through Stripe. Plans renew automatically unless
+cancelled before the renewal date. Cancel anytime in Mira → Settings → Account.
+Refunds are not provided for partial billing periods except where required by
+law. Prices may change with reasonable notice. Taxes may apply.
 
 ## 7. Intellectual property
 We and our licensors own the app and its content. We grant you a personal,
@@ -70,11 +68,10 @@ KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
 PURPOSE, AND NON-INFRINGEMENT, TO THE MAXIMUM EXTENT PERMITTED BY LAW.
 
 ## 11. Limitation of liability
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, [LEGAL ENTITY NAME] WILL NOT BE LIABLE FOR
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, TREVON BARBOUR WILL NOT BE LIABLE FOR
 INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR LOST
 PROFITS OR DATA. OUR TOTAL LIABILITY FOR ANY CLAIM IS LIMITED TO THE GREATER OF
-[AMOUNT, e.g. US$50] OR THE AMOUNT YOU PAID US IN THE [12] MONTHS BEFORE THE
-CLAIM.
+US$50 OR THE AMOUNT YOU PAID US IN THE 12 MONTHS BEFORE THE CLAIM.
 
 ## 12. Indemnification
 You'll indemnify us against claims arising from your misuse of the service or
@@ -86,13 +83,13 @@ of these Terms or to protect the service. Sections that by nature should survive
 (IP, disclaimers, liability, indemnity) survive termination.
 
 ## 14. Governing law & disputes
-These Terms are governed by the laws of [STATE/COUNTRY], without regard to
-conflict-of-laws rules. [Dispute resolution / arbitration / venue — have counsel
-choose.]
+These Terms are governed by the laws of the State of Georgia, United States,
+without regard to conflict-of-laws rules. Any disputes will be resolved in the
+courts of Fulton County, Georgia.
 
 ## 15. Changes
 We may update these Terms; material changes will be notified in-app or by email,
 and continued use after the effective date constitutes acceptance.
 
 ## 16. Contact
-[LEGAL ENTITY NAME], [ADDRESS]. Questions: [SUPPORT EMAIL].
+Trevon Barbour, Atlanta, Georgia, United States. Questions: trevonbarbour@gmail.com
