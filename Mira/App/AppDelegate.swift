@@ -106,10 +106,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
 
-        // Show onboarding on first launch, after the island is ready
+        // Voice-driven notch onboarding on first launch — Mira speaks each step,
+        // no modal window, no buttons to click.
         if OnboardingService.shared.isFirstLaunch {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                OnboardingWindowController.shared.show()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                NotchOnboardingManager.shared.start(with: manager.animController)
             }
         }
     }

@@ -15,6 +15,7 @@ final class AnimationController: ObservableObject {
 
     // Phase 2: HUD overlay mode — separate from IslandState so the
     // existing .collapsed/.expanded animation pair is never touched.
+    @Published var isOnboarding:               Bool       = false
     @Published private(set) var hudMode:       HUDMode    = .idle
     @Published private(set) var currentResult: AgentResult? = nil   // Fix 1: survives to .done view
 

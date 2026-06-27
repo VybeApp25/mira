@@ -114,6 +114,7 @@
 		62946323C65311FC235B93CA /* CodexLiveOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08509CD2EF20373C6E2B3DE4 /* CodexLiveOverlay.swift */; };
 		633E12D061864B837775754C /* MisoTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C32360D76CD7D9599499DCA /* MisoTTSService.swift */; };
 		6354AEC26CBF8A68590170E0 /* reminders_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 041B7A6A32E7D953B37E758B /* reminders_rw.py */; };
+		B2C3D4E5F6789012345678A1 /* NotchOnboardingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345678 /* NotchOnboardingManager.swift */; };
 		D4B2C3E5F6789012345678A9 /* OnboardingNarrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */; };
 		64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4486101C5C80FCD26BD6F11C /* OnboardingService.swift */; };
 		6566B080D5E57E3C8C7B22A5 /* CodexBridgeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */; };
@@ -213,6 +214,7 @@
 		BF26435153371D1BBC560BE2 /* obsidian.md in Resources */ = {isa = PBXBuildFile; fileRef = 8F4F81E8FA81740E9B72884C /* obsidian.md */; };
 		BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */; };
 		BF602219B770443FB8E60ADC /* claude-code.md in Resources */ = {isa = PBXBuildFile; fileRef = 69D1A19C98BFF6EDB3B69816 /* claude-code.md */; };
+		D4E5F6789012345678A1B2C3 /* NotchOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6789012345678A1B2 /* NotchOnboardingView.swift */; };
 		BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */; };
 		BFB0355D3849FA0B84F47590 /* ControlGroupTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CF799162D6500DB5D454C4 /* ControlGroupTracker.swift */; };
 		C117552EE76C1FEF99EFCB5E /* SkillStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C1C1240C045D738B98CC29 /* SkillStore.swift */; };
@@ -307,6 +309,7 @@
 		0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStore.swift; sourceTree = "<group>"; };
 		0C866D699E86AEDCD53A7217 /* TriggersTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriggersTabView.swift; sourceTree = "<group>"; };
 		0E725D6F6415478DAE245772 /* TeachingHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingHUD.swift; sourceTree = "<group>"; };
+		C3D4E5F6789012345678A1B2 /* NotchOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingView.swift; sourceTree = "<group>"; };
 		0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonScaffolder.swift; sourceTree = "<group>"; };
 		140C79E08FEE4FC0BC1B9A6F /* apple-notes.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "apple-notes.md"; sourceTree = "<group>"; };
@@ -358,6 +361,7 @@
 		418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCopyQueueService.swift; sourceTree = "<group>"; };
 		42036566FF695AD6554E8E01 /* AgentOutputsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutputsView.swift; sourceTree = "<group>"; };
 		441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputRoute.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6789012345678 /* NotchOnboardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingManager.swift; sourceTree = "<group>"; };
 		C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingNarrator.swift; sourceTree = "<group>"; };
 		4486101C5C80FCD26BD6F11C /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
 		44B3A75742D4282073152A2A /* gmail.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = gmail.md; sourceTree = "<group>"; };
@@ -825,6 +829,7 @@
 				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
+				A1B2C3D4E5F6789012345678 /* NotchOnboardingManager.swift */,
 				C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */,
 				4486101C5C80FCD26BD6F11C /* OnboardingService.swift */,
 				872DD8FFE16217C9024800BE /* OpenAIService.swift */,
@@ -954,6 +959,7 @@
 				54D4739EA771EF0C39908A69 /* MiraIslandView.swift */,
 				6AAB411962D3D66F94EE5483 /* MiraPanel.swift */,
 				D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */,
+				C3D4E5F6789012345678A1B2 /* NotchOnboardingView.swift */,
 				0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */,
 				FD96AD74487529E2CEF249FB /* OutputDetailView.swift */,
 				28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */,
@@ -1260,8 +1266,10 @@
 				E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */,
 				6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */,
 				54CD8C2E16FA6C1653F4BF9E /* OffscreenRenderer.swift in Sources */,
+				B2C3D4E5F6789012345678A1 /* NotchOnboardingManager.swift in Sources */,
 				D4B2C3E5F6789012345678A9 /* OnboardingNarrator.swift in Sources */,
 				64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */,
+				D4E5F6789012345678A1B2C3 /* NotchOnboardingView.swift in Sources */,
 				BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */,
 				DCB1DA8646D9D1A8669A8973 /* OpenAIService.swift in Sources */,
 				F06EAD3B5F62AAC1380A9EC8 /* OutcomeEvaluation.swift in Sources */,

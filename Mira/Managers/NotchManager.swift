@@ -128,6 +128,10 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraDrawModeToggled, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { ScreenDrawController.shared.toggleStandalone() }
         }
+        // Notch onboarding — expand the island and make it interactive so the flow can run.
+        NotificationCenter.default.addObserver(forName: .miraOnboardingStarted, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.expandForShortcut() }
+        }
         NotificationCenter.default.addObserver(forName: .miraShowClipboard, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { ClipboardHistoryPanel.shared.toggle() }
         }

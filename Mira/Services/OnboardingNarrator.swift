@@ -66,6 +66,13 @@ final class OnboardingNarrator: ObservableObject {
         currentTask = Task { await speakAsync(text, voice: voice) }
     }
 
+    // Async variant used by NotchOnboardingManager — awaits until speech finishes.
+    func speakAndWait(_ text: String) async {
+        stop()
+        guard !text.isEmpty else { return }
+        await speakAsync(text, voice: MiraVoice.saved)
+    }
+
     func stop() {
         currentTask?.cancel()
         currentTask = nil

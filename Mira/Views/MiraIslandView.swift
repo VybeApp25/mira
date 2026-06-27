@@ -56,8 +56,9 @@ struct MiraIslandView: View {
     @ObservedObject var voice:     VoiceService
     @ObservedObject var wakeWord:  WakeWordService
     let geometry: NotchGeometry
-    @ObservedObject private var engine   = ProjectEngine.shared
-    @ObservedObject private var pointTo  = PointToService.shared
+    @ObservedObject private var onboarding = NotchOnboardingManager.shared
+    @ObservedObject private var engine     = ProjectEngine.shared
+    @ObservedObject private var pointTo    = PointToService.shared
     // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
     // pill even when the island is closed. (miraState.realtimeState is only mirrored
     // by IslandChatView, which exists only while expanded — so in always-on/closed
@@ -76,7 +77,8 @@ struct MiraIslandView: View {
     // Live accent color
     @ObservedObject private var accentSvc = AccentColorService.shared
 
-    private var isExpanded: Bool { animController.state == .expanded }
+    private var isExpanded:   Bool { animController.state == .expanded }
+    private var isOnboarding: Bool { onboarding.isActive }
 
     // True whenever any non-idle visual indicator should appear in the collapsed pill.
     // Also true while the PointToService cursor is in flight so the pill stays wide.
@@ -86,7 +88,7 @@ struct MiraIslandView: View {
 
     // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
     private var pillW: CGFloat {
-        if isExpanded { return AnimationController.expandedW }
+        if isOnboarding || isExpanded { return AnimationController.expandedW }
         guard collapsedIndicatorActive else { return geometry.notchWidth }
         return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
@@ -114,7 +116,10 @@ struct MiraIslandView: View {
         selectedTab == .home ? AnimationController.expandedH
                              : AnimationController.expandedTallH
     }
-    private var pillH: CGFloat { isExpanded ? expandedHeight : geometry.notchHeight + collapsedDropH }
+    private var pillH: CGFloat {
+        if isOnboarding { return animController.currentExpandedH }
+        return isExpanded ? expandedHeight : geometry.notchHeight + collapsedDropH
+    }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
     private var botR:  CGFloat { isExpanded ? AnimationController.expandedBotR : AnimationController.collapsedBotR }
 
@@ -217,7 +222,11 @@ struct MiraIslandView: View {
                 // Pure black matches the hardware notch exactly — any off-black creates a visible seam.
                 Color.black
             }
-            if isExpanded {
+            if isOnboarding {
+                NotchOnboardingView(notchHeight: geometry.notchHeight)
+                    .opacity(animController.contentVisible ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.14), value: animController.contentVisible)
+            } else if isExpanded {
                 expandedContent
                     .opacity(animController.contentVisible ? 1 : 0)
                     .animation(.easeInOut(duration: 0.14), value: animController.contentVisible)
@@ -236,6 +245,7 @@ struct MiraIslandView: View {
             // can't be drawn on; the ear is empty menu-bar space next to it. The text
             // label drops just below (collapsedContent). Expanded: top-right of nav bar.
             SharedStatusView(pillState: pillState, isCompact: !isExpanded)
+                .opacity(isOnboarding ? 0 : 1)
                 .frame(maxWidth: .infinity, maxHeight: .infinity,
                        alignment: isExpanded ? .topTrailing : .topLeading)
                 .padding(.trailing, isExpanded ? 88 : 0)
