@@ -1,8 +1,12 @@
 import AVFoundation
 import Foundation
 
-// Speaks onboarding narration using the on-device AVSpeechSynthesizer so it
-// works before sign-in and can't be interrupted by the realtime voice session.
+// Two-engine narration for onboarding:
+//   • Before sign-in  → AVSpeechSynthesizer (on-device, always available)
+//   • After sign-in   → OpenAI TTS via proxy (richer voice, same path as VoicePreviewService)
+//
+// NotchOnboardingManager signs the user in first, then all demo narration
+// runs through OpenAI so every line sounds like Mira's real voice.
 
 @MainActor
 final class OnboardingNarrator: ObservableObject {
@@ -10,8 +14,13 @@ final class OnboardingNarrator: ObservableObject {
 
     @Published private(set) var isSpeaking = false
 
+    // System TTS (pre-auth)
     private let synthesizer    = AVSpeechSynthesizer()
     private let speechDelegate = _SpeechDelegate()
+
+    // OpenAI TTS (post-auth)
+    private var openAITask: Task<Void, Never>?
+    private var openAIPlayer: AVAudioPlayer?
 
     private init() {
         synthesizer.delegate = speechDelegate
@@ -19,109 +28,162 @@ final class OnboardingNarrator: ObservableObject {
 
     // MARK: - Public API
 
-    /// Speaks `text` and suspends until the utterance finishes (or is stopped).
+    /// Speaks `text` and suspends until done. Picks engine based on auth state.
     func speakAndWait(_ text: String) async {
         stop()
         guard !text.isEmpty else { return }
         isSpeaking = true
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            speechDelegate.onFinish = { [weak self] in
-                Task { @MainActor in
-                    self?.isSpeaking = false
-                    self?.speechDelegate.onFinish = nil
-                    continuation.resume()
-                }
-            }
-            synthesizer.speak(utterance(for: text))
+        if AccountService.shared.isSignedIn {
+            await speakOpenAIAsync(text)
+        } else {
+            await speakSystemAsync(text)
         }
-    }
-
-    /// Fire-and-forget variant (used by legacy OnboardingView).
-    func speak(for step: OnboardingStep) {
-        guard let text = Self.line(for: step) else { return }
-        stop()
-        isSpeaking = true
-        speechDelegate.onFinish = { [weak self] in
-            Task { @MainActor in
-                self?.isSpeaking = false
-                self?.speechDelegate.onFinish = nil
-            }
-        }
-        synthesizer.speak(utterance(for: text))
+        isSpeaking = false
     }
 
     func stop() {
+        // OpenAI path
+        openAITask?.cancel()
+        openAITask = nil
+        openAIPlayer?.stop()
+        openAIPlayer = nil
+        // System path
         synthesizer.stopSpeaking(at: .immediate)
         speechDelegate.onFinish = nil
         isSpeaking = false
     }
 
-    // MARK: - Narration script
+    // MARK: - System TTS (AVSpeechSynthesizer)
 
-    static func line(for step: OnboardingStep) -> String? {
-        switch step {
-        case .intro:
-            return "Hey — I'm Mira. I live right here in your notch and I'm always ready to help. Let's get you set up in just a minute."
-        case .signIn:
-            return "First, sign in or create your account. I handle all the AI keys behind the scenes — you never have to manage them yourself."
-        case .voicePersona:
-            return "Pick the voice you want me to use. You can hear a preview of each one. Choose whichever feels right."
-        case .knowledgeImport:
-            return "If you already use ChatGPT or Claude, you can import your profile so I know you from day one. This stays on your Mac and is never shared."
-        case .discovery:
-            return "Quick one — how did you hear about me? Just tap an option and we'll keep moving."
-        case .permission(let p):
-            switch p {
-            case .microphone:
-                return "I need to hear you. Allow microphone access so I can listen for your voice."
-            case .screenRecording:
-                return "Now I need to see your screen so I can point at things and guide you through any app. Open System Settings and flip my toggle on."
-            case .accessibility:
-                return "Last one. Accessibility lets me click and type in your apps when you ask. System Settings, find Mira, and turn me on."
+    private func speakSystemAsync(_ text: String) async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            speechDelegate.onFinish = { [weak self] in
+                Task { @MainActor in
+                    self?.speechDelegate.onFinish = nil
+                    cont.resume()
+                }
             }
-        case .agentFolder:
-            return "This is where I'll save files when I run tasks for you. The default works great for most people."
-        case .demoAgent:
-            return "Want to see me work right now? Hit Run the demo and I'll build you a webpage while we finish setup."
-        case .paywall:
-            return "Start free, or upgrade to Pro or Ultra for more agent runs. You can change your plan anytime in Settings."
-        case .done:
-            return "You're all set. Hover the notch to open me. Hold Control-Option to talk. I'll be right here."
+            synthesizer.speak(systemUtterance(for: text))
         }
     }
 
-    // MARK: - Private
-
-    private func utterance(for text: String) -> AVSpeechUtterance {
+    private func systemUtterance(for text: String) -> AVSpeechUtterance {
         let u = AVSpeechUtterance(string: text)
-        u.voice = Self.bestVoice()
+        u.voice = bestSystemVoice()
         u.rate  = 0.50
         u.pitchMultiplier = 1.02
         u.volume = 1.0
         return u
     }
 
-    private static func bestVoice() -> AVSpeechSynthesisVoice? {
+    private func bestSystemVoice() -> AVSpeechSynthesisVoice? {
         let ids = [
             "com.apple.voice.premium.en-US.Zoe",
             "com.apple.ttsbundle.Samantha-premium",
             "com.apple.voice.premium.en-US.Evan",
             "com.apple.ttsbundle.Alex-compact",
         ]
-        for id in ids {
-            if let v = AVSpeechSynthesisVoice(identifier: id) { return v }
-        }
+        for id in ids { if let v = AVSpeechSynthesisVoice(identifier: id) { return v } }
         return AVSpeechSynthesisVoice(language: "en-US")
+    }
+
+    // MARK: - OpenAI TTS
+
+    private func speakOpenAIAsync(_ text: String) async {
+        let voice = MiraVoice.saved
+        let cached = cacheURL(text: text, voice: voice)
+
+        let data: Data
+        if FileManager.default.fileExists(atPath: cached.path),
+           let d = try? Data(contentsOf: cached) {
+            data = d
+        } else {
+            guard let fetched = try? await synthesizeOpenAI(text: text, voice: voice) else {
+                // graceful fallback if network fails mid-onboarding
+                await speakSystemAsync(text)
+                return
+            }
+            try? fetched.write(to: cached, options: .atomic)
+            data = fetched
+        }
+
+        guard let player = try? AVAudioPlayer(data: data,
+                                              fileTypeHint: AVFileType.mp3.rawValue)
+        else { await speakSystemAsync(text); return }
+
+        player.enableRate = true
+        player.rate = Float(MiraVoice.savedSpeed)
+        player.prepareToPlay()
+        openAIPlayer = player
+        player.play()
+
+        while player.isPlaying {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+        }
+        openAIPlayer = nil
+    }
+
+    private func synthesizeOpenAI(text: String, voice: MiraVoice) async throws -> Data {
+        struct Body: Encodable {
+            let model, voice, input, response_format: String
+        }
+        let body = Body(model: "gpt-4o-mini-tts", voice: voice.ttsVoice,
+                        input: text, response_format: "mp3")
+        var req = URLRequest(url: MiraBackend.openAITTSURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(body)
+        req.timeoutInterval = 30
+        guard MiraBackend.authorizeOpenAI(&req, directKey: OpenAIService.effectiveKey) else {
+            throw MiraError.api("Not signed in")
+        }
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api("TTS failed")
+        }
+        return data
+    }
+
+    private var cacheDir: URL {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mira-onboarding-narration", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base
+    }
+
+    private func cacheURL(text: String, voice: MiraVoice) -> URL {
+        var h: UInt64 = 5381
+        for byte in (text + voice.rawValue).utf8 { h = (h &* 33) &+ UInt64(byte) }
+        return cacheDir.appendingPathComponent("narration-\(String(h, radix: 36)).mp3")
+    }
+
+    // MARK: - Legacy step lines (used by old OnboardingView)
+
+    static func line(for step: OnboardingStep) -> String? {
+        switch step {
+        case .intro:           return "Hey — I'm Mira. I live right here in your notch and I'm always ready to help."
+        case .signIn:          return "Sign in or create your account. I handle all the AI keys — you never have to."
+        case .voicePersona:    return "Pick the voice you want me to use."
+        case .knowledgeImport: return "Import your profile from ChatGPT or Claude if you'd like. It stays on your Mac."
+        case .discovery:       return "How did you hear about me?"
+        case .permission(let p):
+            switch p {
+            case .microphone:     return "I need microphone access to hear you."
+            case .screenRecording:return "Allow Screen Recording so I can see your screen and guide you."
+            case .accessibility:  return "Accessibility lets me click and type in your apps."
+            }
+        case .agentFolder:     return "This is where I'll save files when I run tasks for you."
+        case .demoAgent:       return "Want to see me work? I'll build a webpage right now."
+        case .paywall:         return "Start free, or upgrade anytime."
+        case .done:            return "You're all set. I'm right here whenever you need me."
+        }
     }
 }
 
-// MARK: - Delegate shim
+// MARK: - AVSpeechSynthesizer delegate shim
 
 private final class _SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
     var onFinish: (() -> Void)?
-
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
-                           didFinish utterance: AVSpeechUtterance) {
-        onFinish?()
-    }
+                           didFinish utterance: AVSpeechUtterance) { onFinish?() }
 }

@@ -50,10 +50,6 @@ struct OnboardingView: View {
         }
         .onAppear {
             buildSteps()
-            OnboardingNarrator.shared.speak(for: .intro)
-        }
-        .onChange(of: step) { _, newStep in
-            OnboardingNarrator.shared.speak(for: newStep)
         }
     }
 
