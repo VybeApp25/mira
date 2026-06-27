@@ -11,7 +11,7 @@ private let accent  = DS.Colors.accent
 
 // MARK: - Onboarding step enum
 
-private enum OnboardingStep: Equatable, Hashable {
+enum OnboardingStep: Equatable, Hashable {
     case intro
     case signIn
     case voicePersona
@@ -29,8 +29,9 @@ private enum OnboardingStep: Equatable, Hashable {
 struct OnboardingView: View {
     let onDismiss: () -> Void
 
-    @StateObject private var svc     = OnboardingService.shared
-    @ObservedObject private var acct = AccountService.shared
+    @StateObject private var svc      = OnboardingService.shared
+    @ObservedObject private var acct  = AccountService.shared
+    @ObservedObject private var narrator = OnboardingNarrator.shared
 
     @State private var step:        OnboardingStep = .intro
     @State private var steps:       [OnboardingStep] = []
@@ -47,7 +48,13 @@ struct OnboardingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onAppear { buildSteps() }
+        .onAppear {
+            buildSteps()
+            OnboardingNarrator.shared.speak(for: .intro)
+        }
+        .onChange(of: step) { _, newStep in
+            OnboardingNarrator.shared.speak(for: newStep)
+        }
     }
 
     // MARK: - Top bar
@@ -62,6 +69,13 @@ struct OnboardingView: View {
             }
 
             Spacer()
+
+            // Speaking indicator
+            if narrator.isSpeaking {
+                NarratorWaveform()
+                    .padding(.trailing, 8)
+                    .transition(.opacity)
+            }
 
             // Skip button (intro only) / close on done
             if step == .intro || step == .done {
@@ -78,6 +92,7 @@ struct OnboardingView: View {
         }
         .frame(height: 36)
         .padding(.leading, 20)
+        .animation(.easeInOut(duration: 0.2), value: narrator.isSpeaking)
     }
 
     private var progressStrip: some View {
@@ -145,6 +160,7 @@ struct OnboardingView: View {
     }
 
     private func advance() {
+        OnboardingNarrator.shared.stop()
         direction = 1
         let next = stepIndex + 1
         guard next < steps.count else { onDismiss(); return }
@@ -1194,4 +1210,34 @@ private func primaryButton(_ label: String, action: @escaping () -> Void) -> som
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
     .buttonStyle(.plain)
+}
+
+// MARK: - Narrator waveform indicator
+
+private struct NarratorWaveform: View {
+    private static let heights: [CGFloat] = [4, 8, 6, 10, 5, 9, 4]
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<Self.heights.count, id: \.self) { i in
+                Bar(maxH: Self.heights[i], delay: Double(i) * 0.07)
+            }
+        }
+    }
+    private struct Bar: View {
+        let maxH: CGFloat
+        let delay: Double
+        @State private var h: CGFloat = 2
+        var body: some View {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(accent.opacity(0.70))
+                .frame(width: 2.5, height: h)
+                .onAppear {
+                    withAnimation(
+                        .easeInOut(duration: 0.45)
+                        .repeatForever(autoreverses: true)
+                        .delay(delay)
+                    ) { h = maxH }
+                }
+        }
+    }
 }

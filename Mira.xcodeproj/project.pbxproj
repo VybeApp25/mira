@@ -114,6 +114,7 @@
 		62946323C65311FC235B93CA /* CodexLiveOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08509CD2EF20373C6E2B3DE4 /* CodexLiveOverlay.swift */; };
 		633E12D061864B837775754C /* MisoTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C32360D76CD7D9599499DCA /* MisoTTSService.swift */; };
 		6354AEC26CBF8A68590170E0 /* reminders_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 041B7A6A32E7D953B37E758B /* reminders_rw.py */; };
+		D4B2C3E5F6789012345678A9 /* OnboardingNarrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */; };
 		64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4486101C5C80FCD26BD6F11C /* OnboardingService.swift */; };
 		6566B080D5E57E3C8C7B22A5 /* CodexBridgeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */; };
 		65A733FC2AA9E0468290BBD9 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 177D935B2C9FEEDB97A25EE9 /* IOKit.framework */; };
@@ -357,6 +358,7 @@
 		418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCopyQueueService.swift; sourceTree = "<group>"; };
 		42036566FF695AD6554E8E01 /* AgentOutputsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutputsView.swift; sourceTree = "<group>"; };
 		441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputRoute.swift; sourceTree = "<group>"; };
+		C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingNarrator.swift; sourceTree = "<group>"; };
 		4486101C5C80FCD26BD6F11C /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
 		44B3A75742D4282073152A2A /* gmail.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = gmail.md; sourceTree = "<group>"; };
 		463BF5B30736DAB269B90717 /* WebsiteHealthAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteHealthAgent.swift; sourceTree = "<group>"; };
@@ -823,6 +825,7 @@
 				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
+				C3A1B2D4E5F6789012345678 /* OnboardingNarrator.swift */,
 				4486101C5C80FCD26BD6F11C /* OnboardingService.swift */,
 				872DD8FFE16217C9024800BE /* OpenAIService.swift */,
 				55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */,
@@ -1257,6 +1260,7 @@
 				E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */,
 				6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */,
 				54CD8C2E16FA6C1653F4BF9E /* OffscreenRenderer.swift in Sources */,
+				D4B2C3E5F6789012345678A9 /* OnboardingNarrator.swift in Sources */,
 				64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */,
 				BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */,
 				DCB1DA8646D9D1A8669A8973 /* OpenAIService.swift in Sources */,
