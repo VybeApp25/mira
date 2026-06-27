@@ -35,10 +35,12 @@ final class OnboardingNarrator: ObservableObject {
     func speakAndWait(_ text: String) async {
         stop()
         guard !text.isEmpty else { return }
+        NSLog("[OnboardingNarrator] speakAndWait | signedIn=\(AccountService.shared.isSignedIn) | text=\(text.prefix(60))")
         isSpeaking = true
         if AccountService.shared.isSignedIn {
             await speakOpenAIAsync(text)
         } else {
+            NSLog("[OnboardingNarrator] NOT signed in — using system TTS")
             await speakSystemAsync(text)
         }
         isSpeaking = false
@@ -80,7 +82,7 @@ final class OnboardingNarrator: ObservableObject {
                 try? fetched.write(to: cached, options: .atomic)
                 data = fetched
             } catch {
-                NSLog("[OnboardingNarrator] TTS fetch failed (\(error)) — using system voice")
+                NSLog("[OnboardingNarrator] TTS FAILED: \(error)")
                 await speakSystemAsync(text)
                 return
             }
@@ -116,6 +118,7 @@ final class OnboardingNarrator: ObservableObject {
     }
 
     private func synthesizeOpenAI(text: String, voice: MiraVoice) async throws -> Data {
+        NSLog("[OnboardingNarrator] synthesizeOpenAI voice=\(voice.rawValue) len=\(text.count)")
         struct Body: Encodable {
             let model, voice, input, response_format: String
         }
@@ -130,8 +133,10 @@ final class OnboardingNarrator: ObservableObject {
             throw MiraError.api("Not signed in")
         }
         let (data, resp) = try await MiraBackend.proxyData(for: req)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            throw MiraError.api("TTS \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        NSLog("[OnboardingNarrator] TTS response status=\(status) bytes=\(data.count)")
+        guard status == 200 else {
+            throw MiraError.api("TTS \(status)")
         }
         return data
     }
@@ -178,7 +183,7 @@ final class OnboardingNarrator: ObservableObject {
 
     private var cacheDir: URL {
         let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mira-onboarding-narration", isDirectory: true)
+            .appendingPathComponent("mira-onboarding-narration-v2", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base
     }
