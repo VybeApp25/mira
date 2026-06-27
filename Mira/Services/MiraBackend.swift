@@ -81,6 +81,14 @@ enum MiraBackend {
             : URL(string: "https://api.openai.com/v1/audio/speech")!
     }
 
+    /// Narration TTS — accepts arbitrary input text (unlike openai-tts-proxy which
+    /// always plays the fixed preview phrase). Used by OnboardingNarrator.
+    static var openAITTSNarrationURL: URL {
+        useProxy
+            ? URL(string: "\(functionsBase)/openai-tts-narration")!
+            : URL(string: "https://api.openai.com/v1/audio/speech")!
+    }
+
     /// Bearer value for the realtime token-mint edge function: the user's JWT when
     /// signed in, else the anon key (keeps unauthenticated direct-mode calls working
     /// until proxy mode is on and sign-in is required).

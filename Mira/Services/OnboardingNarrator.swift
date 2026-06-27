@@ -121,7 +121,7 @@ final class OnboardingNarrator: ObservableObject {
         }
         let body = Body(model: "gpt-4o-mini-tts", voice: voice.ttsVoice,
                         input: text, response_format: "mp3")
-        var req = URLRequest(url: MiraBackend.openAITTSURL)
+        var req = URLRequest(url: MiraBackend.openAITTSNarrationURL)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody   = try JSONEncoder().encode(body)
