@@ -20,8 +20,8 @@ serve(async (req) => {
       "client_reference_id":           user.userId,
       "metadata[plan]":                plan,
       "metadata[user_id]":             user.userId,
-      "success_url":                   "https://miraapp.ai?upgrade=success",
-      "cancel_url":                    "https://miraapp.ai?upgrade=cancelled",
+      "success_url":                   "https://getmira.today?upgrade=success",
+      "cancel_url":                    "https://getmira.today?upgrade=cancelled",
       "allow_promotion_codes":         "true",
     });
 
