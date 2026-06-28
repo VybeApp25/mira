@@ -27,6 +27,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // after launch. Instantiating AccountService.shared also restores authState.
         _ = AccountService.shared
 
+        // Handle the mira:// custom URL scheme — used by the Apple web-OAuth flow,
+        // which redirects back to mira://auth-callback#access_token=… on success.
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID:    AEEventID(kAEGetURL))
+
         // Keep the access token fresh. It expires ~1h after sign-in and nothing
         // renewed it before, so all proxy AI (chat/voice/grounding) died an hour
         // later. Refresh now (covers a token that expired while the app was closed),
@@ -112,6 +120,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 NotchOnboardingManager.shared.start(with: manager.animController)
             }
+        }
+    }
+
+    /// Receives mira:// URLs (Apple web-OAuth callback) and forwards the auth
+    /// callback to AccountService to adopt the session.
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor,
+                                      withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: urlString),
+              url.scheme == "mira" else { return }
+        if urlString.contains("auth-callback") {
+            Task { @MainActor in await AccountService.shared.handleAppleWebCallback(url) }
         }
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import AppKit
 import Combine
 
 enum MiraAuthError: LocalizedError {
@@ -92,6 +93,37 @@ final class AccountService: NSObject, ObservableObject {
             } catch {
                 authState = .signedOut
             }
+        }
+    }
+
+    // MARK: - Apple WEB OAuth (browser flow — no entitlement, Developer-ID-safe)
+
+    /// Starts Apple sign-in in the browser. Native Sign in with Apple needs the
+    /// applesignin entitlement, which a Developer-ID Mac app can't carry (AMFI
+    /// blocks launch), so we use the browser OAuth flow. The result returns via
+    /// the mira:// URL scheme → AppDelegate → handleAppleWebCallback.
+    func signInWithAppleWeb() {
+        guard let url = SupabaseService.shared.appleOAuthURL() else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Adopts the session from the mira://auth-callback redirect and finishes
+    /// sign-in exactly like the other paths (plan fetch + device registration).
+    func handleAppleWebCallback(_ url: URL) async {
+        authState = .loading
+        do {
+            let s = try SupabaseService.shared.completeAppleWebOAuth(callbackURL: url)
+            let user = MiraUser(
+                id: s.userId, email: s.email,
+                displayName: s.displayName ?? s.email?.components(separatedBy: "@").first,
+                avatarURL: nil, createdAt: Date())
+            saveUser(user)
+            authState = .signedIn(user)
+            PostHogService.shared.identify(userId: s.userId, email: s.email, name: s.displayName)
+            await EntitlementService.shared.fetchAndApplyPlan()
+            await registerDevice(DeviceFingerprintService.deviceHash, jwt: s.accessToken)
+        } catch {
+            authState = .signedOut
         }
     }
 
