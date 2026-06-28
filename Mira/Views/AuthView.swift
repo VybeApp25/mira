@@ -16,6 +16,10 @@ struct AuthView: View {
     @State private var name = ""
     @State private var error: String?
     @State private var busy = false
+    // Explicit Terms/Privacy consent — required to create an account (sign-up
+    // only; existing users agreed at their own sign-up). Gates both the email
+    // "Create account" button and the Apple sign-in button.
+    @State private var agreedToTerms = false
 
     private let accent  = DS.Colors.accent
     private let surface = Color(red: 0.13, green: 0.13, blue: 0.16)
@@ -25,8 +29,12 @@ struct AuthView: View {
     private var canSubmit: Bool {
         guard !isLoading else { return false }
         guard email.contains("@"), email.contains("."), password.count >= 6 else { return false }
+        if mode == .signUp && !agreedToTerms { return false }   // must accept Terms to create an account
         return true
     }
+
+    /// In sign-up mode, account creation (email or Apple) requires consent.
+    private var consentRequiredButMissing: Bool { mode == .signUp && !agreedToTerms }
 
     var body: some View {
         if mode == .confirmEmail {
@@ -90,6 +98,11 @@ struct AuthView: View {
                 field(icon: "lock", placeholder: "Password (6+ characters)", text: $password, secure: true)
             }
 
+            if mode == .signUp {
+                consentCheckbox
+                    .padding(.top, 12)
+            }
+
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
@@ -135,10 +148,9 @@ struct AuthView: View {
             .frame(height: 42)
             .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             .padding(.top, 8)
-
-            if mode == .signUp {
-                legalBlurb
-            }
+            // Apple sign-in creates an account too — require the same consent.
+            .disabled(consentRequiredButMissing)
+            .opacity(consentRequiredButMissing ? 0.45 : 1)
 
             Button {
                 withAnimation { mode = (mode == .signUp ? .signIn : .signUp); error = nil }
@@ -159,32 +171,40 @@ struct AuthView: View {
         }
     }
 
-    private var legalBlurb: some View {
-        HStack(spacing: 0) {
-            Text("By creating an account you agree to our ")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.30))
-            Button("Terms") {
-                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html")!)
+    // Explicit consent checkbox shown in sign-up mode. The checkbox image and the
+    // Terms/Privacy links are siblings (not nested buttons) so taps don't conflict:
+    // tapping the box toggles consent; tapping a link opens that document.
+    private var consentCheckbox: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
+                .font(.system(size: 16))
+                .foregroundColor(agreedToTerms ? accent : .white.opacity(0.40))
+                .contentShape(Rectangle())
+                .onTapGesture { agreedToTerms.toggle() }
+
+            HStack(spacing: 0) {
+                Text("I agree to Mira's ")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.50))
+                Button("Terms") {
+                    NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html")!)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(accent.opacity(0.9))
+                Text(" and ")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.50))
+                Button("Privacy Policy") {
+                    NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/privacy.html")!)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(accent.opacity(0.9))
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 10))
-            .foregroundColor(.white.opacity(0.45))
-            Text(" and ")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.30))
-            Button("Privacy Policy") {
-                NSWorkspace.shared.open(URL(string: "https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/privacy.html")!)
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 10))
-            .foregroundColor(.white.opacity(0.45))
-            Text(".")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.30))
+            Spacer(minLength: 0)
         }
-        .padding(.top, 10)
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
