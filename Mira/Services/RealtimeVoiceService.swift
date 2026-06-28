@@ -166,10 +166,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     // MARK: Private — Voice usage reporting (free-tier throttle)
 
-    // Wall-clock start of the current healthy session; on teardown the elapsed
-    // seconds are POSTed to report-voice-usage so the server's daily seconds cap
-    // accumulates real usage. See migration 20260628120000_voice_usage_quota.sql.
-    private var sessionStartedAt: Date?
+    // Accurate voice metering: accumulate ONLY the time the mic is actually
+    // capturing audio — excludes silent pre-warm / warm-standby and the
+    // post-response idle window, so the daily voice-seconds cap reflects real
+    // audio usage rather than how long a socket happened to stay open. The total
+    // is POSTed to report-voice-usage on teardown. See migration
+    // 20260628120000_voice_usage_quota.sql.
+    private var micActiveStart: Date?
+    private var accumulatedVoiceSeconds: TimeInterval = 0
 
     // Result of an ephemeral-token mint — lets openSocket distinguish a daily
     // voice-cap rejection (429) from a generic failure, so the UI can show an
@@ -220,6 +224,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     /// When PTT fires it finds a healthy session and begins recording immediately.
     /// Mirrors HeyClicky's "agent keep-warm flag" / prewarm-Agent-Mode-session pattern.
     func prewarm() {
+        // Pre-warming silently mints a Realtime session, which counts against the
+        // user's daily voice quota. Free tier has a tight per-day session cap, so
+        // don't spend it on a session the user never spoke into (otherwise a few
+        // app launches lock them out of voice). Free users open a session on
+        // demand at PTT — a real voice turn, correctly metered. Paid tiers have
+        // ample quota and keep the first-PTT latency win.
+        guard EntitlementService.shared.plan != .free else { return }
         guard !isAlwaysOn, webSocket == nil, !isWarmStandby else { return }
         guard MiraBackend.useProxy || !AppSecrets.openAIKey.isEmpty else { return }
         NSLog("[MiraRealtime] pre-warming session")
@@ -542,7 +553,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             guard shouldReconnect || isWarmStandby else { teardown(); return }
             retryCount     = 0
             sessionHealthy = true
-            if sessionStartedAt == nil { sessionStartedAt = Date() }
             if isWarmStandby {
                 // Warm standby: session is healthy but mic stays off until PTT fires.
                 // Don't inject history or change state — stay invisible until needed.
@@ -1024,6 +1034,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         captureEngine.prepare()
         do {
             try captureEngine.start()
+            if micActiveStart == nil { micActiveStart = Date() }   // begin metering real audio time
             NSLog("[MiraRealtime] mic capture session running")
         } catch {
             NSLog("[MiraRealtime] mic capture start failed: %@", error.localizedDescription)
@@ -1212,6 +1223,11 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private func stopMicCapture() {
         guard captureEngine.isRunning else { return }
+        // Accumulate the mic-active segment just ended (real audio time).
+        if let start = micActiveStart {
+            accumulatedVoiceSeconds += Date().timeIntervalSince(start)
+            micActiveStart = nil
+        }
         captureEngine.inputNode.removeTap(onBus: 0)
         captureEngine.stop()
         inputConverter = nil
@@ -1274,14 +1290,6 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     private func teardown() {
-        // Report this session's duration to the daily seconds cap before resetting.
-        // Reconnects tear down + reopen, so each live segment is reported and the
-        // server sums them — that's correct.
-        if let started = sessionStartedAt {
-            let elapsed = Int(Date().timeIntervalSince(started).rounded())
-            reportVoiceUsage(seconds: elapsed)
-            sessionStartedAt = nil
-        }
         sessionHealthy  = false
         historyInjected = false
         isWarmStandby   = false
@@ -1292,7 +1300,15 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         webSocket  = nil
         urlSession = nil
 
-        stopMicCapture()
+        stopMicCapture()   // accumulates the final mic-active segment
+
+        // Report the real audio time for this session (mic-active only — excludes
+        // pre-warm / warm-standby and post-response idle). Reconnects tear down +
+        // reopen, so each session's active seconds are reported and the server
+        // sums them.
+        let secs = Int(accumulatedVoiceSeconds.rounded())
+        if secs > 0 { reportVoiceUsage(seconds: secs) }
+        accumulatedVoiceSeconds = 0
 
         playerNode.stop()
         if playEngine.isRunning { playEngine.stop() }
