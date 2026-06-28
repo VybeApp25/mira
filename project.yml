@@ -29,7 +29,6 @@ targets:
         com.apple.security.automation.apple-events: true
         # Required for Sparkle to download updates
         com.apple.security.network.client: true
-        com.apple.developer.applesignin: [Default]
     info:
       path: Mira/Info.plist
       properties:
