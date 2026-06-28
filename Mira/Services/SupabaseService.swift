@@ -183,6 +183,73 @@ final class SupabaseService: ObservableObject {
         return s
     }
 
+    // MARK: - Apple WEB OAuth (browser flow — no entitlement, works for Developer ID)
+    //
+    // Native Sign in with Apple needs the com.apple.developer.applesignin
+    // entitlement, which a Developer-ID (direct-distribution) Mac app can't carry
+    // (AMFI denies launch). The browser OAuth flow sidesteps that entirely: open
+    // Supabase's /authorize URL in the browser, the user signs in with Apple,
+    // Supabase redirects back to our custom URL scheme (mira://auth-callback) with
+    // the session tokens in the URL fragment, and we adopt them.
+
+    static let oauthRedirect = "mira://auth-callback"
+
+    /// The URL to open in the browser to start Apple web sign-in.
+    func appleOAuthURL() -> URL? {
+        var c = URLComponents(string: baseURL + "/auth/v1/authorize")
+        c?.queryItems = [
+            URLQueryItem(name: "provider", value: "apple"),
+            URLQueryItem(name: "redirect_to", value: Self.oauthRedirect),
+        ]
+        return c?.url
+    }
+
+    /// Adopt the session from the OAuth callback URL
+    /// (mira://auth-callback#access_token=…&refresh_token=…&expires_in=…).
+    /// Throws if the callback carried an error or no tokens.
+    @discardableResult
+    func completeAppleWebOAuth(callbackURL url: URL) throws -> SupabaseSession {
+        // Tokens are in the fragment; an error comes back as query/fragment params.
+        let raw = url.fragment ?? url.query ?? ""
+        var params: [String: String] = [:]
+        for pair in raw.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            if kv.count == 2 { params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+        }
+        if let err = params["error_description"] ?? params["error"] {
+            throw SupabaseError.serverError(400, err.replacingOccurrences(of: "+", with: " "))
+        }
+        guard let access = params["access_token"], let refresh = params["refresh_token"] else {
+            throw SupabaseError.serverError(400, "No tokens in the sign-in response.")
+        }
+        let expiresIn = Int(params["expires_in"] ?? "3600") ?? 3600
+        let claims = Self.decodeJWTClaims(access)
+        let s = SupabaseSession(
+            accessToken: access, refreshToken: refresh,
+            userId: claims.userId, email: claims.email,
+            displayName: claims.email?.components(separatedBy: "@").first,
+            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)))
+        save(s)
+        session = s
+        PostHogService.shared.capture("auth_sign_in", properties: ["method": "apple_web"])
+        return s
+    }
+
+    /// Decodes the `sub` (user id) and `email` claims from a JWT's payload without
+    /// verifying the signature (the token came straight from our own auth server).
+    static func decodeJWTClaims(_ jwt: String) -> (userId: String, email: String?) {
+        let parts = jwt.split(separator: ".")
+        guard parts.count >= 2 else { return ("", nil) }
+        var b64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while b64.count % 4 != 0 { b64 += "=" }
+        guard let data = Data(base64Encoded: b64),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return ("", nil) }
+        return (json["sub"] as? String ?? "", json["email"] as? String)
+    }
+
     // MARK: - Refresh
 
     func refresh() async throws {

@@ -69,7 +69,7 @@ ENTITLEMENTS="Mira/Mira.entitlements"
 # Sparkle ships pre-signed with its own cert from SPM; notarization requires
 # every nested binary to be signed with YOUR Developer ID + secure timestamp.
 # Sign innermost → outermost.
-echo "▶ Re-signing Sparkle sub-components…"
+echo "▶ Re-signing Sparkle sub-components..."
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 for bin in \
   "$SPARKLE/XPCServices/Downloader.xpc/Contents/MacOS/Downloader" \
@@ -87,12 +87,12 @@ for bin in \
 done
 
 # ── Re-sign main app with clean entitlements (strips injected get-task-allow) ─
-echo "▶ Re-signing Mira.app…"
+echo "▶ Re-signing Mira.app..."
 codesign --force --sign "$SIGN_ID" --timestamp --options=runtime \
   --entitlements "$ENTITLEMENTS" "$APP"
 
 # ── Verify code signature (pre-notarization) ─────────────────────────────────
-echo "▶ Verifying signature…"
+echo "▶ Verifying signature..."
 codesign --verify --deep --strict "$APP" \
   || { echo "ERROR: Code signature verification failed."; exit 1; }
 
@@ -101,7 +101,7 @@ echo "▶ Packaging $ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 # ── Notarize zip ──────────────────────────────────────────────────────────────
-echo "▶ Notarizing zip (this takes 1–5 minutes)…"
+echo "▶ Notarizing zip (this takes 1–5 minutes)..."
 xcrun notarytool submit "$ZIP" \
   --key "$API_KEY" \
   --key-id "$API_KEY_ID" \
@@ -109,13 +109,13 @@ xcrun notarytool submit "$ZIP" \
   --wait
 
 # ── Staple app + repackage zip ────────────────────────────────────────────────
-echo "▶ Stapling…"
+echo "▶ Stapling..."
 xcrun stapler staple "$APP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
 # ── DMG (for website download) ───────────────────────────────────────────────
 DMG="Mira-$VERSION.dmg"
-rm -f "$DMG"   # create-dmg's hdiutil convert fails ("File exists") if it's there
+rm -f "${DMG}"   # create-dmg's hdiutil convert fails ("File exists") if it's there
 echo "▶ Creating ${DMG}..."
 create-dmg \
   --volname "Mira" \
@@ -126,26 +126,26 @@ create-dmg \
   --icon "Mira.app" 160 185 \
   --hide-extension "Mira.app" \
   --app-drop-link 440 185 \
-  "$DMG" "$APP"
+  "${DMG}" "$APP"
 
 # Sign the DMG itself before notarizing. Without this the disk image has no code
 # signature, so even after notarize+staple `spctl -a -t open` reports "no usable
 # signature" and a downloaded .dmg can trip Gatekeeper. Sign → notarize → staple.
-echo "▶ Signing $DMG…"
-codesign --force --sign "$SIGN_ID" --timestamp "$DMG"
+echo "▶ Signing ${DMG}..."
+codesign --force --sign "$SIGN_ID" --timestamp "${DMG}"
 
-echo "▶ Notarizing $DMG…"
-xcrun notarytool submit "$DMG" \
+echo "▶ Notarizing ${DMG}..."
+xcrun notarytool submit "${DMG}" \
   --key "$API_KEY" \
   --key-id "$API_KEY_ID" \
   --issuer "$API_ISSUER" \
   --wait
 
-echo "▶ Stapling $DMG…"
-xcrun stapler staple "$DMG"
+echo "▶ Stapling ${DMG}..."
+xcrun stapler staple "${DMG}"
 
 echo ""
-echo "✅  $ZIP (Sparkle) and $DMG (website) are ready."
+echo "✅  $ZIP (Sparkle) and ${DMG} (website) are ready."
 echo ""
 echo "Next steps:"
 echo "  1. Upload $ZIP to GitHub → Releases → v$VERSION"

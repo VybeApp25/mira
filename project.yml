@@ -49,6 +49,10 @@ targets:
         SUPublicEDKey: "2iBo+zLdYngL6mFsqVQCgTsWpJMjBULTaB5TtTsC/Bs="
         SUEnableAutomaticChecks: true
         SUAutomaticallyUpdate: false
+        # Custom URL scheme for the Apple web-OAuth callback (mira://auth-callback)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.trevonbarbour.mira
+            CFBundleURLSchemes: [mira]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trevonbarbour.mira
