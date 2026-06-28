@@ -127,6 +127,12 @@ create-dmg \
   --app-drop-link 440 185 \
   "$DMG" "$APP"
 
+# Sign the DMG itself before notarizing. Without this the disk image has no code
+# signature, so even after notarize+staple `spctl -a -t open` reports "no usable
+# signature" and a downloaded .dmg can trip Gatekeeper. Sign → notarize → staple.
+echo "▶ Signing $DMG…"
+codesign --force --sign "$SIGN_ID" --timestamp "$DMG"
+
 echo "▶ Notarizing $DMG…"
 xcrun notarytool submit "$DMG" \
   --key "$API_KEY" \
