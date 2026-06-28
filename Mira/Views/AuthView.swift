@@ -36,6 +36,18 @@ struct AuthView: View {
     /// In sign-up mode, account creation (email or Apple) requires consent.
     private var consentRequiredButMissing: Bool { mode == .signUp && !agreedToTerms }
 
+    /// Whether to surface the "Sign in with Apple" button. Default OFF: the
+    /// Supabase Apple provider is disabled server-side, so the button would fail
+    /// silently. A `mira_apple_signin_enabled` UserDefaults override flips it on
+    /// (for testing) without a rebuild; change the default to `true` to ship it
+    /// once the provider + Apple Services ID are configured.
+    static var appleSignInEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "mira_apple_signin_enabled") != nil {
+            return UserDefaults.standard.bool(forKey: "mira_apple_signin_enabled")
+        }
+        return false
+    }
+
     var body: some View {
         if mode == .confirmEmail {
             confirmEmailView
@@ -127,30 +139,38 @@ struct AuthView: View {
             .disabled(!canSubmit)
             .padding(.top, 14)
 
-            HStack(spacing: 10) {
-                Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
-                Text("or").font(.system(size: 11)).foregroundColor(.white.opacity(0.30))
-                Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
-            }
-            .padding(.top, 14)
-
-            SignInWithAppleButton(.continue, onRequest: { request in
-                request.requestedScopes = [.fullName, .email]
-            }, onCompletion: { result in
-                switch result {
-                case .success(let auth):
-                    AccountService.shared.handleAppleAuthorization(auth)
-                case .failure:
-                    break
+            // Apple Sign-In is hidden until the Supabase Apple provider is
+            // enabled + the Apple Services ID / key are configured server-side.
+            // Until then the button would fail silently, so we don't show it (or
+            // the "or" divider). Flip it on with no rebuild via:
+            //   defaults write com.trevonbarbour.mira mira_apple_signin_enabled -bool YES
+            // and make it the shipped default by changing appleSignInEnabled below.
+            if Self.appleSignInEnabled {
+                HStack(spacing: 10) {
+                    Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
+                    Text("or").font(.system(size: 11)).foregroundColor(.white.opacity(0.30))
+                    Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1)
                 }
-            })
-            .signInWithAppleButtonStyle(.white)
-            .frame(height: 42)
-            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .padding(.top, 8)
-            // Apple sign-in creates an account too — require the same consent.
-            .disabled(consentRequiredButMissing)
-            .opacity(consentRequiredButMissing ? 0.45 : 1)
+                .padding(.top, 14)
+
+                SignInWithAppleButton(.continue, onRequest: { request in
+                    request.requestedScopes = [.fullName, .email]
+                }, onCompletion: { result in
+                    switch result {
+                    case .success(let auth):
+                        AccountService.shared.handleAppleAuthorization(auth)
+                    case .failure:
+                        break
+                    }
+                })
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .padding(.top, 8)
+                // Apple sign-in creates an account too — require the same consent.
+                .disabled(consentRequiredButMissing)
+                .opacity(consentRequiredButMissing ? 0.45 : 1)
+            }
 
             Button {
                 withAnimation { mode = (mode == .signUp ? .signIn : .signUp); error = nil }
