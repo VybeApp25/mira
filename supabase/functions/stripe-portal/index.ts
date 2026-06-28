@@ -11,7 +11,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { CORS, json, requireUser } from "../_shared/auth.ts";
 
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY")!;
-const RETURN_URL    = Deno.env.get("STRIPE_PORTAL_RETURN_URL") ?? "https://miraapp.ai";
+const RETURN_URL    = Deno.env.get("STRIPE_PORTAL_RETURN_URL") ?? "https://getmira.today";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
