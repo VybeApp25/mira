@@ -36,16 +36,17 @@ struct AuthView: View {
     /// In sign-up mode, account creation (email or Apple) requires consent.
     private var consentRequiredButMissing: Bool { mode == .signUp && !agreedToTerms }
 
-    /// Whether to surface the "Sign in with Apple" button. Default OFF: the
-    /// Supabase Apple provider is disabled server-side, so the button would fail
-    /// silently. A `mira_apple_signin_enabled` UserDefaults override flips it on
-    /// (for testing) without a rebuild; change the default to `true` to ship it
-    /// once the provider + Apple Services ID are configured.
+    /// Whether to surface the "Sign in with Apple" button. Now ON: the Supabase
+    /// Apple provider is enabled, the App ID has the Sign in with Apple
+    /// capability, and a Developer ID build signed with the applesignin
+    /// entitlement + embedded profile was verified to notarize (2026-06-28). A
+    /// `mira_apple_signin_enabled` UserDefaults override can force it off if
+    /// needed.
     static var appleSignInEnabled: Bool {
         if UserDefaults.standard.object(forKey: "mira_apple_signin_enabled") != nil {
             return UserDefaults.standard.bool(forKey: "mira_apple_signin_enabled")
         }
-        return false
+        return true
     }
 
     var body: some View {
