@@ -55,19 +55,23 @@ struct NotchOnboardingView: View {
             )
 
         case .voice:
-            demoCard(
-                icon: "mic.fill",
-                color: Color(red: 0.28, green: 0.72, blue: 1.0),
-                headline: "Voice, always on",
-                subtitle: "Hold ⌃⌥ anywhere to talk.\nNo switching apps. No typing."
-            )
+            if manager.isDemoActive {
+                VoiceWaveformCard()
+            } else {
+                demoCard(
+                    icon: "mic.fill",
+                    color: Color(red: 0.28, green: 0.72, blue: 1.0),
+                    headline: "Voice, always on",
+                    subtitle: "Hold ⌃⌥V anywhere to talk.\nNo switching apps. No typing."
+                )
+            }
 
         case .screenGuidance:
             demoCard(
                 icon: "cursorarrow.rays",
                 color: Color(red: 1.0, green: 0.65, blue: 0.20),
                 headline: "I see your screen",
-                subtitle: "Draw on anything and ask me.\nI'll walk you through it."
+                subtitle: "Hold ⌃⌥D to draw on anything.\nI'll walk you through it."
             )
 
         case .autonomy:
@@ -79,12 +83,16 @@ struct NotchOnboardingView: View {
             )
 
         case .agents:
-            demoCard(
-                icon: "gearshape.2.fill",
-                color: Color(red: 1.0, green: 0.35, blue: 0.50),
-                headline: "Background agents",
-                subtitle: "Build sites, research, batch tasks.\nI work while you do other things."
-            )
+            if manager.isDemoActive {
+                AgentProgressCard()
+            } else {
+                demoCard(
+                    icon: "gearshape.2.fill",
+                    color: Color(red: 1.0, green: 0.35, blue: 0.50),
+                    headline: "Background agents",
+                    subtitle: "Build sites, research, batch tasks.\nI work while you do other things."
+                )
+            }
 
         case .signIn:
             VStack(spacing: 10) {
@@ -301,6 +309,118 @@ struct MiraEyesView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
             withAnimation(.spring(response: 0.20, dampingFraction: 0.68)) { joyScale = 1.0 }
+        }
+    }
+}
+
+// MARK: - Voice Waveform Demo Card
+
+struct VoiceWaveformCard: View {
+    private let barCount = 20
+    private let accentColor = Color(red: 0.28, green: 0.72, blue: 1.0)
+    @State private var heights: [CGFloat] = Array(repeating: 4, count: 20)
+    @State private var timer: Timer?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Animated bars
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<barCount, id: \.self) { i in
+                    Capsule()
+                        .fill(accentColor.opacity(0.7 + 0.3 * Double(heights[i]) / 28))
+                        .frame(width: 3, height: heights[i])
+                        .animation(.easeInOut(duration: 0.18), value: heights[i])
+                }
+            }
+            .frame(height: 32)
+
+            Text("Listening…")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(accentColor)
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { _ in
+                Task { @MainActor in
+                    for i in 0..<barCount {
+                        heights[i] = CGFloat.random(in: 4...28)
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+}
+
+// MARK: - Agent Progress Demo Card
+
+struct AgentProgressCard: View {
+    private let accentColor = Color(red: 1.0, green: 0.35, blue: 0.50)
+    @State private var progress: CGFloat = 0
+    @State private var rotation: Double  = 0
+    @State private var phase: Int        = 0  // 0=running 1=done
+
+    private let phases = ["Building structure…", "Writing content…", "Deploying…", "Done ✓"]
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // Spinning gear or checkmark
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                if phase < 3 {
+                    Image(systemName: "gearshape.2.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .rotationEffect(.degrees(rotation))
+                } else {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Color(red: 0.18, green: 0.80, blue: 0.44))
+                }
+            }
+
+            Text(phases[min(phase, phases.count - 1)])
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.75))
+                .animation(.easeInOut(duration: 0.25), value: phase)
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.10)).frame(height: 4)
+                    Capsule()
+                        .fill(phase < 3 ? accentColor : Color(red: 0.18, green: 0.80, blue: 0.44))
+                        .frame(width: geo.size.width * progress, height: 4)
+                }
+            }
+            .frame(height: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear { runDemo() }
+    }
+
+    private func runDemo() {
+        // Spin gear
+        withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+            rotation = 360
+        }
+        // Fill progress bar over ~3s in segments
+        let milestones: [(Double, CGFloat, Int)] = [
+            (0.6, 0.32, 0),
+            (1.1, 0.58, 1),
+            (1.7, 0.80, 2),
+            (2.3, 1.00, 3),
+        ]
+        for (delay, prog, ph) in milestones {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.easeInOut(duration: 0.5)) { progress = prog }
+                phase = ph
+            }
         }
     }
 }

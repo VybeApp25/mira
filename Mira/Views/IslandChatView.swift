@@ -192,7 +192,6 @@ struct IslandChatView: View {
     private func wireRealtime() {
         realtime.onUserMessage = { text in
             messages.append(ChatMessage(role: .user, text: text))
-            ConversationStore.shared.save(role: "user", text: text)
         }
         realtime.onAIMessage = { text in
             // Finalise the streaming placeholder if present; otherwise append new message
@@ -203,7 +202,6 @@ struct IslandChatView: View {
                 messages.append(ChatMessage(role: .mira, text: text))
             }
             streamingMsgId = nil
-            ConversationStore.shared.save(role: "mira", text: text)
         }
     }
 

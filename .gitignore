@@ -13,3 +13,18 @@ AgentService/dist/
 
 # Local xcodebuild output
 build_local/
+build_run/
+build_qa/
+build_release/
+
+# Release artifacts (notarized output of build_release.sh)
+Mira-*.dmg
+Mira-*.zip
+rw.*.dmg
+
+# Local tooling / agent state
+.claude/
+.agents/
+.pi/
+.hermes/
+supabase/.temp/
