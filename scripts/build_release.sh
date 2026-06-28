@@ -86,19 +86,6 @@ for bin in \
   fi
 done
 
-# ── Embed the provisioning profile ───────────────────────────────────────────
-# Authorizes restricted entitlements (Sign in with Apple) for this Developer ID
-# app. The profile only carries the App ID; notarization validates the
-# applesignin entitlement against the App ID's enabled capability. Verified
-# Accepted by notarytool 2026-06-28.
-PROFILE="Mira.provisionprofile"
-if [ -f "$PROFILE" ]; then
-  echo "▶ Embedding provisioning profile…"
-  cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
-else
-  echo "WARNING: $PROFILE not found — Sign in with Apple will fail to notarize."
-fi
-
 # ── Re-sign main app with clean entitlements (strips injected get-task-allow) ─
 echo "▶ Re-signing Mira.app…"
 codesign --force --sign "$SIGN_ID" --timestamp --options=runtime \
@@ -128,6 +115,7 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 
 # ── DMG (for website download) ───────────────────────────────────────────────
 DMG="Mira-$VERSION.dmg"
+rm -f "$DMG"   # create-dmg's hdiutil convert fails ("File exists") if it's there
 echo "▶ Creating ${DMG}..."
 create-dmg \
   --volname "Mira" \
