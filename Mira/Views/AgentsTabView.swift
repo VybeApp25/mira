@@ -27,6 +27,7 @@ struct AgentsTabView: View {
     @State private var websiteMode: WebsiteBuildMode = .pro
     @State private var referenceImagePaths: [String] = []
     @State private var knownCompletedIds: Set<UUID> = []
+    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,6 +51,7 @@ struct AgentsTabView: View {
             )
             .frame(width: 560, height: 460)
         }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
         .onAppear {
             knownCompletedIds = Set(jobStore.completedJobs.map(\.id))
         }
@@ -409,8 +411,7 @@ struct AgentsTabView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
             Button {
-                // Opens the pricing page — replace with real URL
-                NSWorkspace.shared.open(URL(string: "https://mira.ai/pricing")!)
+                showPaywall = true
             } label: {
                 Text("Upgrade to Pro")
                     .font(.system(size: 13, weight: .semibold))

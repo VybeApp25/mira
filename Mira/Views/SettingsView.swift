@@ -13,6 +13,7 @@ struct SettingsView: View {
     @ObservedObject private var realtime = RealtimeVoiceService.shared
     @ObservedObject private var account  = AccountService.shared
     @ObservedObject private var quota    = QuotaService.shared
+    @ObservedObject private var entitlements = EntitlementService.shared
     @Environment(\.dismiss) var dismiss
     @State private var keyInput      = ""
     @State private var saved         = false
@@ -26,6 +27,7 @@ struct SettingsView: View {
     @State private var showProposalMetrics = false
     @State private var showReliability     = false
     @State private var showKnowledgeImport = false
+    @State private var showPaywall = false
     @ObservedObject private var updater = UpdateService.shared
     @AppStorage(HoverPreferences.companionKey)   private var screenCompanionEnabled = true
     @AppStorage(HoverPreferences.sensitivityKey) private var sensitivityRaw = "balanced"
@@ -143,6 +145,7 @@ struct SettingsView: View {
             agentFolderPath = UserDefaults.standard.string(forKey: "mira_agent_folder") ?? Self.defaultAgentFolder
         }
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
+        .sheet(isPresented: $showPaywall)         { PaywallView() }
         .sheet(isPresented: $showIntegrations)    { IntegrationsView() }
         .sheet(isPresented: $showProposalMetrics) { ProposalMetricsView() }
         .sheet(isPresented: $showReliability)     { ReliabilityDashboardView() }
@@ -287,6 +290,37 @@ struct SettingsView: View {
                 .padding(10)
                 .background(Color.green.opacity(0.08))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.20)))
+                .cornerRadius(8)
+
+                // Plan + upgrade / manage
+                HStack(spacing: 8) {
+                    Image(systemName: entitlements.plan == .free ? "sparkles" : "crown.fill")
+                        .foregroundColor(accent)
+                        .font(.system(size: 13))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(entitlements.plan.displayName) plan")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(entitlements.plan == .free
+                             ? "Upgrade for background agents & more voice"
+                             : "Manage or change your subscription")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.40))
+                    }
+                    Spacer()
+                    Button(entitlements.plan == .free ? "Upgrade" : "Manage") {
+                        showPaywall = true
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(accent)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.08)))
                 .cornerRadius(8)
             } else {
                 Text("Sign in to use Mira — chat, voice, and agents run through Mira's secure backend.")
