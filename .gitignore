@@ -27,4 +27,6 @@ rw.*.dmg
 .agents/
 .pi/
 .hermes/
+.netlify/
+skills-lock.json
 supabase/.temp/
