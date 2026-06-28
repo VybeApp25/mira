@@ -4,12 +4,12 @@
         <title>Mira</title>
         <item>
             <title>1.0.0</title>
-            <pubDate>Fri, 26 Jun 2026 12:21:29 -0400</pubDate>
+            <pubDate>Sun, 28 Jun 2026 17:57:07 -0400</pubDate>
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/Mira-1.0.0.zip" length="17681766" type="application/octet-stream" sparkle:edSignature="VctGwR2Fy7H96iquWCfFBiGuz1gY2/PXQsnN2UE3wkA1ErRzNK0DwdR6dJW/kvo3nsyVL8it0TgVHMY7i6OMDw=="/>
+            <enclosure url="https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/Mira-1.0.0.zip" length="17675989" type="application/octet-stream" sparkle:edSignature="Q5dnRPN/FQl/5hxbLahXEZMeeIJBSNAfYvHkhdfuwfuJme2k8Ik6zjisSCmT9Es/HoUbNxf2bECcf1bF9/bTCw=="/>
         </item>
     </channel>
 </rss>
