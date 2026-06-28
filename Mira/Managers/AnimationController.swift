@@ -48,6 +48,7 @@ final class AnimationController: ObservableObject {
 
     func expand() {
         guard state != .expanded else { return }
+        NSLog("[Mira] expand() called from:\n%@", Thread.callStackSymbols.prefix(10).joined(separator: "\n"))
         state = .expanded
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
             self?.contentVisible = true

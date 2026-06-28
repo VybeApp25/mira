@@ -19,6 +19,7 @@ final class NotchOnboardingManager: ObservableObject {
     @Published private(set) var isActive    = false
     @Published private(set) var step: Step  = .welcome
     @Published private(set) var stepGranted = false   // triggers joy eye-animation
+    @Published private(set) var isDemoActive = false  // triggers animated demo card state
 
     private weak var animController: AnimationController?
     private var flowTask: Task<Void, Never>?
@@ -85,26 +86,40 @@ final class NotchOnboardingManager: ObservableObject {
 
         // Voice
         step = .voice
-        await narrator.speakAndWait("My voice is always on. Hold Control-Option anywhere on your Mac and I wake up instantly, ready to listen. Ask me to write an email, summarise what's on your screen, set a reminder, look something up — I'll answer and act. No switching apps, no typing, no waiting.")
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        isDemoActive = true
+        await narrator.speakAndWait("My voice is always on. Hold Control-Option-V anywhere on your Mac and I wake up instantly, ready to listen. Ask me to write an email, summarise what's on your screen, set a reminder, look something up — I'll answer and act. No switching apps, no typing, no waiting.")
+        // Hold waveform visible briefly after narration ends
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        isDemoActive = false
+        try? await Task.sleep(nanoseconds: 200_000_000)
         guard !Task.isCancelled else { return }
 
         // Screen Guidance
         step = .screenGuidance
-        await narrator.speakAndWait("I can see exactly what you're looking at too. Hold Control-Option-V and draw on your screen to show me anything — a button you can't find, a form that's confusing, a chart you want explained. I'll point to the exact thing and walk you through it step by step, in any app.")
+        // Launch overlay concurrent with narration so the spotlight appears mid-speech
+        async let _overlay: Void = OnboardingDemoOverlay.shared.showScreenGuidanceDemo()
+        await narrator.speakAndWait("I can see exactly what you're looking at too. Hold Control-Option-D and draw on your screen to show me anything — a button you can't find, a form that's confusing, a chart you want explained. I'll point to the exact thing and walk you through it step by step, in any app.")
+        _ = await _overlay
         try? await Task.sleep(nanoseconds: 250_000_000)
         guard !Task.isCancelled else { return }
 
         // Autonomy
         step = .autonomy
-        await narrator.speakAndWait("Here's where I'm different from every other assistant. I can actually take over your Mac and do things for you. Fill out a form. Click through a settings screen. Navigate a complex workflow. You describe the task, I execute it — you watch it happen in real time, or go grab a coffee while I handle it.")
+        await narrator.speakAndWait("Here's where I'm different from every other assistant. I can actually take over your Mac and do things for you. Fill out a form. Click through a settings screen. Navigate a complex workflow. You describe the task, I execute it — you watch it happen in real time.")
+        // Now actually move the cursor while user watches
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+        await OnboardingDemoOverlay.shared.showAutonomyDemo()
         try? await Task.sleep(nanoseconds: 250_000_000)
         guard !Task.isCancelled else { return }
 
         // Agents
         step = .agents
+        isDemoActive = true
         await narrator.speakAndWait("And for bigger projects, I run background agents. Ask me to build a landing page, research competitors, process a batch of files, or connect your tools. I'll spin up an agent, work in the background, and report back when it's done. I'm always working, even when you're not watching.")
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        isDemoActive = false
+        try? await Task.sleep(nanoseconds: 200_000_000)
         guard !Task.isCancelled else { return }
 
         // Microphone
@@ -164,7 +179,8 @@ final class NotchOnboardingManager: ObservableObject {
     }
 
     private func finishOnboarding() {
-        isActive = false
+        isActive      = false
+        isDemoActive  = false
         animController?.isOnboarding = false
         animController?.collapse()
         OnboardingService.shared.completeSetup()

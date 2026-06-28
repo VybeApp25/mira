@@ -84,6 +84,13 @@ final class NotchManager {
         // Pre-warm the Realtime WebSocket so the first PTT is instant.
         // Mirrors HeyClicky's keep-warm behavior — session is healthy before the user speaks.
         RealtimeVoiceService.shared.prewarm()
+        // Restore always-on voice if it was active before the last quit.
+        if UserDefaults.standard.bool(forKey: "mira_always_on") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                RealtimeVoiceService.shared.connectAlwaysOn()
+                NSLog("[Mira] always-on voice restored from previous session")
+            }
+        }
         Task { await QuotaService.shared.refreshQuota() }
         MiraState.shared = miraState
         CronScheduler.shared.start()
@@ -99,30 +106,39 @@ final class NotchManager {
         // All observers use queue: .main, so MainActor.assumeIsolated is sound —
         // it gives the closures static MainActor isolation instead of crossing
         // the actor boundary unchecked.
-        NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let alreadyExpanded = self.animController.state == .expanded
-                self.expandForShortcut()
-                if !alreadyExpanded {
-                    // IslandChatView is inside `if isExpanded` — it wasn't in the hierarchy yet.
-                    // Re-post after SwiftUI renders expandedContent so the view catches the notification.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                        NotificationCenter.default.post(name: .miraActivateVoice, object: nil)
-                    }
-                }
-            }
+        // Voice shortcut — PTT runs in the closed notch pill. The pill shows listening/
+        // thinking/speaking via SharedStatusView. The island only opens when the user
+        // hovers the notch. No expand on key-down.
+        // IslandChatView observes .miraActivateVoice directly and handles it when
+        // already in the hierarchy (island expanded by hover before/during PTT).
+        NotificationCenter.default.addObserver(forName: .miraActivateVoice, object: nil, queue: .main) { _ in
+            // intentionally no-op — mic capture is driven by .miraPushToTalkBegan; island stays closed
+            NSLog("[Mira] miraActivateVoice received — NOT expanding (closed-notch PTT)")
         }
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.expandForShortcut() }
         }
 
-        // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor
-        NotificationCenter.default.addObserver(forName: .miraPushToTalkBegan, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { RealtimeVoiceService.shared.beginPushToTalk() }
+        // PTT — stays in the closed notch. Pause hover detection so dwell-triggered
+        // insights can't auto-expand the island while the user is speaking.
+        NotificationCenter.default.addObserver(forName: .miraPushToTalkBegan, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.pttActive = true
+                self?.insightManager?.cancel()
+                self?.hoverDetection.pause()
+                RealtimeVoiceService.shared.beginPushToTalk()
+                NSLog("[Mira] PTT began — hover expand suppressed")
+            }
         }
-        NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { RealtimeVoiceService.shared.endPushToTalk() }
+        NotificationCenter.default.addObserver(forName: .miraPushToTalkEnded, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.pttActive = false
+                RealtimeVoiceService.shared.endPushToTalk()
+                if self?.animController.state == .collapsed {
+                    self?.hoverDetection.resume()
+                }
+                NSLog("[Mira] PTT ended — hover expand re-enabled")
+            }
         }
         // Draw-on-screen spatial context (⌃⌥D) — toggle the freehand draw overlay
         NotificationCenter.default.addObserver(forName: .miraDrawModeToggled, object: nil, queue: .main) { _ in
@@ -205,6 +221,7 @@ final class NotchManager {
     }
 
     private func expandForShortcut() {
+        NSLog("[Mira] expandForShortcut called from:\n%@", Thread.callStackSymbols.prefix(8).joined(separator: "\n"))
         collapseGeneration += 1   // invalidate any in-flight collapse retries
         collapseWork?.cancel()
         collapseWork = nil
@@ -230,12 +247,20 @@ final class NotchManager {
     // >0 while a multi-step flow has pinned the island open (see .miraPinIsland).
     // Suppresses the hover-exit auto-collapse so the user can leave Mira and return.
     private var pinCount = 0
+    // True while PTT is active — suppresses hover-triggered expand so the notch
+    // stays closed even if the cursor drifts near the notch while the user speaks.
+    private var pttActive = false
 
     private func wireHover() {
         hoverManager.update(activationRect: collapsedZone())
 
         hoverManager.onEnter = { [weak self] in
             guard let self else { return }
+            // Never expand on cursor proximity while PTT is in progress.
+            guard !pttActive else {
+                NSLog("[Mira] hoverManager.onEnter suppressed — PTT active")
+                return
+            }
             collapseGeneration += 1   // invalidate any pending collapse retries
             collapseWork?.cancel()
             collapseWork = nil
