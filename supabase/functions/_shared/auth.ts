@@ -91,3 +91,54 @@ export async function meter(
     });
   } catch (_) { /* metering must never fail the user's request */ }
 }
+
+// ── Voice (Realtime) throttle ────────────────────────────────────────────────
+// Realtime audio is the most expensive per-user COGS and is NOT token-metered
+// through `usage`, so it needs its own daily cap. Enforced at mint time so a
+// free user can't burn unlimited audio minutes. See migration
+// 20260628120000_voice_usage_quota.sql.
+
+/** Throws 429 `voice_quota_exceeded` if the user is already over today's voice
+ *  allowance (either the session-count cap OR the seconds cap) for their plan.
+ *  Caps come from the SQL `daily_voice_caps(plan)` — the server-side source of
+ *  truth a tampered client cannot raise. */
+export async function checkVoiceQuota(userId: string, plan: Plan): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: caps } = await admin.rpc("daily_voice_caps", { p_plan: plan });
+  const sessionLimit = Number(caps?.sessions ?? 5);
+  const secondsLimit = Number(caps?.seconds ?? 600);
+
+  const { data } = await admin
+    .from("voice_usage").select("sessions, seconds")
+    .eq("user_id", userId).eq("window_start", today)
+    .maybeSingle();
+
+  const sessionsUsed = Number(data?.sessions ?? 0);
+  const secondsUsed  = Number(data?.seconds  ?? 0);
+
+  const overSessions = sessionLimit >= 0 && sessionsUsed >= sessionLimit;
+  const overSeconds  = secondsLimit >= 0 && secondsUsed  >= secondsLimit;
+  if (overSessions || overSeconds) {
+    throw json({
+      error: "voice_quota_exceeded",
+      plan,
+      sessions_used: sessionsUsed, sessions_limit: sessionLimit,
+      seconds_used:  secondsUsed,  seconds_limit:  secondsLimit,
+    }, 429);
+  }
+}
+
+/** Records voice usage (best-effort). `sessions` is +1 at mint; `seconds` is the
+ *  client-reported session duration on teardown. Never blocks the response. */
+export async function addVoiceUsage(
+  userId: string, sessions: number, seconds: number,
+): Promise<void> {
+  try {
+    await admin.rpc("add_voice_usage", {
+      p_user: userId,
+      p_sessions: Math.max(0, Math.round(sessions)),
+      p_seconds:  Math.max(0, Math.round(seconds)),
+    });
+  } catch (_) { /* metering must never fail the user's request */ }
+}

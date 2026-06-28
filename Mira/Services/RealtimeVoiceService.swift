@@ -164,6 +164,22 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     private var retryCount      = 0
     private var reconnectTask:  Task<Void, Never>?
 
+    // MARK: Private — Voice usage reporting (free-tier throttle)
+
+    // Wall-clock start of the current healthy session; on teardown the elapsed
+    // seconds are POSTed to report-voice-usage so the server's daily seconds cap
+    // accumulates real usage. See migration 20260628120000_voice_usage_quota.sql.
+    private var sessionStartedAt: Date?
+
+    // Result of an ephemeral-token mint — lets openSocket distinguish a daily
+    // voice-cap rejection (429) from a generic failure, so the UI can show an
+    // upgrade-friendly message instead of "sign in".
+    private enum MintResult {
+        case token(String)
+        case quotaExceeded
+        case failed
+    }
+
     // MARK: Private — Always-on
 
     private var isAlwaysOn = false
@@ -175,6 +191,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
     private var pttActive:        Bool               = false
     private var pttTailTask:      Task<Void, Never>?
+    private var pttPeakPower:     Float              = 0  // peak RMS during current PTT hold
     // True after session.updated — gates the PTT commit so audio is never sent to an unready socket
     private var sessionHealthy:   Bool               = false
     // Keeps the WebSocket warm for 3 min after a PTT response so next PTT skips cold-start
@@ -255,8 +272,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         // screen while talking. The annotated capture is emitted at end-of-turn
         // (flushed in the PTT tail, just before commit). The begin-time snapshot below
         // still sends a clean baseline.
-        pttDrawCoupled = screenContextEnabled && drawContextEnabled
-        if pttDrawCoupled { ScreenDrawController.shared.begin(mode: .voiceCoupled) }
+        // Voice-coupled draw is opt-in — only arm when user explicitly enabled it in Settings.
+        // Default is off so ⌃⌥V (voice) and ⌃⌥D (draw) stay independent.
+        pttDrawCoupled = false
+        pttPeakPower   = 0
 
         if webSocket != nil && sessionHealthy {
             // Warm session (or warm standby) — mic was stopped; restart it and clear any stale buffer.
@@ -325,10 +344,18 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             }
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                NSLog("[MiraRealtime] PTT end: session healthy — committing")
-                AudioCueService.shared.playTextSend()
+                let hadSpeech = self.pttPeakPower > 0.01
+                NSLog("[MiraRealtime] PTT end: session healthy — committing (peakPower=%.4f hadSpeech=%@)",
+                      self.pttPeakPower, hadSpeech ? "YES" : "NO")
                 self.emit(["type": "input_audio_buffer.commit"])
-                self.emit(["type": "response.create"])
+                if hadSpeech {
+                    AudioCueService.shared.playTextSend()
+                    self.emit(["type": "response.create"])
+                } else {
+                    // No speech detected — clear buffer, no response
+                    self.emit(["type": "input_audio_buffer.clear"])
+                    self.state = .idle
+                }
             }
         }
     }
@@ -351,19 +378,37 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         // Prefer the minted ephemeral token. Fall back to the embedded key ONLY in
         // direct mode; in proxy mode a mint failure must NOT leak the raw key —
         // refuse to connect instead.
-        guard let authToken = await fetchEphemeralToken()
-                ?? (MiraBackend.useProxy ? nil : AppSecrets.openAIKey) else {
-            // Don't leave the UI hanging on "Connecting" forever: the mint failed
-            // (no valid signed-in session). Stop any reconnect/always-on loop and
-            // surface an actionable error.
-            NSLog("[MiraRealtime] mint failed (proxy mode) — surfacing sign-in error")
+        let authToken: String
+        switch await fetchEphemeralToken() {
+        case .token(let t):
+            authToken = t
+        case .quotaExceeded:
+            // Daily voice cap hit — stop the reconnect/always-on loop and show an
+            // upgrade-friendly message rather than retrying (which would just 429
+            // again and burn the cap-check on the server).
+            NSLog("[MiraRealtime] mint blocked — daily voice quota exceeded")
             shouldReconnect  = false
             isAlwaysOn       = false
             isAlwaysOnActive = false
             reconnectTask?.cancel(); reconnectTask = nil
             teardown()
-            state = .error("Sign in to use voice")
+            state = .error("Daily voice limit reached — upgrade for more.")
             return
+        case .failed:
+            guard !MiraBackend.useProxy, !AppSecrets.openAIKey.isEmpty else {
+                // Don't leave the UI hanging on "Connecting" forever: the mint failed
+                // (no valid signed-in session). Stop any reconnect/always-on loop and
+                // surface an actionable error.
+                NSLog("[MiraRealtime] mint failed (proxy mode) — surfacing sign-in error")
+                shouldReconnect  = false
+                isAlwaysOn       = false
+                isAlwaysOnActive = false
+                reconnectTask?.cancel(); reconnectTask = nil
+                teardown()
+                state = .error("Sign in to use voice")
+                return
+            }
+            authToken = AppSecrets.openAIKey
         }
 
         guard let url = URL(string: "wss://api.openai.com/v1/realtime?model=\(model)") else { return }
@@ -380,9 +425,9 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     // Mints a short-lived ephemeral token via the Supabase edge function so the
     // raw OpenAI key never travels over the WebSocket connection (matches HeyClicky's
     // /agent/session-token backend pattern). Falls back to raw key on any failure.
-    private func fetchEphemeralToken() async -> String? {
+    private func fetchEphemeralToken() async -> MintResult {
         let endpoint = "\(AppSecrets.supabaseURL)/functions/v1/mint-realtime-token"
-        guard let url = URL(string: endpoint) else { return nil }
+        guard let url = URL(string: endpoint) else { return .failed }
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -397,17 +442,43 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         do {
             let (data, resp) = try await MiraBackend.proxyData(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            // 429 = daily voice cap reached (server-authoritative). Distinct from a
+            // generic failure so the UI can prompt an upgrade rather than sign-in.
+            if status == 429 {
+                NSLog("[MiraRealtime] mint-token: daily voice quota exceeded (429)")
+                return .quotaExceeded
+            }
+            guard status == 200,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let token = json["token"] as? String, !token.isEmpty else {
-                NSLog("[MiraRealtime] mint-token: bad response, using fallback")
-                return nil
+                NSLog("[MiraRealtime] mint-token: bad response (status %d), using fallback", status)
+                return .failed
             }
             NSLog("[MiraRealtime] ephemeral token minted OK")
-            return token
+            return .token(token)
         } catch {
             NSLog("[MiraRealtime] mint-token failed: %@, using fallback", error.localizedDescription)
-            return nil
+            return .failed
+        }
+    }
+
+    /// Reports the duration of a realtime session to the backend so the daily
+    /// seconds cap accumulates (the soft half of the free-tier voice throttle).
+    /// Best-effort, fire-and-forget — failure never affects the user. Proxy mode
+    /// + signed-in only (direct mode has no server to meter against).
+    private func reportVoiceUsage(seconds: Int) {
+        guard seconds > 0, MiraBackend.useProxy, SupabaseService.shared.isSignedIn else { return }
+        let endpoint = "\(AppSecrets.supabaseURL)/functions/v1/report-voice-usage"
+        guard let url = URL(string: endpoint) else { return }
+        Task.detached {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.addValue(AppSecrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+            req.addValue("Bearer \(MiraBackend.supabaseBearer)", forHTTPHeaderField: "Authorization")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: ["seconds": seconds])
+            _ = try? await MiraBackend.proxyData(for: req)
         }
     }
 
@@ -471,6 +542,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             guard shouldReconnect || isWarmStandby else { teardown(); return }
             retryCount     = 0
             sessionHealthy = true
+            if sessionStartedAt == nil { sessionStartedAt = Date() }
             if isWarmStandby {
                 // Warm standby: session is healthy but mic stays off until PTT fires.
                 // Don't inject history or change state — stay invisible until needed.
@@ -519,6 +591,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let text = event["transcript"] as? String ?? ""
             if !text.isEmpty && !Self.isPhantomTranscript(text) {
                 userDraft = text
+                ConversationStore.shared.save(role: "user", text: text)
                 onUserMessage?(text)
                 // Fire Computer Use element detection in parallel with AI response.
                 // If a UI element is identified, PointToService animates to it.
@@ -589,7 +662,10 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
 
         case "response.output_audio_transcript.done":
             let (cleanText, pt) = Self.extractPointTag(from: aiTranscript)
-            if !cleanText.isEmpty { onAIMessage?(cleanText) }
+            if !cleanText.isEmpty {
+                ConversationStore.shared.save(role: "mira", text: cleanText)
+                onAIMessage?(cleanText)
+            }
             if let pt { PointToService.shared.point(toNormalized: pt) }
             CursorBubbleService.shared.finishStreaming()
 
@@ -980,6 +1056,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         var sumSq: Float = 0
         for i in 0..<count { sumSq += floats[i] * floats[i] }
         let rms = sqrt(sumSq / Float(max(1, count)))
+        if pttActive { pttPeakPower = max(pttPeakPower, rms) }
         let boosted = min(max(rms * 10.2, 0), 1)
 
         Task { @MainActor [weak self] in
@@ -1197,6 +1274,14 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
     }
 
     private func teardown() {
+        // Report this session's duration to the daily seconds cap before resetting.
+        // Reconnects tear down + reopen, so each live segment is reported and the
+        // server sums them — that's correct.
+        if let started = sessionStartedAt {
+            let elapsed = Int(Date().timeIntervalSince(started).rounded())
+            reportVoiceUsage(seconds: elapsed)
+            sessionStartedAt = nil
+        }
         sessionHealthy  = false
         historyInjected = false
         isWarmStandby   = false
