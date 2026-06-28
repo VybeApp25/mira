@@ -245,6 +245,7 @@
 		D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 979DE80CA67152EBCA55AC4D /* MiraToolService.swift */; };
 		D89568F2308BBB94C70027B3 /* ClipboardMonitorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */; };
 		D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7668116B1E1B08C2A630FA1 /* SettingsView.swift */; };
+		FACE0001FACE0001FACE0001 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0002FACE0002FACE0002 /* PaywallView.swift */; };
 		D8F7DE0D6CBE08338593A56F /* NotchGeometryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */; };
 		D9000B1F5D5817FE0E25FB6C /* ProjectEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */; };
 		DAB962DC6E7F0207ABEC93BF /* vercel.md in Resources */ = {isa = PBXBuildFile; fileRef = E916F39A99413681760D61AE /* vercel.md */; };
@@ -568,6 +569,7 @@
 		F71BBE7E8D7EEA7B8AE4D74C /* PointToService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointToService.swift; sourceTree = "<group>"; };
 		F7230251B147A0AA2C01D691 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		F7668116B1E1B08C2A630FA1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FACE0002FACE0002FACE0002 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeService.swift; sourceTree = "<group>"; };
 		F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		F861FAC8802E2F2125CE93E4 /* MiraSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraSkill.swift; sourceTree = "<group>"; };
@@ -969,6 +971,7 @@
 				2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */,
 				E21822F4B90B50BBAF783859 /* ResponseCardView.swift */,
 				F7668116B1E1B08C2A630FA1 /* SettingsView.swift */,
+				FACE0002FACE0002FACE0002 /* PaywallView.swift */,
 				714E5F324015327B7790838A /* SharedStatusView.swift */,
 				9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */,
 				9A431A7E053E44BF6BCF3CC6 /* SkillsTabView.swift */,
@@ -1309,6 +1312,7 @@
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
 				78DC18E55F5011C56CFEE6F9 /* ScreenDrawController.swift in Sources */,
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
+				FACE0001FACE0001FACE0001 /* PaywallView.swift in Sources */,
 				516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */,
 				BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */,
 				29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */,

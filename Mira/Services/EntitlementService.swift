@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 // MARK: - Plan
 
@@ -74,6 +75,10 @@ final class EntitlementService: ObservableObject {
     private let planKey = "mira_subscription_plan"
     private let legacyProKey = "mira_is_pro"
 
+    // Throttles app-activation refreshes; serializes the post-checkout poll.
+    private var lastRefresh = Date.distantPast
+    private var pollTask: Task<Void, Never>?
+
     private init() {
         if let raw = UserDefaults.standard.string(forKey: planKey),
            let saved = SubscriptionPlan(rawValue: raw) {
@@ -82,6 +87,32 @@ final class EntitlementService: ObservableObject {
             // Migrate old isPro flag
             plan = .pro
             persist()
+        }
+        // Refresh the plan whenever the app comes forward — this is how an upgrade
+        // (or cancel) completed in the browser reflects in-app on return.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            guard Date().timeIntervalSince(self.lastRefresh) > 5 else { return }  // debounce
+            self.lastRefresh = Date()
+            Task { await self.fetchAndApplyPlan() }
+        }
+    }
+
+    /// After a checkout/portal action, poll the server for a plan change so the
+    /// upgrade (or cancel) lands without an app restart. Stops as soon as the
+    /// plan differs from `oldPlan`, or after ~2 minutes.
+    func pollForUpgrade(from oldPlan: SubscriptionPlan) {
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            guard let self else { return }
+            for _ in 0..<30 {                                  // 30 × 4s ≈ 2 min
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if Task.isCancelled { return }
+                await self.fetchAndApplyPlan()
+                if self.plan != oldPlan { return }             // change landed
+            }
         }
     }
 

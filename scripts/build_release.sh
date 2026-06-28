@@ -2,13 +2,14 @@
 # Mira release build script
 # Usage: API_ISSUER=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx ./scripts/build_release.sh
 #
-# Prerequisites:
-#   1. Developer ID Application cert in Keychain
-#   2. Fill in DEVELOPMENT_TEAM in project.yml (Release config)
+# Prerequisites (all satisfied as of v1.0.0):
+#   1. Developer ID Application cert in Keychain  ✓ (team 7FD7W8SX34)
+#   2. DEVELOPMENT_TEAM set in project.yml (Release config)  ✓
 #   3. Generate Sparkle keys once: ./Sparkle/bin/generate_keys
-#      → paste public key into project.yml SUPublicEDKey
-#      → keep private key safe (never commit it)
-#   4. App Store Connect API key at ~/Downloads/AuthKey_MML9PK7Y5L.p8
+#      → paste public key into project.yml SUPublicEDKey  ✓
+#      → keep private key safe (Sparkle stores it in the login keychain; never commit it)
+#   4. App Store Connect API key (default ~/Downloads/AuthKey_44WN756492.p8;
+#      override with API_KEY / API_KEY_ID / API_ISSUER env vars)
 #      Find Issuer ID: App Store Connect → Users and Access → Integrations → App Store Connect API
 #
 # After running:
@@ -34,8 +35,15 @@ BUILD=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' Mira/Info.plist)
 TEAM=$(xcodebuild -project Mira.xcodeproj -scheme $SCHEME -configuration Release \
   -showBuildSettings 2>/dev/null | grep ' DEVELOPMENT_TEAM' | awk '{print $3}')
 
-if [[ "$TEAM" == "YOUR_TEAM_ID_HERE" ]]; then
+if [[ -z "$TEAM" || "$TEAM" == "YOUR_TEAM_ID_HERE" ]]; then
   echo "ERROR: Fill in DEVELOPMENT_TEAM in project.yml (Release config) before releasing."
+  exit 1
+fi
+
+# Fail early if the matching Developer ID cert isn't in the keychain — otherwise
+# the build burns minutes before the re-sign step fails.
+if ! security find-identity -v -p codesigning | grep -q "Developer ID Application: .*($TEAM)"; then
+  echo "ERROR: No 'Developer ID Application' cert for team $TEAM in the keychain."
   exit 1
 fi
 
@@ -118,6 +126,12 @@ create-dmg \
   --hide-extension "Mira.app" \
   --app-drop-link 440 185 \
   "$DMG" "$APP"
+
+# Sign the DMG itself before notarizing. Without this the disk image has no code
+# signature, so even after notarize+staple `spctl -a -t open` reports "no usable
+# signature" and a downloaded .dmg can trip Gatekeeper. Sign → notarize → staple.
+echo "▶ Signing $DMG…"
+codesign --force --sign "$SIGN_ID" --timestamp "$DMG"
 
 echo "▶ Notarizing $DMG…"
 xcrun notarytool submit "$DMG" \
