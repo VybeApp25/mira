@@ -37,6 +37,10 @@
 	<string>Mira reads your active browser tab to provide context-aware assistance.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Mira shows your upcoming events in the Home tab.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Mira uses your location to show local weather on the Home tab.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Mira uses your location to show local weather on the Home tab.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mira listens for voice commands.</string>
 	<key>NSPrincipalClass</key>
