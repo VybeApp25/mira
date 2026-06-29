@@ -33,6 +33,10 @@ final class MiraIslandWindowManager {
     // Tall enough for expandedTallH (500) + notch + shadow margin
     static let windowH: CGFloat = 560
 
+    // Above status bar items + system elements; same tier used by DynamicLake /
+    // NotchNook. Extracted so suspend/resume can restore it exactly.
+    static let islandLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
+
     /// When true, the island is allowed to appear in screenshots / screen recordings
     /// (sharingType .readOnly). Default false hides it from capture. Toggled from
     /// Settings → Appearance → "Show in screen recordings" for demo videos.
@@ -41,6 +45,9 @@ final class MiraIslandWindowManager {
 
     private var panel: NSPanel?
     private let geometry: NotchGeometry
+
+    // Saved panel state while suspended for a system modal (see suspend/resume).
+    private var suspendedIgnoresMouse: Bool?
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry
@@ -66,6 +73,40 @@ final class MiraIslandWindowManager {
                 self?.panel?.sharingType = Self.showInCapture ? .readOnly : .none
             }
         }
+
+        // Step the island out of the way while a system-owned modal (Sparkle's
+        // update dialog) is on screen, then restore it. Without this the dialog
+        // renders behind the notch overlay and can't be seen or clicked.
+        NotificationCenter.default.addObserver(
+            forName: .miraSuspendForModal, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.suspendForModal() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .miraResumeFromModal, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeFromModal() }
+        }
+    }
+
+    // MARK: - Modal suspend / resume
+
+    /// Drop the panel below normal windows and let clicks pass through, so a
+    /// system modal presented on top of the notch is fully visible & clickable.
+    private func suspendForModal() {
+        guard let panel, suspendedIgnoresMouse == nil else { return }
+        suspendedIgnoresMouse = panel.ignoresMouseEvents
+        panel.ignoresMouseEvents = true
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+    }
+
+    /// Restore the panel's normal overlay level after the modal is dismissed.
+    private func resumeFromModal() {
+        guard let panel, let priorIgnoresMouse = suspendedIgnoresMouse else { return }
+        panel.level = Self.islandLevel
+        panel.ignoresMouseEvents = priorIgnoresMouse
+        suspendedIgnoresMouse = nil
+        panel.orderFrontRegardless()
     }
 
     func teardown() {
@@ -99,7 +140,7 @@ final class MiraIslandWindowManager {
             defer:       false
         )
         // Level: above status bar items + system elements; same tier used by DynamicLake / NotchNook.
-        p.level              = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
+        p.level              = Self.islandLevel
         p.backgroundColor    = .clear
         p.isOpaque           = false
         p.hasShadow          = false    // always off — shadow drawn by SwiftUI to avoid macOS corner rounding

@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, agents, learn, settings, crons, labs }
+enum IslandTab: Equatable { case home, agents, learn, settings, crons, labs, skills }
 
 // MARK: - Main island view
 
@@ -609,9 +609,9 @@ struct MiraIslandView: View {
             navTab(icon: "house.fill",         label: "Home",     tab: .home)
             navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
             navTab(icon: "sparkles",           label: "Labs",     tab: .labs)
+            navTab(icon: "puzzlepiece.extension.fill", label: "Skills", tab: .skills)
             navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
             navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
-            navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
 
             Spacer()
 
@@ -633,6 +633,10 @@ struct MiraIslandView: View {
                     .foregroundColor(.white.opacity(0.25))
                     .padding(.trailing, 2)
             }
+
+            // Pinned to the far right, clear of the physical notch (the center
+            // gap created by the Spacer above is where the notch sits).
+            navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
         }
         .padding(.horizontal, 10)
         .frame(height: 38)
@@ -692,6 +696,9 @@ struct MiraIslandView: View {
             )
         case .labs:
             LabsTabView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .skills:
+            SkillsTabView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .learn:
             LessonsTabView()

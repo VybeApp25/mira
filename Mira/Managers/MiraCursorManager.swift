@@ -77,10 +77,33 @@ final class OverlayWindowManager {
     private var trackingTimer: Timer?
     private var displayObserver: Any?
     private var active = false
+    // While paused, the custom cursor is hidden and the real system cursor is
+    // restored — used when a system modal (Sparkle's update dialog) is on screen
+    // so the user can see the pointer to click it.
+    private var paused = false
+    // CGDisplayHideCursor/ShowCursor is reference counted: the cursor is only
+    // visible once Show has balanced every Hide. The tracking timer issues a Hide
+    // every frame, so this count climbs steadily — track it so pauseForModal can
+    // fully drain it at once and the real cursor reappears immediately.
+    private var hideCount = 0
     private var bubbleHideTask: Task<Void, Never>?
     private var voiceStateCancellable: AnyCancellable?
 
-    private init() {}
+    private init() {
+        // Restore the real cursor whenever a system modal asks the overlays to
+        // step aside (see UpdateService / MiraIslandWindowManager). Guarded on
+        // `active`, so these are no-ops when the companion isn't running.
+        NotificationCenter.default.addObserver(
+            forName: .miraSuspendForModal, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pauseForModal() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .miraResumeFromModal, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeFromModal() }
+        }
+    }
 
     // MARK: - Lifecycle
 
@@ -92,6 +115,7 @@ final class OverlayWindowManager {
         // alongside the custom blue cursor.
         BackgroundCursorHider.enable()
         CGDisplayHideCursor(kCGNullDirectDisplay)
+        hideCount += 1
         buildOverlaysForAllScreens()
         startTracking()
         watchDisplayChanges()
@@ -128,6 +152,31 @@ final class OverlayWindowManager {
         overlayWindows.values.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll()
         CGDisplayShowCursor(kCGNullDirectDisplay)
+    }
+
+    // MARK: - Modal pause / resume
+
+    /// Hide the custom cursor overlay and bring the real system cursor back so
+    /// the user can see the pointer to click a system modal.
+    func pauseForModal() {
+        guard active, !paused else { return }
+        paused = true
+        overlayWindows.values.forEach { $0.orderOut(nil) }
+        // Balance every Hide we've issued in one shot so the real cursor appears
+        // instantly. Other apps may have re-shown the cursor (pushing the real
+        // count below ours); the extra Show calls below zero are harmless no-ops.
+        while hideCount > 0 {
+            CGDisplayShowCursor(kCGNullDirectDisplay)
+            hideCount -= 1
+        }
+    }
+
+    /// Restore the custom cursor after the modal is dismissed. The tracking timer
+    /// re-asserts the system-cursor hide on its next tick.
+    func resumeFromModal() {
+        guard active, paused else { return }
+        paused = false
+        overlayWindows.values.forEach { $0.orderFrontRegardless() }
     }
 
     // MARK: - Bubble API (called by CursorBubbleService facade)
@@ -226,8 +275,12 @@ final class OverlayWindowManager {
                 // so there is no stuck-hidden cursor; deactivate() only runs at
                 // terminate. (CGCursorIsVisible, which would let us skip redundant
                 // calls, is unavailable on modern macOS.)
-                if self.active {
+                // While paused for a system modal, leave the real cursor alone
+                // (pauseForModal already drained the hide-count). Otherwise keep
+                // re-asserting the hide so only the custom cursor remains.
+                if self.active, !self.paused {
                     CGDisplayHideCursor(kCGNullDirectDisplay)
+                    self.hideCount += 1
                 }
             }
         }

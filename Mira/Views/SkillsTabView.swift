@@ -1,16 +1,58 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SkillsTabView: View {
-    @ObservedObject private var store = SkillStore.shared
+    @ObservedObject private var store        = SkillStore.shared
+    @ObservedObject private var loader       = MiraSkillLoader.shared
+    @ObservedObject private var entitlements = EntitlementService.shared
+
+    @State private var importing   = false   // file picker open
+    @State private var importError: String?  // non-nil → error alert
+    @State private var showPaywall = false
+
+    /// User-authored bundles that failed to load — shown so authors get feedback.
+    private var userIssues: [MiraSkillLoader.InvalidSkill] {
+        loader.invalid.filter { $0.origin == .user }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().opacity(0.15)
+            content
+            if !store.activeIDs.isEmpty {
+                activeBar
+            }
+        }
+        .onAppear { store.refresh() }
+        // A plan up/downgrade re-gates the list and the injected context.
+        .onChange(of: entitlements.plan) { _, _ in store.planChanged() }
+        .fileImporter(isPresented: $importing,
+                      allowedContentTypes: [.folder],
+                      allowsMultipleSelection: false) { result in
+            handleImport(result)
+        }
+        .alert("Couldn't add skill", isPresented: Binding(
+            get: { importError != nil }, set: { if !$0 { importError = nil } })
+        ) {
+            Button("OK", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    // MARK: - Content (plan-gated)
+
+    @ViewBuilder
+    private var content: some View {
+        if entitlements.plan == .free {
+            upsell
+        } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     ForEach(MiraSkill.Category.allCases, id: \.self) { category in
-                        let skills = MiraSkillCatalog.all.filter { $0.category == category }
+                        let skills = store.all.filter { $0.category == category }
                         if !skills.isEmpty {
                             Section {
                                 ForEach(skills) { skill in
@@ -19,27 +61,30 @@ struct SkillsTabView: View {
                                     }
                                 }
                             } header: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: category.icon)
-                                        .font(.system(size: 9, weight: .semibold))
-                                    Text(category.rawValue.uppercased())
-                                        .font(.system(size: 9, weight: .semibold))
-                                }
-                                .foregroundColor(.secondary.opacity(0.7))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                                .padding(.top, 10)
-                                .gridCellColumns(2)
+                                sectionHeader(category)
                             }
                         }
                     }
                 }
                 .padding(10)
-            }
-            if !store.activeIDs.isEmpty {
-                activeBar
+
+                if !userIssues.isEmpty { issuesList }
             }
         }
+    }
+
+    private func sectionHeader(_ category: MiraSkill.Category) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: category.icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(category.rawValue.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+        }
+        .foregroundColor(.secondary.opacity(0.7))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
+        .padding(.top, 10)
+        .gridCellColumns(2)
     }
 
     // MARK: - Header
@@ -53,12 +98,102 @@ struct SkillsTabView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
             Spacer()
+            // Bulk select / deselect — only meaningful when skills are visible.
+            if entitlements.plan != .free {
+                Button("Select all") { store.selectAll() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(allSelected ? .secondary.opacity(0.35) : miraTeale)
+                    .disabled(allSelected)
+                Text("·").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.4))
+                Button("Clear all") { store.clearAll() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(store.activeIDs.isEmpty ? .secondary.opacity(0.35) : .secondary)
+                    .disabled(store.activeIDs.isEmpty)
+            }
+            // Add your own — Ultra only.
+            if loader.canAddUserSkills {
+                Button { importing = true } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(miraTeale)
+                }
+                .buttonStyle(.plain)
+                .help("Add a skill folder (SKILL.md)")
+            }
             Text("\(store.activeIDs.count) active")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// True when every granted skill is already active — disables "Select all".
+    private var allSelected: Bool {
+        let granted = Set(store.all.map(\.id))
+        return !granted.isEmpty && granted.isSubset(of: store.activeIDs)
+    }
+
+    // MARK: - Free-plan upsell
+
+    private var upsell: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(miraTeale)
+            Text("Skills are a paid feature")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+            Text("Upgrade to Pro for Mira's built-in skills, or Ultra to add your own.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+            Button { showPaywall = true } label: {
+                Text("See plans")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(miraTeale.opacity(0.85)))
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
+    }
+
+    // MARK: - Invalid user skills
+
+    private var issuesList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("NEEDS ATTENTION")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.orange.opacity(0.8))
+            ForEach(userIssues) { issue in
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange)
+                        .padding(.top, 1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(issue.folder)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.85))
+                        Text(issue.reason)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
     }
 
     // MARK: - Active bar
@@ -78,9 +213,48 @@ struct SkillsTabView: View {
     }
 
     private var activeLabel: String {
-        let names = MiraSkillCatalog.all.filter { store.isActive($0.id) }.map(\.name)
+        let names = store.all.filter { store.isActive($0.id) }.map(\.name)
         if names.count <= 2 { return names.joined(separator: " · ") + " enabled" }
         return "\(names.prefix(2).joined(separator: " · ")) +\(names.count - 2) more"
+    }
+
+    // MARK: - Import
+
+    /// Copies a user-picked skill folder (must contain SKILL.md) into the loader's
+    /// user dir after validating it. Rejects names that collide with built-in or
+    /// platform skills so a personal skill can't shadow one we patch later.
+    private func handleImport(_ result: Result<[URL], Error>) {
+        guard loader.canAddUserSkills else { return }
+        switch result {
+        case .failure(let err):
+            importError = err.localizedDescription
+        case .success(let urls):
+            guard let src = urls.first else { return }
+            let scoped = src.startAccessingSecurityScopedResource()
+            defer { if scoped { src.stopAccessingSecurityScopedResource() } }
+
+            let md = src.appendingPathComponent("SKILL.md")
+            guard let text = try? String(contentsOf: md, encoding: .utf8) else {
+                importError = "That folder has no SKILL.md at its top level."
+                return
+            }
+            if let reason = loader.importBlocker(forFolderNamed: src.lastPathComponent, skillMarkdown: text) {
+                importError = reason
+                return
+            }
+            let fm = FileManager.default
+            let dest = loader.userDir.appendingPathComponent(src.lastPathComponent, isDirectory: true)
+            do {
+                try fm.createDirectory(at: loader.userDir, withIntermediateDirectories: true)
+                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+                try fm.copyItem(at: src, to: dest)
+            } catch {
+                importError = "Couldn't copy the skill: \(error.localizedDescription)"
+                return
+            }
+            store.refresh()
+            AudioCueService.shared.play(.skillUp)
+        }
     }
 }
 
