@@ -36,6 +36,12 @@ extension Notification.Name {
     // round-trip (copy prompt → another assistant → copy reply → back to Mira).
     // userInfo["pinned"] is a Bool. Pins are reference-counted in NotchManager.
     static let miraPinIsland              = Notification.Name("miraPinIsland")
+    // Temporarily drop the island panel below normal windows so a system-owned
+    // modal (e.g. Sparkle's update dialog) isn't occluded by the notch overlay.
+    // Posted by UpdateService around the update session; observed by
+    // MiraIslandWindowManager. Resume restores the island's normal window level.
+    static let miraSuspendForModal        = Notification.Name("miraSuspendForModal")
+    static let miraResumeFromModal        = Notification.Name("miraResumeFromModal")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)
