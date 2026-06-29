@@ -36,7 +36,7 @@ targets:
         NSPrincipalClass: NSApplication
         CFBundleDisplayName: Mira
         CFBundleName: Mira
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         CFBundleShortVersionString: "1.0.0"
         NSMicrophoneUsageDescription: "Mira listens for voice commands."
         NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."

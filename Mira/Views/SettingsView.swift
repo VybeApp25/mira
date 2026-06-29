@@ -92,8 +92,6 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         settingsGroup("General", icon: "gearshape.fill") {
                             accountSection
-                            keySection
-                            openRouterSection
                             accentColorSection
                             appearanceSection
                             updatesSection
