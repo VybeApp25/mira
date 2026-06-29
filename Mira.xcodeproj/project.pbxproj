@@ -236,6 +236,7 @@
 		D21590CBAA9253D716FA335E /* UserKnowledge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 928A7931DFC04CBC08736153 /* UserKnowledge.swift */; };
 		D254FEFCAA9426DB89C17B07 /* WebsiteBuilderAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80ED8ED7A6C8DC6CE506BB1E /* WebsiteBuilderAgent.swift */; };
 		D2A5D835D5C9750041818082 /* docx_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = CB38BBEE5A82A00325431A23 /* docx_rw.py */; };
+		D2B327C84D974834D338BAB9 /* MiraSkillLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C02C5FF34002C6ADF2A50D /* MiraSkillLoader.swift */; };
 		D34592F90B205AA8D4F63700 /* SkillBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30D7BBBE1AD86425D4A0E84B /* SkillBundle.swift */; };
 		D37336D1E54FF64164918D9A /* ProjectsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */; };
 		D39FB3D62ED7EB5B5C31CB1C /* KnowledgeImportPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */; };
@@ -298,6 +299,7 @@
 /* Begin PBXFileReference section */
 		01ACF9118D36B54D9E00146F /* ComputerUseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseService.swift; sourceTree = "<group>"; };
 		041B7A6A32E7D953B37E758B /* reminders_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = reminders_rw.py; sourceTree = "<group>"; };
+		04C02C5FF34002C6ADF2A50D /* MiraSkillLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraSkillLoader.swift; sourceTree = "<group>"; };
 		04E9E3BEC0C88DE784C19C5D /* NotchHUDController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDController.swift; sourceTree = "<group>"; };
 		04F1B30EBD78983473632ED6 /* ProjectModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectModels.swift; sourceTree = "<group>"; };
 		07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionManager.swift; sourceTree = "<group>"; };
@@ -828,6 +830,7 @@
 				86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */,
 				B91346EA30D1B31122573AE9 /* MiraBackend.swift */,
 				C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */,
+				04C02C5FF34002C6ADF2A50D /* MiraSkillLoader.swift */,
 				979DE80CA67152EBCA55AC4D /* MiraToolService.swift */,
 				6C32360D76CD7D9599499DCA /* MisoTTSService.swift */,
 				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
@@ -1262,6 +1265,7 @@
 				344D95E382740D9C5F18B221 /* MiraMCPServer.swift in Sources */,
 				D08711BF6A67BC56365F6AAD /* MiraPanel.swift in Sources */,
 				CE72D3B5E1213AEEBC2B533C /* MiraSkill.swift in Sources */,
+				D2B327C84D974834D338BAB9 /* MiraSkillLoader.swift in Sources */,
 				ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */,
 				D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */,
 				633E12D061864B837775754C /* MisoTTSService.swift in Sources */,
@@ -1429,6 +1433,7 @@
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 7FD7W8SX34;
+				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Mira/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
