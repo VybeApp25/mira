@@ -82,8 +82,21 @@ final class WeatherService: ObservableObject {
     func fetch() {
         Task { @MainActor in
             let coord = await locator.current()
-            load(Self.url(for: coord))
+            // Reverse-geocode the real GPS fix into a proper city name so the
+            // widget shows where the user actually is, rather than wttr.in's
+            // coarser IP/nearest-area guess.
+            let city = await Self.cityName(for: coord)
+            load(Self.url(for: coord), preferredLocation: city)
         }
+    }
+
+    /// Turns a coordinate into a human city/locality via Core Location's
+    /// geocoder. Returns nil when there's no fix or the lookup fails.
+    private static func cityName(for coord: CLLocationCoordinate2D?) async -> String? {
+        guard let coord else { return nil }
+        let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        guard let mark = try? await CLGeocoder().reverseGeocodeLocation(loc).first else { return nil }
+        return mark.locality ?? mark.subAdministrativeArea ?? mark.administrativeArea
     }
 
     /// wttr.in endpoint for an explicit coordinate, or the IP-detected location
@@ -98,7 +111,7 @@ final class WeatherService: ObservableObject {
         return URL(string: path)
     }
 
-    private func load(_ url: URL?) {
+    private func load(_ url: URL?, preferredLocation: String? = nil) {
         guard let url else { return }
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let self, let data else { return }
@@ -112,7 +125,9 @@ final class WeatherService: ObservableObject {
             let maxF      = dayInfo?["maxtempF"] as? String ?? "--"
             let minF      = dayInfo?["mintempF"] as? String ?? "--"
             let area      = (json["nearest_area"] as? [[String: Any]])?.first
-            let city      = (area?["areaName"] as? [[String: Any]])?.first?["value"] as? String ?? ""
+            let apiCity   = (area?["areaName"] as? [[String: Any]])?.first?["value"] as? String ?? ""
+            // Prefer the geocoded GPS city; fall back to wttr.in's nearest area.
+            let city      = preferredLocation ?? (apiCity.isEmpty ? "" : apiCity)
 
             DispatchQueue.main.async {
                 self.weather = WeatherInfo(

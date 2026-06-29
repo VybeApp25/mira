@@ -52,6 +52,25 @@ final class SkillStore: ObservableObject {
 
     func isActive(_ id: String) -> Bool { activeIDs.contains(id) }
 
+    /// Activates every skill the current plan grants (the visible set).
+    func selectAll() {
+        let granted = all.map(\.id)
+        guard !granted.isEmpty else { return }
+        activeIDs = Set(granted)
+        UserDefaults.standard.set(Array(activeIDs), forKey: defaultsKey)
+        rebuildContext()
+        AudioCueService.shared.play(.skillUp)
+    }
+
+    /// Deactivates every skill.
+    func clearAll() {
+        guard !activeIDs.isEmpty else { return }
+        activeIDs.removeAll()
+        UserDefaults.standard.set(Array(activeIDs), forKey: defaultsKey)
+        rebuildContext()
+        AudioCueService.shared.play(.skillDown)
+    }
+
     private func rebuildContext() {
         Self.cachedContext = Self.buildContext(ids: activeIDs, all: all)
     }

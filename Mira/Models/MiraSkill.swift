@@ -216,6 +216,21 @@ enum MiraSkillCatalog {
                 """
         ),
 
+        MiraSkill(
+            id: "clone-website",
+            name: "Clone Website",
+            tagline: "Reverse-engineer any site into clean code",
+            icon: "square.on.square.dashed",
+            category: .engineering,
+            context: """
+                Skill active: Clone Website.
+                Reverse-engineer a target website into a clean, modern codebase that matches it 1:1.
+                Flow: (1) inspect the live site — capture design tokens (colors, typography, spacing, radii, shadows), the layout/grid, and every distinct section; (2) download the real assets (images, video, fonts, favicons) into the project — never placeholders; (3) extract the real copy verbatim; (4) rebuild section-by-section, mobile-first and responsive.
+                Fidelity bar: pixel-perfect emulation first — match the target's spacing, color, and type exactly before any personal restyling. Use semantic HTML and sensible component structure; keep real text in markup, not baked into images.
+                Verify each section against the original with local renders, screenshots, or build logs — do not ship a section you have not compared to the source.
+                """
+        ),
+
         // MARK: Communication
 
         MiraSkill(

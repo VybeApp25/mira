@@ -98,6 +98,20 @@ struct SkillsTabView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white)
             Spacer()
+            // Bulk select / deselect — only meaningful when skills are visible.
+            if entitlements.plan != .free {
+                Button("Select all") { store.selectAll() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(allSelected ? .secondary.opacity(0.35) : miraTeale)
+                    .disabled(allSelected)
+                Text("·").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.4))
+                Button("Clear all") { store.clearAll() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(store.activeIDs.isEmpty ? .secondary.opacity(0.35) : .secondary)
+                    .disabled(store.activeIDs.isEmpty)
+            }
             // Add your own — Ultra only.
             if loader.canAddUserSkills {
                 Button { importing = true } label: {
@@ -114,6 +128,12 @@ struct SkillsTabView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// True when every granted skill is already active — disables "Select all".
+    private var allSelected: Bool {
+        let granted = Set(store.all.map(\.id))
+        return !granted.isEmpty && granted.isSubset(of: store.activeIDs)
     }
 
     // MARK: - Free-plan upsell

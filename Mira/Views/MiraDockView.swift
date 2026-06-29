@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import IOKit.ps
 import CoreLocation
+import UniformTypeIdentifiers
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Widget registry
@@ -56,6 +57,27 @@ private func saveWidgetOrder(_ order: [DockWidgetType]) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Dock background color persistence
+// ─────────────────────────────────────────────────────────────────────────────
+
+private let dockColorKey = "mira_dock_bg_color_v1"
+private let dockDefaultColor = Color(red: 0.06, green: 0.06, blue: 0.08).opacity(0.97)
+
+private func loadDockColor() -> Color {
+    guard let comps = UserDefaults.standard.array(forKey: dockColorKey) as? [Double],
+          comps.count == 4 else { return dockDefaultColor }
+    return Color(.sRGB, red: comps[0], green: comps[1], blue: comps[2], opacity: comps[3])
+}
+
+private func saveDockColor(_ color: Color) {
+    let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+    UserDefaults.standard.set(
+        [Double(ns.redComponent), Double(ns.greenComponent),
+         Double(ns.blueComponent), Double(ns.alphaComponent)],
+        forKey: dockColorKey)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Main Dock View
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,6 +85,8 @@ struct MiraDockView: View {
     @State private var widgets:   [DockWidgetType] = loadWidgetOrder()
     @State private var editMode   = false
     @State private var showPicker = false
+    @State private var dragging:  DockWidgetType?            // in-flight reorder
+    @State private var dockColor: Color = loadDockColor()
 
     var body: some View {
         HStack(spacing: 0) {
@@ -75,6 +99,17 @@ struct MiraDockView: View {
                         editMode: editMode,
                         onRemove: { remove(wtype) }
                     )
+                    .opacity(dragging == wtype ? 0.45 : 1)
+                    // Drag to reorder — only while editing, so it never fights
+                    // with the widgets' own buttons during normal use.
+                    .onDrag {
+                        guard editMode else { return NSItemProvider() }
+                        dragging = wtype
+                        return NSItemProvider(object: wtype.rawValue as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: DockReorderDelegate(
+                        item: wtype, widgets: $widgets, dragging: $dragging,
+                        onChange: { saveWidgetOrder($0) }))
                 }
 
                 Button {
@@ -87,21 +122,22 @@ struct MiraDockView: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showPicker, arrowEdge: .top) {
-                    WidgetPickerPopover(active: widgets) { toggle($0) }
+                    WidgetPickerPopover(active: widgets, bgColor: $dockColor) { toggle($0) }
                 }
             }
             .padding(.horizontal, 10)
             .frame(height: 72)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color(red: 0.06, green: 0.06, blue: 0.08).opacity(0.97))
+                    .fill(dockColor)
                     .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
             )
+            .onChange(of: dockColor) { _, c in saveDockColor(c) }
             .contextMenu {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { editMode.toggle() }
                 } label: {
-                    Label(editMode ? "Done Editing" : "Edit Dock",
+                    Label(editMode ? "Done Editing" : "Edit Dock (drag to reorder)",
                           systemImage: editMode ? "checkmark.circle" : "pencil.circle")
                 }
                 Divider()
@@ -109,6 +145,7 @@ struct MiraDockView: View {
                     widgets = [.clock, .pomodoro, .nowPlaying, .battery, .toggles, .weather, .appLauncher]
                     saveWidgetOrder(widgets)
                 }
+                Button("Reset Dock Color") { dockColor = dockDefaultColor }
                 Button("Hide Dock") { MiraDockManager.shared.hideDock() }
             }
 
@@ -239,6 +276,7 @@ private struct WidgetSlot: View {
 
 private struct WidgetPickerPopover: View {
     let active:   [DockWidgetType]
+    @Binding var bgColor: Color
     let onToggle: (DockWidgetType) -> Void
 
     var body: some View {
@@ -273,9 +311,50 @@ private struct WidgetPickerPopover: View {
                 }
                 .padding(6)
             }
+            Divider().opacity(0.1)
+            // Fully adjustable dock background color (incl. opacity).
+            HStack(spacing: 8) {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.6)).frame(width: 22)
+                Text("Background")
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.85))
+                Spacer()
+                ColorPicker("", selection: $bgColor, supportsOpacity: true)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
         }
-        .frame(width: 210, height: 270)
+        .frame(width: 210, height: 320)
         .background(Color(red: 0.1, green: 0.1, blue: 0.13))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Drag-to-reorder
+// ─────────────────────────────────────────────────────────────────────────────
+
+private struct DockReorderDelegate: DropDelegate {
+    let item: DockWidgetType
+    @Binding var widgets:  [DockWidgetType]
+    @Binding var dragging: DockWidgetType?
+    let onChange: ([DockWidgetType]) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != item,
+              let from = widgets.firstIndex(of: dragging),
+              let to   = widgets.firstIndex(of: item) else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            widgets.move(fromOffsets: IndexSet(integer: from),
+                         toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        onChange(widgets)
+        return true
     }
 }
 
@@ -473,12 +552,22 @@ private struct WeatherWidget: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(svc.isLoaded ? "\(svc.weather.tempF)°" : "--")
                     .font(.system(size: 20, weight: .semibold, design: .rounded)).foregroundColor(.white)
-                Text(svc.isLoaded ? svc.weather.location : "—")
-                    .font(.system(size: 9)).foregroundColor(.white.opacity(0.4)).lineLimit(1)
+                HStack(spacing: 2) {
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 7)).foregroundColor(.white.opacity(0.4))
+                    Text(locationLabel)
+                        .font(.system(size: 9)).foregroundColor(.white.opacity(0.5)).lineLimit(1)
+                }
             }
         }
-        .padding(.horizontal, 10).frame(width: 114)
+        .padding(.horizontal, 10).frame(width: 120)
         .onAppear { svc.fetch() }
+    }
+
+    /// Current city once located; a "Locating…" placeholder until the fix lands.
+    private var locationLabel: String {
+        if svc.isLoaded && !svc.weather.location.isEmpty { return svc.weather.location }
+        return svc.isLoaded ? "Unknown" : "Locating…"
     }
 }
 
