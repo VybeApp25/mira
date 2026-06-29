@@ -77,6 +77,28 @@ private func saveDockColor(_ color: Color) {
         forKey: dockColorKey)
 }
 
+private let dockGlassKey = "mira_dock_glass_mode_v1"
+private func loadDockGlass() -> Bool { UserDefaults.standard.bool(forKey: dockGlassKey) }
+private func saveDockGlass(_ on: Bool) { UserDefaults.standard.set(on, forKey: dockGlassKey) }
+
+/// sRGB components of a Color, for decomposing/recomposing in the picker.
+private func dockRGBA(_ c: Color) -> (r: Double, g: Double, b: Double, a: Double) {
+    let ns = NSColor(c).usingColorSpace(.sRGB) ?? NSColor(c)
+    return (Double(ns.redComponent), Double(ns.greenComponent),
+            Double(ns.blueComponent), Double(ns.alphaComponent))
+}
+
+private func dockWithOpacity(_ c: Color, _ a: Double) -> Color {
+    let p = dockRGBA(c)
+    return Color(.sRGB, red: p.r, green: p.g, blue: p.b, opacity: a)
+}
+
+/// RGB equality ignoring alpha — used to highlight the selected swatch.
+private func dockSameHue(_ a: Color, _ b: Color) -> Bool {
+    let x = dockRGBA(a), y = dockRGBA(b)
+    return abs(x.r - y.r) < 0.02 && abs(x.g - y.g) < 0.02 && abs(x.b - y.b) < 0.02
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Main Dock View
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +109,7 @@ struct MiraDockView: View {
     @State private var showPicker = false
     @State private var dragging:  DockWidgetType?            // in-flight reorder
     @State private var dockColor: Color = loadDockColor()
+    @State private var glassMode: Bool  = loadDockGlass()
 
     var body: some View {
         HStack(spacing: 0) {
@@ -122,17 +145,14 @@ struct MiraDockView: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showPicker, arrowEdge: .top) {
-                    WidgetPickerPopover(active: widgets, bgColor: $dockColor) { toggle($0) }
+                    WidgetPickerPopover(active: widgets, bgColor: $dockColor, glass: $glassMode) { toggle($0) }
                 }
             }
             .padding(.horizontal, 10)
             .frame(height: 72)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(dockColor)
-                    .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
-            )
+            .background { dockBackground }
             .onChange(of: dockColor) { _, c in saveDockColor(c) }
+            .onChange(of: glassMode) { _, on in saveDockGlass(on) }
             .contextMenu {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { editMode.toggle() }
@@ -150,6 +170,26 @@ struct MiraDockView: View {
             }
 
             Spacer(minLength: 0)
+        }
+    }
+
+    /// Solid tint, or real Liquid Glass (macOS 26+) with a translucent-material
+    /// fallback on older systems.
+    @ViewBuilder
+    private var dockBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        if glassMode {
+            if #available(macOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular, in: shape)
+                    .shadow(color: .black.opacity(0.35), radius: 18, y: -3)
+            } else {
+                shape.fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.40), radius: 18, y: -3)
+            }
+        } else {
+            shape.fill(dockColor)
+                .shadow(color: .black.opacity(0.55), radius: 20, y: -4)
         }
     }
 
@@ -277,7 +317,24 @@ private struct WidgetSlot: View {
 private struct WidgetPickerPopover: View {
     let active:   [DockWidgetType]
     @Binding var bgColor: Color
+    @Binding var glass:   Bool
     let onToggle: (DockWidgetType) -> Void
+
+    private static let swatches: [Color] = [
+        Color(red: 0.06, green: 0.06, blue: 0.08),  // default near-black
+        Color(red: 0.13, green: 0.13, blue: 0.15),  // graphite
+        Color(red: 0.10, green: 0.11, blue: 0.20),  // navy
+        Color(red: 0.17, green: 0.09, blue: 0.22),  // plum
+        Color(red: 0.06, green: 0.17, blue: 0.16),  // teal
+        Color(red: 0.08, green: 0.16, blue: 0.10),  // forest
+        Color(red: 0.22, green: 0.10, blue: 0.10),  // maroon
+        Color(red: 0.20, green: 0.20, blue: 0.23),  // slate
+    ]
+
+    private var opacityBinding: Binding<Double> {
+        Binding(get: { dockRGBA(bgColor).a },
+                set: { bgColor = dockWithOpacity(bgColor, $0) })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -312,22 +369,51 @@ private struct WidgetPickerPopover: View {
                 .padding(6)
             }
             Divider().opacity(0.1)
-            // Fully adjustable dock background color (incl. opacity).
-            HStack(spacing: 8) {
-                Image(systemName: "paintpalette")
-                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.6)).frame(width: 22)
-                Text("Background")
-                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.85))
-                Spacer()
-                ColorPicker("", selection: $bgColor, supportsOpacity: true)
-                    .labelsHidden()
+            // Appearance: Liquid Glass toggle + a self-contained color picker
+            // (swatches + opacity). We avoid the system ColorPicker because it
+            // opens NSColorPanel, which dismisses this popover on the dock's
+            // floating (non-key) panel — so nothing would appear.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .font(.system(size: 12)).foregroundColor(miraGlassTint).frame(width: 22)
+                    Text("Liquid Glass")
+                        .font(.system(size: 12)).foregroundColor(.white.opacity(0.85))
+                    Spacer()
+                    Toggle("", isOn: $glass).toggleStyle(.switch).labelsHidden().tint(miraGlassTint)
+                }
+
+                if !glass {
+                    HStack(spacing: 6) {
+                        ForEach(Array(Self.swatches.enumerated()), id: \.offset) { _, c in
+                            Button {
+                                bgColor = dockWithOpacity(c, dockRGBA(bgColor).a)
+                            } label: {
+                                Circle()
+                                    .fill(c)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(Circle().stroke(
+                                        Color.white.opacity(dockSameHue(c, bgColor) ? 0.9 : 0.18),
+                                        lineWidth: dockSameHue(c, bgColor) ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.lefthalf.filled")
+                            .font(.system(size: 11)).foregroundColor(.white.opacity(0.5))
+                        Slider(value: opacityBinding, in: 0.3...1)
+                    }
+                }
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .padding(.horizontal, 14).padding(.vertical, 12)
         }
-        .frame(width: 210, height: 320)
+        .frame(width: 220, height: glass ? 300 : 350)
         .background(Color(red: 0.1, green: 0.1, blue: 0.13))
     }
 }
+
+private let miraGlassTint = Color(red: 0, green: 0.78, blue: 0.68)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Drag-to-reorder

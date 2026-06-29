@@ -27,7 +27,12 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     /// from any context; only one request is in flight per provider at a time.
     @MainActor
     func current() async -> CLLocationCoordinate2D? {
-        if continuation != nil { return nil }   // a request is already in flight
+        // Fast path: reuse a recent cached fix — the same last-known location
+        // Weather.app shows instantly — so the widget never sits on "Locating…".
+        if let loc = manager.location, Date().timeIntervalSince(loc.timestamp) < 600 {
+            return loc.coordinate
+        }
+        if continuation != nil { return manager.location?.coordinate }
         return await withCheckedContinuation { cont in
             self.continuation = cont
             switch manager.authorizationStatus {
@@ -37,9 +42,24 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
                 manager.requestWhenInUseAuthorization()
                 // locationManagerDidChangeAuthorization drives the next step.
             default:
-                finish(nil)
+                finish(manager.location?.coordinate)   // denied → stale fix or nil
+                return
+            }
+            // Safety net: never hang. If no fix lands in 6s, fall back to the
+            // last-known location (or nil → IP geolocation) so weather still loads.
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                await MainActor.run { self?.finishIfPending() }
             }
         }
+    }
+
+    /// Resolves an in-flight request with the best location we have, if the
+    /// delegate hasn't already delivered one.
+    @MainActor
+    private func finishIfPending() {
+        guard continuation != nil else { return }
+        finish(manager.location?.coordinate)
     }
 
     private func finish(_ coord: CLLocationCoordinate2D?) {
