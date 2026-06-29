@@ -90,7 +90,7 @@ final class SidecarSuggestionService: ObservableObject {
               !acknowledged.contains(skillID),
               !SkillStore.shared.isActive(skillID) else { return }
 
-        let skill = MiraSkillCatalog.all.first { $0.id == skillID }
+        let skill = SkillStore.shared.all.first { $0.id == skillID }
         show(SidecarSuggestion(
             skillID:  skillID,
             appName:  appName,

@@ -9,7 +9,13 @@ final class SkillStore: ObservableObject {
     // Thread-safe cache so MiraPrompts.system (nonisolated) can read it.
     nonisolated(unsafe) static var cachedContext: String = ""
 
-    let all: [MiraSkill] = MiraSkillCatalog.all
+    private let loader = MiraSkillLoader.shared
+
+    /// Skills the current plan actually grants — the source for both the Skills
+    /// tab and the injected context. Drawn from the unified loader (built-ins +
+    /// platform + user, plan-gated), no longer a hardcoded array.
+    var all: [MiraSkill] { loader.skills }
+
     @Published private(set) var activeIDs: Set<String>
 
     private let defaultsKey = "mira_active_skill_ids"
@@ -17,18 +23,38 @@ final class SkillStore: ObservableObject {
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: defaultsKey) ?? []
         activeIDs = Set(saved)
-        Self.cachedContext = Self.buildContext(ids: activeIDs, all: MiraSkillCatalog.all)
+        loader.refresh()
+        rebuildContext()
+    }
+
+    /// Rescans disk, re-applies plan gating, and rebuilds the injected context.
+    /// Call when the Skills tab appears, after an add/remove, or on plan change.
+    func refresh() {
+        loader.refresh()
+        rebuildContext()
+        objectWillChange.send()
+    }
+
+    /// Re-applies plan gating without a disk rescan — for plan up/downgrades.
+    func planChanged() {
+        loader.applyPlanFilter()
+        rebuildContext()
+        objectWillChange.send()
     }
 
     func toggle(_ id: String) {
         let willActivate = !activeIDs.contains(id)
         if willActivate { activeIDs.insert(id) } else { activeIDs.remove(id) }
         UserDefaults.standard.set(Array(activeIDs), forKey: defaultsKey)
-        Self.cachedContext = Self.buildContext(ids: activeIDs, all: all)
+        rebuildContext()
         AudioCueService.shared.play(willActivate ? .skillUp : .skillDown)
     }
 
     func isActive(_ id: String) -> Bool { activeIDs.contains(id) }
+
+    private func rebuildContext() {
+        Self.cachedContext = Self.buildContext(ids: activeIDs, all: all)
+    }
 
     private static func buildContext(ids: Set<String>, all: [MiraSkill]) -> String {
         let active = all.filter { ids.contains($0.id) }
