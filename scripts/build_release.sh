@@ -26,6 +26,14 @@ API_KEY="${API_KEY:-$HOME/Downloads/AuthKey_44WN756492.p8}"
 API_KEY_ID="${API_KEY_ID:-44WN756492}"
 API_ISSUER="${API_ISSUER:-37bf5512-2ca0-470e-ac5f-cb5dca0a086d}"
 
+# ── Generate project FIRST ───────────────────────────────────────────────────
+# Must run before reading the version. XcodeGen regenerates Mira/Info.plist from
+# project.yml, so a version bump in project.yml only lands in Info.plist after
+# this. Reading the version before generating picks up a STALE Info.plist: the
+# app still compiles at the new version, but the zip/dmg get named with the old
+# one (and the appcast/website then point at files that don't exist).
+xcodegen generate
+
 # ── Version from Info.plist ──────────────────────────────────────────────────
 # Read the version directly from Info.plist — the project sets
 # CFBundleShortVersionString/CFBundleVersion there, not via the
@@ -48,9 +56,6 @@ if ! security find-identity -v -p codesigning | grep -q "Developer ID Applicatio
 fi
 
 echo "▶ Building Mira $VERSION ($BUILD) for team $TEAM"
-
-# ── Generate project ─────────────────────────────────────────────────────────
-xcodegen generate
 
 # ── Build Release ────────────────────────────────────────────────────────────
 xcodebuild \
