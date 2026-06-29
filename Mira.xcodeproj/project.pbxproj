@@ -69,6 +69,7 @@
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
 		39A20B41E671B958232ED793 /* AgentJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A402B112ABE83ADE3C4489E6 /* AgentJob.swift */; };
 		3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A266BE527831F1DF05489050 /* StripePurchaseService.swift */; };
+		3C096114A2F525A597968FB3 /* Skills in Resources */ = {isa = PBXBuildFile; fileRef = 18A4F3CB8B14BD7FB49CEE7D /* Skills */; };
 		3E2DB0D90E9E847491E02103 /* GuidanceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE4D9FFAA2573FD2BE0E42 /* GuidanceOverlayView.swift */; };
 		3FF94BFAEB99BBB0D83E4B11 /* imessage_read.py in Resources */ = {isa = PBXBuildFile; fileRef = B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */; };
 		3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F52A13C8B02EEA4701166A /* ResponseCardService.swift */; };
@@ -324,6 +325,7 @@
 		1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecrets.swift; sourceTree = "<group>"; };
 		177D935B2C9FEEDB97A25EE9 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		17B535DE12D73CC125D81565 /* ActionChipService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipService.swift; sourceTree = "<group>"; };
+		18A4F3CB8B14BD7FB49CEE7D /* Skills */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Skills; path = Mira/Resources/Skills; sourceTree = SOURCE_ROOT; };
 		1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceView.swift; sourceTree = "<group>"; };
 		1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseTabView.swift; sourceTree = "<group>"; };
 		202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandChatView.swift; sourceTree = "<group>"; };
@@ -739,6 +741,7 @@
 		9F12A7678DA6DB07C4E15942 = {
 			isa = PBXGroup;
 			children = (
+				18A4F3CB8B14BD7FB49CEE7D /* Skills */,
 				B1E35459BDE79C37D5E39EE8 /* Mira */,
 				D8AA324BF4666DEB17DD11F9 /* Frameworks */,
 				6BAEE14F16EA8C85A415D967 /* Products */,
@@ -1067,6 +1070,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				47D10CE56F35895DF6988812 /* Assets.xcassets in Resources */,
+				3C096114A2F525A597968FB3 /* Skills in Resources */,
 				2CD31292CD2EE71A3191CC39 /* agent-close.mp3 in Resources */,
 				62049E610A50C91F1531FAD5 /* agent-done.mp3 in Resources */,
 				41A836A8FF78EF0DF0055710 /* agent-launch.mp3 in Resources */,

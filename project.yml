@@ -16,6 +16,17 @@ targets:
     platform: macOS
     sources:
       - path: Mira
+        excludes:
+          - "Resources/Skills"
+          - "Resources/Skills/**"
+      # Prompt-skill bundles ship as a folder reference so the per-skill
+      # subfolder tree (Skills/<id>/SKILL.md) is preserved in the app bundle
+      # at Contents/Resources/Skills, where MiraSkillLoader expects it. Added
+      # as a folder (not individual files) because every skill's file is named
+      # SKILL.md and would otherwise collide when Copy-Bundle-Resources flattens.
+      - path: Mira/Resources/Skills
+        type: folder
+        buildPhase: resources
     dependencies:
       - sdk: IOKit.framework
       - sdk: Carbon.framework
