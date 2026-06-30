@@ -48,6 +48,7 @@ struct SettingsView: View {
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
+    @AppStorage("mira_audio_muted")        private var audioMuted        = false
     @AppStorage(BrowserService.preferredKey) private var preferredBrowser = ""
     @State private var installedBrowsers: [BrowserService.Browser] = []
     @State private var micDevices:     [AVCaptureDevice] = []
@@ -1632,8 +1633,13 @@ struct SettingsView: View {
                 proc.standardError  = pipe
                 proc.launch()
                 proc.waitUntilExit()
-                let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "not installed"
+                let raw = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                // Take the last non-empty line so noise from the user's shell
+                // startup (e.g. a broken ~/.zprofile writing to stderr) can't
+                // mask the real `claude --version` output.
+                let out = raw.split(whereSeparator: \.isNewline)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .last(where: { !$0.isEmpty }) ?? "not installed"
                 cont.resume(returning: out.isEmpty ? "not installed" : out)
             }
         }
@@ -1939,6 +1945,16 @@ struct SettingsView: View {
             .onChange(of: showInCapture) {
                 NotificationCenter.default.post(name: .miraShowInCaptureChanged, object: nil)
             }
+
+            // Global on/off for all of Mira's sound effects. Backed by the same
+            // "mira_audio_muted" flag AudioCueService.play() already checks, so the
+            // toggle is presented inverted (on = sounds play, off = fully silent).
+            toggleRow(
+                icon: "speaker.wave.2.fill",
+                title: "Mira sounds",
+                subtitle: "Sound effects for chimes, agent activity, and interactions",
+                binding: Binding(get: { !audioMuted }, set: { audioMuted = !$0 })
+            )
         }
     }
 
