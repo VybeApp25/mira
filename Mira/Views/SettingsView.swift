@@ -65,6 +65,7 @@ struct SettingsView: View {
     private static let defaultAgentFolder = NSHomeDirectory() + "/Desktop/Mira"
     @State private var transcriptFolderPath: String = ""
     private static let defaultTranscriptFolder = NSHomeDirectory() + "/Documents/Transcripts"
+    @ObservedObject private var radial = RadialLauncherModel.shared
 
     enum RecordingTarget {
         case voice, text, draw
@@ -120,6 +121,7 @@ struct SettingsView: View {
                             knowledgeImportButton
                             agentFolderSection
                             transcriptFolderSection
+                            radialLauncherSection
                             memorySection
                         }
                         settingsGroup("Advanced", icon: "wrench.and.screwdriver.fill") {
@@ -1634,6 +1636,55 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             transcriptFolderPath = url.path
             UserDefaults.standard.set(url.path, forKey: "mira_transcript_folder")
+        }
+    }
+
+    // MARK: - Radial Launcher section
+
+    private var radialLauncherSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Radial Launcher", systemImage: "circle.grid.cross.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { i in
+                    Button { chooseFavoriteApp(i) } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: radial.favoriteName(i) != nil ? "app.fill" : "plus.app")
+                                .font(.system(size: 16))
+                                .foregroundColor(radial.favoriteName(i) != nil ? accent : .white.opacity(0.4))
+                            Text(radial.favoriteName(i) ?? "Favorite \(i + 1)")
+                                .font(.system(size: 9))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text("Tap the Option key to open the ring — your 3 favorites + 3 recent apps. (Pro/Ultra)")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.30))
+        }
+    }
+
+    private func chooseFavoriteApp(_ index: Int) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["app"]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.message = "Choose a favorite app for the radial launcher"
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            radial.setFavorite(index, path: url.path)
         }
     }
 

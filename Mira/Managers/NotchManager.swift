@@ -95,6 +95,8 @@ final class NotchManager {
         MiraState.shared = miraState
         CronScheduler.shared.start()
         CallHUDManager.shared.start()   // meeting-assistant: watch for calls, offer transcription
+        RadialLauncherModel.shared.startTrackingRecents()   // radial launcher: track recent apps
+        RadialLauncherHotkey.shared.start()                 // radial launcher: Option-tap toggle
         ExternalTriggerRunner.shared.rebuildWatchers()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer
         _ = CursorBubbleService.shared      // cursor speech bubble (lazy init)
