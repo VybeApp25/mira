@@ -42,20 +42,18 @@ final class CallDetector: ObservableObject {
 
     // MARK: Detection
 
-    /// Returns the first known call source among the currently running apps.
-    func runningCallSource() -> CallSource? {
-        let running = NSWorkspace.shared.runningApplications
-        for app in running {
-            guard let bid = app.bundleIdentifier else { continue }
-            if let source = CallSource.from(bundleIdentifier: bid) {
-                return source
-            }
-        }
-        return nil
+    /// Returns a known call source only when a call app is the FRONTMOST app —
+    /// the reliable "you're actually on this call" signal. Matching any *running*
+    /// app mislabels (e.g. Discord idle in the background while you take a phone
+    /// call). A phone call with no Mac call app in front yields nil (correct —
+    /// Mira can't capture the phone's audio).
+    func detectedSource() -> CallSource? {
+        guard let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return nil }
+        return CallSource.from(bundleIdentifier: bid)
     }
 
     private func evaluate() {
-        let detected = runningCallSource()
+        let detected = detectedSource()
         guard detected != activeSource else { return }
 
         if let detected {

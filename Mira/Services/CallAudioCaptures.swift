@@ -3,6 +3,22 @@ import Foundation
 import ScreenCaptureKit
 import CoreMedia
 
+// Temporary file-based tracing for the caller (system-audio) path — the unified
+// log redacts the signed app's NSLog output. Read /tmp/mira-call-debug.log.
+// TODO: remove once the caller channel is verified on a real call.
+func callDebugLog(_ msg: String) {
+    let line = "\(Date()): \(msg)\n"
+    guard let data = line.data(using: .utf8) else { return }
+    let url = URL(fileURLWithPath: "/tmp/mira-call-debug.log")
+    if let h = try? FileHandle(forWritingTo: url) {
+        defer { try? h.close() }
+        _ = try? h.seekToEnd()
+        try? h.write(contentsOf: data)
+    } else {
+        try? data.write(to: url)
+    }
+}
+
 // MARK: - Microphone capture (the user → right-side bubbles)
 //
 // A standalone AVAudioEngine input tap. Independent of AssemblyAIStreamingService
@@ -56,16 +72,21 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unc
         cfg.excludesCurrentProcessAudio = true
         cfg.sampleRate                  = 48_000
         cfg.channelCount                = 2
-        // Minimal video — required by SCStream, but we never read .screen frames.
-        cfg.width                = 2
-        cfg.height               = 2
-        cfg.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        // Video is required by SCStream even for audio-only; use the display size
+        // at a low frame rate (we never read .screen frames). A 2x2 size made the
+        // stream fail to deliver audio.
+        cfg.width                = display.width
+        cfg.height               = display.height
+        cfg.minimumFrameInterval = CMTime(value: 1, timescale: 2)   // ~0.5 fps, frames ignored
 
         let s = SCStream(filter: filter, configuration: cfg, delegate: self)
         try s.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
         try await s.startCapture()
         stream = s
+        callDebugLog("system-audio: startCapture OK (\(display.width)x\(display.height))")
     }
+
+    private var loggedFirstBuffer = false
 
     func stop() async {
         try? await stream?.stopCapture()
@@ -75,8 +96,13 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unc
     // SCStreamOutput — called on `queue`.
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
                 of type: SCStreamOutputType) {
-        guard type == .audio, sampleBuffer.isValid,
-              let pcm = sampleBuffer.asPCMBuffer else { return }
+        guard type == .audio else { return }
+        guard sampleBuffer.isValid else { callDebugLog("system-audio: invalid sample buffer"); return }
+        guard let pcm = sampleBuffer.asPCMBuffer else { callDebugLog("system-audio: asPCMBuffer returned nil"); return }
+        if !loggedFirstBuffer {
+            loggedFirstBuffer = true
+            callDebugLog("system-audio: first PCM buffer frames=\(pcm.frameLength) sr=\(pcm.format.sampleRate) ch=\(pcm.format.channelCount)")
+        }
         onBuffer?(pcm)
     }
 }

@@ -28,6 +28,22 @@ final class CallHUDManager {
         detector.onCallStart = { [weak self] source in self?.offerTranscription(source) }
         detector.onCallEnd   = { [weak self] in self?.detectedCallEnded() }
         detector.start()
+
+        // Auto-end a live transcription when its call app quits. (When the call
+        // ends but the app stays open, the ✕ on the card is the manual stop —
+        // detecting hang-up without quitting needs a deeper signal, a follow-up.)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                guard let self,
+                      let session = self.model.session,
+                      let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      let bid = app.bundleIdentifier,
+                      session.source.bundleIdentifiers.contains(bid) else { return }
+                self.endTranscribing()
+            }
+        }
     }
 
     // MARK: Detector → consent prompt
@@ -120,7 +136,7 @@ final class CallHUDManager {
         let vf = screen.visibleFrame
         let size = panel.frame.size
         let inset: CGFloat = 16
-        let origin = NSPoint(x: vf.maxX - size.width - inset, y: vf.maxY - size.height - inset)
+        let origin = NSPoint(x: vf.minX + inset, y: vf.maxY - size.height - inset)
         panel.setFrameOrigin(origin)
     }
 
