@@ -227,6 +227,7 @@ final class RadialLauncherController {
         win.level              = .screenSaver
         win.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         win.hasShadow          = false
+        win.acceptsMouseMovedEvents = true
         win.contentView = NSHostingView(rootView: RadialLauncherView(center: center, onClose: { [weak self] in self?.hide() }))
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -282,6 +283,7 @@ struct RadialLauncherView: View {
     @State private var apps: [LauncherApp] = []
     @State private var selected = 0
     @State private var overRing = false
+    @State private var monitor: Any?
     @FocusState private var focused: Bool
 
     private var outer: CGFloat { model.size.outer }
@@ -292,13 +294,13 @@ struct RadialLauncherView: View {
             Color.black.opacity(0.05).ignoresSafeArea().onTapGesture { onClose() }
             wheel
                 .frame(width: outer * 2, height: outer * 2)
-                .onContinuousHover(coordinateSpace: .local) { handleHover($0) }
                 .onTapGesture { overRing ? launch(selected) : onClose() }
                 .position(center)
         }
         .focusable()
         .focused($focused)
-        .onAppear { apps = model.launcherApps(); focused = true }
+        .onAppear { apps = model.launcherApps(); focused = true; installMouseMonitor() }
+        .onDisappear { removeMouseMonitor() }
         .onKeyPress(.leftArrow)  { move(-1); return .handled }
         .onKeyPress(.upArrow)    { move(-1); return .handled }
         .onKeyPress(.rightArrow) { move(1);  return .handled }
@@ -373,21 +375,32 @@ struct RadialLauncherView: View {
         return CGPoint(x: p.x, y: p.y + iconSize / 2 + 5)
     }
 
-    private func handleHover(_ phase: HoverPhase) {
-        switch phase {
-        case .active(let pt):
-            let dx = pt.x - outer, dy = pt.y - outer
-            let dist = hypot(dx, dy)
-            guard !apps.isEmpty, dist >= inner, dist <= outer else { overRing = false; return }
-            var phi = atan2(dy, dx) + Double.pi / 2          // 0 at the top wedge
-            phi = phi.truncatingRemainder(dividingBy: 2 * .pi)
-            if phi < 0 { phi += 2 * .pi }
-            overRing = true
-            let idx = min(apps.count - 1, Int(phi / (2 * .pi / Double(apps.count))))
-            if idx != selected { selected = idx }   // skip redundant re-renders within a wedge
-        case .ended:
-            overRing = false
+    private func installMouseMonitor() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { e in
+            self.updateSelection(e.locationInWindow, windowHeight: e.window?.frame.height)
+            return e
         }
+    }
+
+    private func removeMouseMonitor() {
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+    }
+
+    /// Highlight the wedge under the cursor — driven by raw mouse-moved events for
+    /// fluid tracking (SwiftUI's onContinuousHover stuttered here).
+    private func updateSelection(_ windowPoint: NSPoint, windowHeight: CGFloat?) {
+        guard let h = windowHeight else { return }
+        let dx = windowPoint.x - center.x
+        let dy = (h - windowPoint.y) - center.y         // window is bottom-left, view top-left
+        let dist = hypot(dx, dy)
+        guard !apps.isEmpty, dist >= inner, dist <= outer else { overRing = false; return }
+        var phi = atan2(dy, dx) + Double.pi / 2
+        phi = phi.truncatingRemainder(dividingBy: 2 * .pi)
+        if phi < 0 { phi += 2 * .pi }
+        overRing = true
+        let idx = min(apps.count - 1, Int(phi / (2 * .pi / Double(apps.count))))
+        if idx != selected { selected = idx }
     }
 
     private func move(_ delta: Int) {
