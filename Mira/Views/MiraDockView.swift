@@ -281,6 +281,11 @@ private struct WidgetSlot: View {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Weather.app"))
                 }
             }
+        case .appLauncher:
+            // The radial ring switcher is a Pro/Ultra feature; Free keeps the
+            // basic launcher popover.
+            if EntitlementService.shared.plan == .free { showDetail.toggle() }
+            else { RadialLauncherController.shared.show() }
         default:
             showDetail.toggle()
         }

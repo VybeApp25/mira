@@ -159,6 +159,7 @@
 		81B72B55F15CE2D344BEA7B1 /* clicky-text-receive.wav in Resources */ = {isa = PBXBuildFile; fileRef = 52FA32F20FF203E1260D29E0 /* clicky-text-receive.wav */; };
 		825330BA14EA4E341A1E7CDE /* PomodoroService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */; };
 		825EC947F9C5C17BF1B8C8F6 /* MiraIslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D4739EA771EF0C39908A69 /* MiraIslandView.swift */; };
+		83553232684E335959BA4451 /* RadialLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6677D006849F37389D64A610 /* RadialLauncher.swift */; };
 		8515B0E439F051BCA9860043 /* MiraCursorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */; };
 		8553F364B94786B1DBB37B20 /* NotchOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479ABA35C69E7426DBC580D5 /* NotchOnboardingView.swift */; };
 		86381236CFAE5F4DD5A0A433 /* ChatWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C90C43741638A1900574C /* ChatWidgetView.swift */; };
@@ -418,6 +419,7 @@
 		63F52A13C8B02EEA4701166A /* ResponseCardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardService.swift; sourceTree = "<group>"; };
 		63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		641B7CB66B672FC642BC96AE /* AttentionDirective.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionDirective.swift; sourceTree = "<group>"; };
+		6677D006849F37389D64A610 /* RadialLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadialLauncher.swift; sourceTree = "<group>"; };
 		6688CC8565B3DE43E7FDD327 /* WorkspaceDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDashboardView.swift; sourceTree = "<group>"; };
 		688E6384F043AE808602588A /* findmy_devices.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = findmy_devices.py; sourceTree = "<group>"; };
 		689C90C43741638A1900574C /* ChatWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWidgetView.swift; sourceTree = "<group>"; };
@@ -886,6 +888,7 @@
 				174A45383DCADC992E1A009B /* PythonSkillRunner.swift */,
 				46A1297EEE877A44731A4D04 /* QualityStore.swift */,
 				CA6D17DC1DC375321372EDEA /* QuotaService.swift */,
+				6677D006849F37389D64A610 /* RadialLauncher.swift */,
 				A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */,
 				63F52A13C8B02EEA4701166A /* ResponseCardService.swift */,
 				39B2C1A5B3D357A621F2541F /* RouterService.swift */,
@@ -1356,6 +1359,7 @@
 				B56FAF42D5DBCD92116DD1D9 /* PythonSkillRunner.swift in Sources */,
 				B67F17EFCB9B3D38E0590E0D /* QualityStore.swift in Sources */,
 				8B4296AB8DE5E2F681CF154E /* QuotaService.swift in Sources */,
+				83553232684E335959BA4451 /* RadialLauncher.swift in Sources */,
 				56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */,
 				45DCD1E11E23C428C1E23DEC /* ReliabilityDashboardView.swift in Sources */,
 				3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */,
