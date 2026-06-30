@@ -94,6 +94,7 @@ final class NotchManager {
         Task { await QuotaService.shared.refreshQuota() }
         MiraState.shared = miraState
         CronScheduler.shared.start()
+        CallHUDManager.shared.start()   // meeting-assistant: watch for calls, offer transcription
         ExternalTriggerRunner.shared.rebuildWatchers()
         _ = CursorCompanionManager.shared   // initialize ambient presence layer
         _ = CursorBubbleService.shared      // cursor speech bubble (lazy init)

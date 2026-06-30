@@ -84,6 +84,7 @@
 		47129E290E702FE79EA1780A /* apple-reminders.md in Resources */ = {isa = PBXBuildFile; fileRef = D74433F31D3AC43D9E8F2B4F /* apple-reminders.md */; };
 		47D10CE56F35895DF6988812 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B81907F9DDB9297D51C992A8 /* Assets.xcassets */; };
 		48D23EC3E1191AC53082DD48 /* WorkspaceDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6688CC8565B3DE43E7FDD327 /* WorkspaceDashboardView.swift */; };
+		4A45C5A7254EEC4623088A21 /* CallTranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380708383A28192B655CE505 /* CallTranscriptView.swift */; };
 		4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376F1CDCA756B5368F057786 /* AgentTaskStore.swift */; };
 		4C80776FEC563AEB1E99B9A9 /* enter.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3593098536F17182B92491AE /* enter.mp3 */; };
 		4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */; };
@@ -234,6 +235,7 @@
 		C99D98F0FAE42E17ABC22272 /* AccentColorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F3AE6AECF82F219A7C1A4 /* AccentColorService.swift */; };
 		CA63D9AFDC3D4C6971488A9B /* ProjectModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F1B30EBD78983473632ED6 /* ProjectModels.swift */; };
 		CE064B3D139D43C3650179C1 /* TeachingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */; };
+		CE23D220F0C4D8D61E5E65D3 /* CallHUDManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5730D96274E04D43ABA9738A /* CallHUDManager.swift */; };
 		CE72D3B5E1213AEEBC2B533C /* MiraSkill.swift in Sources */ = {isa = PBXBuildFile; fileRef = F861FAC8802E2F2125CE93E4 /* MiraSkill.swift */; };
 		CE85BDD6515B31FE03B42593 /* WorkspaceReviewAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60A3BC0F1CEC3BC60BC98A7 /* WorkspaceReviewAgent.swift */; };
 		D08711BF6A67BC56365F6AAD /* MiraPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAB411962D3D66F94EE5483 /* MiraPanel.swift */; };
@@ -361,6 +363,7 @@
 		3593098536F17182B92491AE /* enter.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = enter.mp3; sourceTree = "<group>"; };
 		3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandWindowManager.swift; sourceTree = "<group>"; };
 		376F1CDCA756B5368F057786 /* AgentTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskStore.swift; sourceTree = "<group>"; };
+		380708383A28192B655CE505 /* CallTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriptView.swift; sourceTree = "<group>"; };
 		39B2C1A5B3D357A621F2541F /* RouterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterService.swift; sourceTree = "<group>"; };
 		3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCoordinator.swift; sourceTree = "<group>"; };
 		3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportPrompts.swift; sourceTree = "<group>"; };
@@ -396,6 +399,7 @@
 		55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutcomeEvaluator.swift; sourceTree = "<group>"; };
 		569D921EDA2E4519F8512B35 /* imessage.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = imessage.md; sourceTree = "<group>"; };
 		56EC347B47F1C0B55FBAD734 /* slack.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = slack.md; sourceTree = "<group>"; };
+		5730D96274E04D43ABA9738A /* CallHUDManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallHUDManager.swift; sourceTree = "<group>"; };
 		5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEngine.swift; sourceTree = "<group>"; };
 		57C1C1240C045D738B98CC29 /* SkillStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillStore.swift; sourceTree = "<group>"; };
 		5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWidgetService.swift; sourceTree = "<group>"; };
@@ -708,6 +712,7 @@
 			children = (
 				090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */,
 				8261E0EB0C3813433E9281F9 /* AnimationController.swift */,
+				5730D96274E04D43ABA9738A /* CallHUDManager.swift */,
 				A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */,
 				3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */,
 				628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */,
@@ -964,6 +969,7 @@
 				3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */,
 				AE6854B359F14D11ED97A532 /* AuthView.swift */,
 				077436ECE19C7096BAC241EC /* BriefingView.swift */,
+				380708383A28192B655CE505 /* CallTranscriptView.swift */,
 				689C90C43741638A1900574C /* ChatWidgetView.swift */,
 				4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */,
 				C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */,
@@ -1199,7 +1205,9 @@
 				3FDD1117C1E6D7B88437055D /* CallAudioCaptures.swift in Sources */,
 				5E5F201BE9E564EB2D147B66 /* CallCaptureService.swift in Sources */,
 				B2E8AF7CE4206A49D5F46ACD /* CallDetector.swift in Sources */,
+				CE23D220F0C4D8D61E5E65D3 /* CallHUDManager.swift in Sources */,
 				6BF2AC0495AE8F975033F4D8 /* CallModels.swift in Sources */,
+				4A45C5A7254EEC4623088A21 /* CallTranscriptView.swift in Sources */,
 				23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */,
 				E6A689A9A3667D0837875C10 /* CausalInsight.swift in Sources */,
 				36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */,
