@@ -60,6 +60,7 @@
 		2D49631A1A91E49F3FD404BA /* findmy.md in Resources */ = {isa = PBXBuildFile; fileRef = E7CC8948A6B01CB2781B9B00 /* findmy.md */; };
 		2F50F20C858D0A1A815FFDB5 /* clicky-question.wav in Resources */ = {isa = PBXBuildFile; fileRef = 161EA381C31F0A54B68A4405 /* clicky-question.wav */; };
 		2FC23E5F7370782A672D9ED3 /* youtube_transcript.py in Resources */ = {isa = PBXBuildFile; fileRef = D89EEAEAD06E19F2837F64F4 /* youtube_transcript.py */; };
+		2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16910211171E9C8F0190DBD8 /* SystemStats.swift */; };
 		2FDF8D290B3689B7EB3F13AE /* MiraBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91346EA30D1B31122573AE9 /* MiraBackend.swift */; };
 		3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */; };
 		337C3FC5FE2A1271016E1791 /* googledrive.md in Resources */ = {isa = PBXBuildFile; fileRef = 088180F819F6CAD079F973DB /* googledrive.md */; };
@@ -328,6 +329,7 @@
 		140C79E08FEE4FC0BC1B9A6F /* apple-notes.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "apple-notes.md"; sourceTree = "<group>"; };
 		161EA381C31F0A54B68A4405 /* clicky-question.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-question.wav"; sourceTree = "<group>"; };
 		16778FFCF54471FB1ABBB110 /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
+		16910211171E9C8F0190DBD8 /* SystemStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStats.swift; sourceTree = "<group>"; };
 		16D6B874FC0EE313F66CD9E6 /* obsidian_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = obsidian_rw.py; sourceTree = "<group>"; };
 		174A45383DCADC992E1A009B /* PythonSkillRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonSkillRunner.swift; sourceTree = "<group>"; };
 		1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecrets.swift; sourceTree = "<group>"; };
@@ -891,6 +893,7 @@
 				A266BE527831F1DF05489050 /* StripePurchaseService.swift */,
 				3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */,
 				70F49814EE23560DC880AF05 /* SupabaseService.swift */,
+				16910211171E9C8F0190DBD8 /* SystemStats.swift */,
 				93237F9C8CE985B51E1E1062 /* TaskAnnouncer.swift */,
 				5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */,
 				2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */,
@@ -1370,6 +1373,7 @@
 				3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */,
 				8A133C5A0C621D99DDBA8C8E /* SuccessObserver.swift in Sources */,
 				9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */,
+				2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */,
 				7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */,
 				7FC3E90009139606A47CB42F /* TaskRunLedger.swift in Sources */,
 				CE064B3D139D43C3650179C1 /* TeachingEngine.swift in Sources */,
