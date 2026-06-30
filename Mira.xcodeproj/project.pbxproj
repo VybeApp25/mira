@@ -110,6 +110,7 @@
 		58C7FB3B6DF3539FEA5AD3C7 /* HoverHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */; };
 		597FF91BBD95F2AC09D1178B /* findmy_devices.py in Resources */ = {isa = PBXBuildFile; fileRef = 688E6384F043AE808602588A /* findmy_devices.py */; };
 		5BC999BCDF2CB2E5859ED059 /* PolicyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06B0C92C98D179DE8BF3C3D /* PolicyEngine.swift */; };
+		5C76BF8209E6648033DAEB47 /* FileShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53D32F98D47AABE99933FAA /* FileShelf.swift */; };
 		5D0080E0C41DFD6B2A1E43B5 /* eshop.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6BA8022B07E7E98EB0CCFBD2 /* eshop.mp3 */; };
 		5E5F201BE9E564EB2D147B66 /* CallCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC64DB121D54E7644A08018 /* CallCaptureService.swift */; };
 		604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B4A19539539B3B6D18DDD0 /* CursorCompanionModels.swift */; };
@@ -494,6 +495,7 @@
 		A266BE527831F1DF05489050 /* StripePurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripePurchaseService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
 		A402B112ABE83ADE3C4489E6 /* AgentJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJob.swift; sourceTree = "<group>"; };
+		A53D32F98D47AABE99933FAA /* FileShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileShelf.swift; sourceTree = "<group>"; };
 		A5AB62B5302AD934D3ED258F /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		A782277C3717512EB6C03900 /* pptx_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pptx_rw.py; sourceTree = "<group>"; };
 		A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
@@ -839,6 +841,7 @@
 				2898F0CED0E0D77476860AC0 /* EvidenceEvaluator.swift */,
 				93C538A7CDB7D083498C2377 /* ExternalTriggerRunner.swift */,
 				7C46953D1361F747CFB25E28 /* FailureMemory.swift */,
+				A53D32F98D47AABE99933FAA /* FileShelf.swift */,
 				D01313512AA5C428B31B4E8C /* FileWatchService.swift */,
 				30DBCAAD8D19FFE4F04F3375 /* FloatingButtonService.swift */,
 				B5D41497F7635F087FD3D293 /* GroundingService.swift */,
@@ -1259,6 +1262,7 @@
 				57A3C2DE8BEF627CB6B8AC54 /* EvidenceEvaluator.swift in Sources */,
 				94682DCB56A8A83B033DB022 /* ExternalTriggerRunner.swift in Sources */,
 				00A95EDCC39057E3E0D58A2F /* FailureMemory.swift in Sources */,
+				5C76BF8209E6648033DAEB47 /* FileShelf.swift in Sources */,
 				DF7ED74A4C011F0D6D8FAB46 /* FileWatchService.swift in Sources */,
 				00017FA4FF8357F9197DE794 /* FloatingAgentChipView.swift in Sources */,
 				A207BDA0F69204FBCB1CFA9C /* FloatingButtonService.swift in Sources */,
