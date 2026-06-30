@@ -315,9 +315,20 @@ struct RadialLauncherView: View {
                 .overlay(DonutShape(inner: inner, outer: outer).stroke(Color.white.opacity(0.18), lineWidth: 1))
                 .shadow(color: .black.opacity(0.3), radius: 18, y: 4)
 
+            // Static base wedges — independent of selection, so they're not
+            // re-rasterized on every hover tick.
             ForEach(apps.indices, id: \.self) { idx in
                 WheelSegment(index: idx, count: apps.count, inner: inner, outer: outer)
-                    .fill(idx == selected ? Color.accentColor.opacity(0.55) : Color.white.opacity(0.06))
+                    .fill(Color.white.opacity(0.06))
+            }
+
+            // The ONLY view that depends on `selected` — keeps hover snappy.
+            if !apps.isEmpty {
+                WheelSegment(index: selected, count: apps.count, inner: inner, outer: outer)
+                    .fill(Color.accentColor.opacity(0.55))
+            }
+
+            ForEach(apps.indices, id: \.self) { idx in
                 WheelSegment(index: idx, count: apps.count, inner: inner, outer: outer)
                     .stroke(Color.black.opacity(0.10), lineWidth: 1)
             }
@@ -326,8 +337,6 @@ struct RadialLauncherView: View {
                 if let icon = apps[idx].icon {
                     Image(nsImage: icon).resizable().frame(width: iconSize, height: iconSize)
                         .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                        .scaleEffect(idx == selected ? 1.14 : 1.0)
-                        .animation(.easeOut(duration: 0.12), value: selected)
                         .position(iconPosition(idx))
                         .allowsHitTesting(false)
                 }
@@ -374,7 +383,8 @@ struct RadialLauncherView: View {
             phi = phi.truncatingRemainder(dividingBy: 2 * .pi)
             if phi < 0 { phi += 2 * .pi }
             overRing = true
-            selected = min(apps.count - 1, Int(phi / (2 * .pi / Double(apps.count))))
+            let idx = min(apps.count - 1, Int(phi / (2 * .pi / Double(apps.count))))
+            if idx != selected { selected = idx }   // skip redundant re-renders within a wedge
         case .ended:
             overRing = false
         }
