@@ -31,35 +31,9 @@ final class FileShelfService: ObservableObject {
     func clear() { items.removeAll() }
 }
 
-// MARK: - Dock widget (compact)
+// MARK: - Labs tab view (drop zone + items)
 
-struct FileShelfWidget: View {
-    @ObservedObject private var shelf = FileShelfService.shared
-    @ObservedObject private var ent   = EntitlementService.shared
-
-    var body: some View {
-        Group {
-            if ent.plan == .free {
-                VStack(spacing: 3) {
-                    Image(systemName: "lock.fill").font(.system(size: 12)).foregroundColor(.yellow)
-                    Text("Shelf").font(.system(size: 9, weight: .medium)).foregroundColor(.white.opacity(0.7))
-                }
-            } else {
-                VStack(spacing: 3) {
-                    Image(systemName: shelf.items.isEmpty ? "tray" : "tray.full.fill")
-                        .font(.system(size: 16)).foregroundColor(.white.opacity(0.85))
-                    Text(shelf.items.isEmpty ? "Shelf" : "\(shelf.items.count)")
-                        .font(.system(size: 9, weight: .semibold)).foregroundColor(.white.opacity(0.6))
-                }
-            }
-        }
-        .frame(width: 60)
-    }
-}
-
-// MARK: - Detail popover (drop zone + items)
-
-struct FileShelfDetailPanel: View {
+struct FileShelfLabsView: View {
     @ObservedObject private var shelf = FileShelfService.shared
     @ObservedObject private var ent   = EntitlementService.shared
     @State private var targeted = false
@@ -111,7 +85,8 @@ struct FileShelfDetailPanel: View {
                     .font(.system(size: 9)).foregroundColor(.white.opacity(0.35))
             }
         }
-        .frame(width: 264)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

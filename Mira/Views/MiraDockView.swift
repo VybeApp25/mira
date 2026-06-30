@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum DockWidgetType: String, CaseIterable, Identifiable {
-    case clock, weather, nowPlaying, battery, appLauncher, pomodoro, toggles, soundMeter, systemStats, fileShelf
+    case clock, weather, nowPlaying, battery, appLauncher, pomodoro, toggles, soundMeter, systemStats
     var id: String { rawValue }
 
     var label: String {
@@ -23,7 +23,6 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
         case .toggles:     "Quick Toggles"
         case .soundMeter:  "Sound Meter"
         case .systemStats: "System"
-        case .fileShelf:   "Shelf"
         }
     }
 
@@ -38,7 +37,6 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
         case .toggles:     "toggles"
         case .soundMeter:  "waveform"
         case .systemStats: "cpu"
-        case .fileShelf:   "tray.full"
         }
     }
 }
@@ -303,7 +301,6 @@ private struct WidgetSlot: View {
         case .toggles:     QuickTogglesWidget()
         case .soundMeter:  SoundMeterWidget()
         case .systemStats: SystemStatsWidget()
-        case .fileShelf:   FileShelfWidget()
         }
     }
 
@@ -317,7 +314,6 @@ private struct WidgetSlot: View {
         case .nowPlaying:  NowPlayingDetailPanel()
         case .battery:     BatteryDetailPanel()
         case .systemStats: SystemStatsDetailPanel()
-        case .fileShelf:   FileShelfDetailPanel()
         default:           Text(wtype.label).foregroundColor(.white.opacity(0.5))
         }
     }

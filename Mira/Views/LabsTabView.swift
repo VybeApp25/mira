@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct LabsTabView: View {
     enum SubTab: String, CaseIterable {
         case clipboard = "Clipboard"
+        case shelf     = "Shelf"
         case shortcuts = "Shortcuts"
         case queue     = "Queue"
         case reminders = "Reminders"
@@ -14,6 +15,7 @@ struct LabsTabView: View {
         var icon: String {
             switch self {
             case .clipboard: return "clipboard"
+            case .shelf:     return "tray.full"
             case .shortcuts: return "keyboard"
             case .queue:     return "list.number"
             case .reminders: return "bell"
@@ -69,6 +71,7 @@ struct LabsTabView: View {
     private var content: some View {
         switch subTab {
         case .clipboard: ClipboardLabsView(highlightID: $highlightClipID)
+        case .shelf:     FileShelfLabsView()
         case .shortcuts: ShortcutsLabsView()
         case .queue:     QueueLabsView()
         case .reminders: RemindersLabsView()
