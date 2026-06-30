@@ -45,14 +45,12 @@ final class CallCaptureService: ObservableObject {
 
         // Caller (system audio) → left bubbles.
         let caller = LiveTranscriptionStream()
-        caller.label = "caller"
         caller.onPartial = { [weak session] t in session?.updatePartial(t, speaker: .caller) }
         caller.onFinal   = { [weak session] t in session?.finalize(t, speaker: .caller) }
         callerStream = caller
 
         // Me (microphone) → right bubbles.
         let me = LiveTranscriptionStream()
-        me.label = "me"
         me.onPartial = { [weak session] t in session?.updatePartial(t, speaker: .me) }
         me.onFinal   = { [weak session] t in session?.finalize(t, speaker: .me) }
         meStream = me
@@ -75,7 +73,6 @@ final class CallCaptureService: ObservableObject {
         Task {
             do { try await sysCap.start() } catch {
                 NSLog("[CallCapture] system-audio capture failed: \(error.localizedDescription)")
-                callDebugLog("system-audio: start() threw — \(error.localizedDescription)")
             }
         }
     }

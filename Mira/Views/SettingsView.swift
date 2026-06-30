@@ -63,6 +63,8 @@ struct SettingsView: View {
     @State private var agentFolderPath:  String = ""
 
     private static let defaultAgentFolder = NSHomeDirectory() + "/Desktop/Mira"
+    @State private var transcriptFolderPath: String = ""
+    private static let defaultTranscriptFolder = NSHomeDirectory() + "/Documents/Transcripts"
 
     enum RecordingTarget {
         case voice, text, draw
@@ -117,6 +119,7 @@ struct SettingsView: View {
                             connectedAppsButton
                             knowledgeImportButton
                             agentFolderSection
+                            transcriptFolderSection
                             memorySection
                         }
                         settingsGroup("Advanced", icon: "wrench.and.screwdriver.fill") {
@@ -142,6 +145,7 @@ struct SettingsView: View {
             selectedMisoVoice = MisoVoice.saved
             orKeyInput = UserDefaults.standard.string(forKey: "mira_openrouter_key") ?? ""
             agentFolderPath = UserDefaults.standard.string(forKey: "mira_agent_folder") ?? Self.defaultAgentFolder
+            transcriptFolderPath = UserDefaults.standard.string(forKey: "mira_transcript_folder") ?? Self.defaultTranscriptFolder
         }
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
         .sheet(isPresented: $showPaywall)         { PaywallView() }
@@ -1575,6 +1579,61 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             agentFolderPath = url.path
             UserDefaults.standard.set(url.path, forKey: "mira_agent_folder")
+        }
+    }
+
+    // MARK: - Transcripts Folder section
+
+    private var transcriptFolderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Transcripts Folder", systemImage: "text.bubble.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                Text(transcriptFolderPath.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button("Change…") { chooseTranscriptFolder() }
+                    .font(.system(size: 11))
+                    .foregroundColor(accent)
+                    .buttonStyle(.plain)
+
+                if transcriptFolderPath != Self.defaultTranscriptFolder {
+                    Button("Reset") {
+                        UserDefaults.standard.removeObject(forKey: "mira_transcript_folder")
+                        transcriptFolderPath = Self.defaultTranscriptFolder
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text("Call transcripts are saved here. Mira can read and summarize them.")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.30))
+        }
+    }
+
+    private func chooseTranscriptFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose where Mira saves call transcripts"
+        panel.prompt = "Select Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            transcriptFolderPath = url.path
+            UserDefaults.standard.set(url.path, forKey: "mira_transcript_folder")
         }
     }
 

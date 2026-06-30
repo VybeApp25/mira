@@ -17,11 +17,6 @@ import Foundation
 final class LiveTranscriptionStream: @unchecked Sendable {
     var onPartial: ((String) -> Void)?
     var onFinal:   ((String) -> Void)?
-    var label = ""   // "me" / "caller" — for diagnostics only
-
-    private var didLogNotReady   = false
-    private var didLogConvertNil = false
-    private var didLogFirstSend  = false
 
     private let wsURL    = URL(string: "wss://streaming.assemblyai.com/v3/ws")!
     private let targetHz: Double = 16_000
@@ -94,19 +89,7 @@ final class LiveTranscriptionStream: @unchecked Sendable {
         let ready = sessionReady
         let task  = webSocketTask
         lock.unlock()
-        guard ready else {
-            if !didLogNotReady { didLogNotReady = true; callDebugLog("[\(label)] push before socket ready") }
-            return
-        }
-        guard let task else { return }
-        guard let data = convert(buffer), !data.isEmpty else {
-            if !didLogConvertNil {
-                didLogConvertNil = true
-                callDebugLog("[\(label)] convert produced no data (inCh=\(buffer.format.channelCount) inSR=\(buffer.format.sampleRate))")
-            }
-            return
-        }
-        if !didLogFirstSend { didLogFirstSend = true; callDebugLog("[\(label)] first audio send \(data.count) bytes") }
+        guard ready, let task, let data = convert(buffer), !data.isEmpty else { return }
         task.send(.data(data)) { _ in }
     }
 
@@ -171,7 +154,6 @@ final class LiveTranscriptionStream: @unchecked Sendable {
         switch type {
         case "Begin", "session_begins":
             lock.lock(); sessionReady = true; lock.unlock()
-            callDebugLog("[\(label)] socket ready (\(type))")
 
         case "Turn":
             // v3: each Turn carries the running transcript; end_of_turn marks it
