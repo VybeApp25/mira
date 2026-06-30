@@ -8,6 +8,7 @@ struct LauncherApp: Identifiable {
     let name: String
     let icon: NSImage?
     let hidesAfter: Bool
+    let isRunning: Bool        // shows a running-indicator dot under the icon
     let activate: () -> Void
 }
 
@@ -106,19 +107,22 @@ final class RadialLauncherModel: ObservableObject {
 
     func launcherApps() -> [LauncherApp] {
         if !palette.isEmpty {
+            let running = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
             return palette.map { pa in
-                LauncherApp(name: pa.name,
+                let bid = Bundle(url: URL(fileURLWithPath: pa.path))?.bundleIdentifier
+                return LauncherApp(name: pa.name,
                             icon: NSWorkspace.shared.icon(forFile: pa.path),
                             hidesAfter: pa.hidesAfterLaunch,
+                            isRunning: bid.map { running.contains($0) } ?? false,
                             activate: { [weak self] in self?.launch(pa) })
             }
         }
-        // Fallback before the user builds a palette: recent apps.
+        // Fallback before the user builds a palette: recent apps (all running).
         var apps: [LauncherApp] = []
         for bid in recents.prefix(6) {
             guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bid).first else { continue }
             apps.append(LauncherApp(name: app.localizedName ?? bid, icon: app.icon,
-                                    hidesAfter: true, activate: { app.activate() }))
+                                    hidesAfter: true, isRunning: true, activate: { app.activate() }))
         }
         return apps
     }
@@ -329,6 +333,15 @@ struct RadialLauncherView: View {
                 }
             }
 
+            // Running-indicator dot under any already-open app (like the Dock).
+            ForEach(apps.indices, id: \.self) { idx in
+                if apps[idx].isRunning {
+                    Circle().fill(Color.white.opacity(0.9)).frame(width: 4, height: 4)
+                        .position(dotPosition(idx))
+                        .allowsHitTesting(false)
+                }
+            }
+
             if apps.isEmpty {
                 Text("Add apps in Settings")
                     .font(.system(size: 11)).foregroundColor(.white.opacity(0.7))
@@ -344,6 +357,11 @@ struct RadialLauncherView: View {
         let a = -Double.pi / 2 + (Double(idx) + 0.5) * seg
         let r = (inner + outer) / 2
         return CGPoint(x: outer + r * cos(a), y: outer + r * sin(a))
+    }
+
+    private func dotPosition(_ idx: Int) -> CGPoint {
+        let p = iconPosition(idx)
+        return CGPoint(x: p.x, y: p.y + iconSize / 2 + 5)
     }
 
     private func handleHover(_ phase: HoverPhase) {
