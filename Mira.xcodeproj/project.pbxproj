@@ -130,6 +130,7 @@
 		6ABEF772A7B9978536C00AF7 /* CoordinationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54EE6C76840A879706154B2F /* CoordinationModels.swift */; };
 		6AFE49EF395CA8BAE99822D8 /* blender.md in Resources */ = {isa = PBXBuildFile; fileRef = 8E84D4D0882E63DE896ED342 /* blender.md */; };
 		6B44686F1F7AE50B7A3ECFBE /* KnowledgeImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */; };
+		6BF2AC0495AE8F975033F4D8 /* CallModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3C803AA19621D1944B4FBA /* CallModels.swift */; };
 		6CF9EF47A828BFECFEB24AB9 /* GroundingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D41497F7635F087FD3D293 /* GroundingService.swift */; };
 		705A9CD000BDFFB117C7E404 /* OnboardingNarrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B4FD4FFA5539F9EDC9F1DE /* OnboardingNarrator.swift */; };
 		713DA3CACD91572D8939C588 /* CodexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF6665B0465EE94AD47A55B /* CodexService.swift */; };
@@ -201,6 +202,7 @@
 		B07910E3464FCC8CF14C2852 /* CoordinatorSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26A0E1791C3F80BB04E5A24 /* CoordinatorSimulation.swift */; };
 		B0A1CA510C4F53004BBC02A8 /* TriggerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7490BE99AE4331B0DA9BF7BE /* TriggerModels.swift */; };
 		B101A7E87F46F83E807086BE /* SkillCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */; };
+		B2E8AF7CE4206A49D5F46ACD /* CallDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD309491F3423590AAC1CBC3 /* CallDetector.swift */; };
 		B56FAF42D5DBCD92116DD1D9 /* PythonSkillRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174A45383DCADC992E1A009B /* PythonSkillRunner.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
 		B651A578C12204C7F51ECFB9 /* TextExpansionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC85C65ED890060037FF65B8 /* TextExpansionService.swift */; };
@@ -393,6 +395,7 @@
 		5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEngine.swift; sourceTree = "<group>"; };
 		57C1C1240C045D738B98CC29 /* SkillStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillStore.swift; sourceTree = "<group>"; };
 		5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWidgetService.swift; sourceTree = "<group>"; };
+		5A3C803AA19621D1944B4FBA /* CallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallModels.swift; sourceTree = "<group>"; };
 		5A7FDDF0CA6E6F4084A0B4D6 /* HUDService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDService.swift; sourceTree = "<group>"; };
 		5B22AFE60CB6F6E579CEDC91 /* excalidraw.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = excalidraw.md; sourceTree = "<group>"; };
 		5F7A089D0333A61E16D3BBA4 /* OutcomeEvaluation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutcomeEvaluation.swift; sourceTree = "<group>"; };
@@ -548,6 +551,7 @@
 		D99F3AE6AECF82F219A7C1A4 /* AccentColorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccentColorService.swift; sourceTree = "<group>"; };
 		DA0389949E9946918CEE0916 /* Mira.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mira.entitlements; sourceTree = "<group>"; };
 		DD2C73BB04A46AD3A823F5A9 /* GuidanceEvidenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceEvidenceService.swift; sourceTree = "<group>"; };
+		DD309491F3423590AAC1CBC3 /* CallDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetector.swift; sourceTree = "<group>"; };
 		E03C7457034E97EA40219216 /* PillStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PillStateModel.swift; sourceTree = "<group>"; };
 		E0C3193DA00933B0BD1B5B4E /* googlesheets.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googlesheets.md; sourceTree = "<group>"; };
 		E21822F4B90B50BBAF783859 /* ResponseCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardView.swift; sourceTree = "<group>"; };
@@ -789,6 +793,7 @@
 				299758A12C64451C7C8799E5 /* AXActuationService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
 				B41C5FF860F44DB7354F8359 /* BrowserService.swift */,
+				DD309491F3423590AAC1CBC3 /* CallDetector.swift */,
 				3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */,
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
@@ -894,6 +899,7 @@
 				A402B112ABE83ADE3C4489E6 /* AgentJob.swift */,
 				376F1CDCA756B5368F057786 /* AgentTaskStore.swift */,
 				641B7CB66B672FC642BC96AE /* AttentionDirective.swift */,
+				5A3C803AA19621D1944B4FBA /* CallModels.swift */,
 				3D3263BDB62DACABB0645CE6 /* CausalInsight.swift */,
 				C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */,
 				94EB42557307F47F93C50C46 /* ConversationStore.swift */,
@@ -1181,6 +1187,8 @@
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
 				12EC8F5AB9E2C753C4A66BE3 /* BrowserService.swift in Sources */,
+				B2E8AF7CE4206A49D5F46ACD /* CallDetector.swift in Sources */,
+				6BF2AC0495AE8F975033F4D8 /* CallModels.swift in Sources */,
 				23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */,
 				E6A689A9A3667D0837875C10 /* CausalInsight.swift in Sources */,
 				36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */,
