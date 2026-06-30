@@ -1648,43 +1648,81 @@ struct SettingsView: View {
                 .foregroundColor(.white.opacity(0.5))
 
             HStack(spacing: 8) {
-                ForEach(0..<3, id: \.self) { i in
-                    Button { chooseFavoriteApp(i) } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: radial.favoriteName(i) != nil ? "app.fill" : "plus.app")
-                                .font(.system(size: 16))
-                                .foregroundColor(radial.favoriteName(i) != nil ? accent : .white.opacity(0.4))
-                            Text(radial.favoriteName(i) ?? "Favorite \(i + 1)")
-                                .font(.system(size: 9))
-                                .foregroundColor(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text("Size").font(.system(size: 11)).foregroundColor(.white.opacity(0.55))
+                    .frame(width: 64, alignment: .leading)
+                Picker("", selection: $radial.size) {
+                    ForEach(WheelSize.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+            HStack(spacing: 8) {
+                Text("Thickness").font(.system(size: 11)).foregroundColor(.white.opacity(0.55))
+                    .frame(width: 64, alignment: .leading)
+                Slider(value: $radial.thickness, in: 34...92)
+            }
+            Toggle(isOn: $radial.showAtCursor) {
+                Text("Open at mouse cursor").font(.system(size: 11)).foregroundColor(.white.opacity(0.75))
+            }
+            .toggleStyle(.switch).scaleEffect(0.8, anchor: .leading)
+
+            Text("APPS").font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.35)).padding(.top, 2)
+            ForEach(radial.palette) { app in
+                HStack(spacing: 8) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                        .resizable().frame(width: 20, height: 20)
+                    Text(app.name).font(.system(size: 11)).foregroundColor(.white.opacity(0.85)).lineLimit(1)
+                    Spacer()
+                    Menu {
+                        Toggle("Hide other apps on launch", isOn: bindHideOthers(app))
+                        Toggle("Hide wheel after launch", isOn: bindHidesAfter(app))
+                    } label: {
+                        Image(systemName: "slider.horizontal.3").font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    Button { radial.removeApp(app.id) } label: {
+                        Image(systemName: "minus.circle.fill").font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.35))
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
+            Button { addPaletteApp() } label: {
+                Label(radial.atLimit ? "App limit reached — Ultra for unlimited" : "Add app", systemImage: "plus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(radial.atLimit ? .white.opacity(0.3) : accent)
+            }
+            .buttonStyle(.plain).disabled(radial.atLimit)
 
-            Text("Tap the Option key to open the ring — your 3 favorites + 3 recent apps. (Pro/Ultra)")
+            Text("Tap the Option key to open the wheel. Arrow keys to navigate, Enter to launch. (Pro/Ultra)")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.30))
         }
     }
 
-    private func chooseFavoriteApp(_ index: Int) {
+    private func bindHideOthers(_ app: PaletteApp) -> Binding<Bool> {
+        Binding(get: { app.hideOthers }, set: { var a = app; a.hideOthers = $0; radial.update(a) })
+    }
+    private func bindHidesAfter(_ app: PaletteApp) -> Binding<Bool> {
+        Binding(get: { app.hidesAfterLaunch }, set: { var a = app; a.hidesAfterLaunch = $0; radial.update(a) })
+    }
+
+    private func addPaletteApp() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedFileTypes = ["app"]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.message = "Choose a favorite app for the radial launcher"
-        panel.prompt = "Choose"
+        panel.message = "Add an app to the radial launcher"
+        panel.prompt = "Add"
         if panel.runModal() == .OK, let url = panel.url {
-            radial.setFavorite(index, path: url.path)
+            radial.addApp(path: url.path)
         }
     }
 
