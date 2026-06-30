@@ -12,9 +12,9 @@ struct LauncherApp: Identifiable {
 
 // MARK: - RadialLauncherModel (favorites + recents)
 //
-// Utility #3: the radial ring app switcher. Shows up to 3 user-favorited apps +
-// up to 3 recently-activated apps. Favorites are chosen in Settings (stored as
-// app paths); recents are tracked live from app activations.
+// Utility #3: a Launchy-style radial "wheel" app switcher. Shows up to 3
+// user-favorited apps + up to 3 recently-activated apps. Favorites are chosen in
+// Settings (stored as app paths); recents are tracked live from activations.
 
 @MainActor
 final class RadialLauncherModel: ObservableObject {
@@ -24,8 +24,8 @@ final class RadialLauncherModel: ObservableObject {
     }
 
     private let favKey = "mira_radial_favorites"
-    @Published var favorites: [String]        // up to 3 app file paths
-    private(set) var recents: [String] = []   // bundle IDs, most-recent first
+    @Published var favorites: [String]
+    private(set) var recents: [String] = []
 
     func startTrackingRecents() {
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -55,7 +55,6 @@ final class RadialLauncherModel: ObservableObject {
         return URL(fileURLWithPath: favorites[index]).deletingPathExtension().lastPathComponent
     }
 
-    /// The 6-ish apps to show: up to 3 favorites then up to 3 recents (deduped).
     func launcherApps() -> [LauncherApp] {
         var apps: [LauncherApp] = []
         var seen = Set<String>()
@@ -68,8 +67,7 @@ final class RadialLauncherModel: ObservableObject {
             apps.append(LauncherApp(
                 name: url.deletingPathExtension().lastPathComponent,
                 icon: NSWorkspace.shared.icon(forFile: path),
-                activate: { NSWorkspace.shared.open(url) }
-            ))
+                activate: { NSWorkspace.shared.open(url) }))
         }
 
         var added = 0
@@ -85,12 +83,7 @@ final class RadialLauncherModel: ObservableObject {
     }
 }
 
-// MARK: - Option-tap hotkey
-//
-// A single clean tap of the Option key toggles the launcher. "Clean" = Option
-// pressed and released within 0.4s with no other key/modifier/click in between,
-// so Option used inside a real shortcut never triggers it. Needs Accessibility /
-// Input Monitoring (Mira already requests Accessibility).
+// MARK: - Option-tap hotkey (single clean tap of Option toggles the wheel)
 
 @MainActor
 final class RadialLauncherHotkey {
@@ -108,7 +101,6 @@ final class RadialLauncherHotkey {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown]
         ) { [weak self] e in MainActor.assumeIsolated { self?.handle(e) } }
-
         localMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.flagsChanged, .keyDown]
         ) { [weak self] e in MainActor.assumeIsolated { self?.handle(e) }; return e }
@@ -123,11 +115,8 @@ final class RadialLauncherHotkey {
                 if optionDownAt == nil { optionDownAt = Date(); contaminated = false }
                 if otherMods { contaminated = true }
             } else {
-                if let t = optionDownAt, !contaminated,
-                   Date().timeIntervalSince(t) < tapMaxDuration {
-                    if EntitlementService.shared.plan != .free {
-                        RadialLauncherController.shared.toggle()
-                    }
+                if let t = optionDownAt, !contaminated, Date().timeIntervalSince(t) < tapMaxDuration {
+                    if EntitlementService.shared.plan != .free { RadialLauncherController.shared.toggle() }
                 }
                 optionDownAt = nil
                 contaminated = false
@@ -138,6 +127,13 @@ final class RadialLauncherHotkey {
             break
         }
     }
+}
+
+// MARK: - Key-capable borderless window (so arrow keys / Enter reach the wheel)
+
+private final class KeyableWindow: NSWindow {
+    override var canBecomeKey:  Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 // MARK: - RadialLauncherController (overlay window)
@@ -154,7 +150,7 @@ final class RadialLauncherController {
 
     func show() {
         guard window == nil, let screen = NSScreen.main else { return }
-        let win = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let win = KeyableWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         win.isOpaque           = false
         win.backgroundColor    = .clear
         win.level              = .screenSaver
@@ -172,56 +168,125 @@ final class RadialLauncherController {
     }
 }
 
-// MARK: - RadialLauncherView
+// MARK: - Wheel geometry
+
+private struct WheelSegment: Shape {
+    let index: Int
+    let count: Int
+    let inner: CGFloat
+    let outer: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let gap = (1.5 * Double.pi / 180)
+        let seg = 2 * Double.pi / Double(max(count, 1))
+        let start = -Double.pi / 2 + Double(index) * seg + gap / 2
+        let end   = start + seg - gap
+        var p = Path()
+        p.addArc(center: c, radius: outer, startAngle: .radians(start), endAngle: .radians(end), clockwise: false)
+        p.addArc(center: c, radius: inner, startAngle: .radians(end), endAngle: .radians(start), clockwise: true)
+        p.closeSubpath()
+        return p
+    }
+}
+
+private struct DonutShape: Shape {
+    let inner: CGFloat
+    let outer: CGFloat
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        var p = Path()
+        p.addEllipse(in: CGRect(x: c.x - outer, y: c.y - outer, width: outer * 2, height: outer * 2))
+        p.addEllipse(in: CGRect(x: c.x - inner, y: c.y - inner, width: inner * 2, height: inner * 2))
+        return p
+    }
+}
+
+// MARK: - RadialLauncherView (the Launchy-style wheel)
 
 struct RadialLauncherView: View {
     let onClose: () -> Void
+
     @State private var apps: [LauncherApp] = []
+    @State private var selected = 0
+    @FocusState private var focused: Bool
+
+    private let outer: CGFloat = 150
+    private let inner: CGFloat = 90
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.28).ignoresSafeArea()
-                .onTapGesture { onClose() }
+            // Near-invisible catcher — click anywhere outside to dismiss.
+            Color.black.opacity(0.05).ignoresSafeArea().onTapGesture { onClose() }
 
-            GeometryReader { geo in
-                let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-                let radius: CGFloat = 150
-                ZStack {
-                    Circle()
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 2)
-                        .frame(width: radius * 2 - 36, height: radius * 2 - 36)
-                        .position(center)
-
-                    ForEach(Array(apps.enumerated()), id: \.element.id) { idx, app in
-                        let angle = (2 * Double.pi * Double(idx) / Double(max(apps.count, 1))) - .pi / 2
-                        Button { app.activate(); onClose() } label: { tile(app) }
-                            .buttonStyle(.plain)
-                            .position(x: center.x + radius * cos(angle),
-                                      y: center.y + radius * sin(angle))
-                    }
-
-                    if apps.isEmpty {
-                        Text("Pick favorites in Settings, or open a few apps")
-                            .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
-                            .position(center)
-                    }
-                }
-            }
+            wheel
+                .frame(width: outer * 2, height: outer * 2)
         }
-        .onAppear { apps = RadialLauncherModel.shared.launcherApps() }
+        .focusable()
+        .focused($focused)
+        .onAppear {
+            apps = RadialLauncherModel.shared.launcherApps()
+            focused = true
+        }
+        .onKeyPress(.leftArrow)  { move(-1); return .handled }
+        .onKeyPress(.upArrow)    { move(-1); return .handled }
+        .onKeyPress(.rightArrow) { move(1);  return .handled }
+        .onKeyPress(.downArrow)  { move(1);  return .handled }
+        .onKeyPress(.return)     { launch(selected); return .handled }
+        .onKeyPress(.space)      { launch(selected); return .handled }
         .onExitCommand(perform: onClose)
     }
 
-    private func tile(_ app: LauncherApp) -> some View {
-        VStack(spacing: 5) {
-            if let icon = app.icon {
-                Image(nsImage: icon).resizable().frame(width: 54, height: 54)
-                    .shadow(color: .black.opacity(0.4), radius: 5, y: 2)
+    private var wheel: some View {
+        ZStack {
+            DonutShape(inner: inner, outer: outer)
+                .fill(.ultraThinMaterial, style: FillStyle(eoFill: true))
+                .overlay(
+                    DonutShape(inner: inner, outer: outer)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 18, y: 4)
+
+            ForEach(apps.indices, id: \.self) { idx in
+                WheelSegment(index: idx, count: apps.count, inner: inner, outer: outer)
+                    .fill(idx == selected ? Color.accentColor.opacity(0.55) : Color.white.opacity(0.06))
+                WheelSegment(index: idx, count: apps.count, inner: inner, outer: outer)
+                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
             }
-            Text(app.name)
-                .font(.system(size: 10, weight: .medium)).foregroundColor(.white)
-                .lineLimit(1).shadow(color: .black.opacity(0.6), radius: 2)
+
+            ForEach(apps.indices, id: \.self) { idx in
+                if let icon = apps[idx].icon {
+                    Button { launch(idx) } label: {
+                        Image(nsImage: icon).resizable().frame(width: 44, height: 44)
+                            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    }
+                    .buttonStyle(.plain)
+                    .position(iconPosition(idx))
+                }
+            }
+
+            if apps.isEmpty {
+                Text("Pick favorites in Settings")
+                    .font(.system(size: 12)).foregroundColor(.white.opacity(0.7))
+            }
         }
-        .frame(width: 86)
+    }
+
+    private func iconPosition(_ idx: Int) -> CGPoint {
+        let seg = 2 * Double.pi / Double(max(apps.count, 1))
+        let a = -Double.pi / 2 + (Double(idx) + 0.5) * seg
+        let r = (inner + outer) / 2
+        return CGPoint(x: outer + r * cos(a), y: outer + r * sin(a))
+    }
+
+    private func move(_ delta: Int) {
+        guard !apps.isEmpty else { return }
+        selected = (selected + delta + apps.count) % apps.count
+    }
+
+    private func launch(_ idx: Int) {
+        guard apps.indices.contains(idx) else { return }
+        apps[idx].activate()
+        onClose()
     }
 }
