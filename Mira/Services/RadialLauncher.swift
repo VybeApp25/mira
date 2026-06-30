@@ -277,6 +277,7 @@ struct RadialLauncherView: View {
     @ObservedObject private var model = RadialLauncherModel.shared
     @State private var apps: [LauncherApp] = []
     @State private var selected = 0
+    @State private var overRing = false
     @FocusState private var focused: Bool
 
     private var outer: CGFloat { model.size.outer }
@@ -285,7 +286,11 @@ struct RadialLauncherView: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.05).ignoresSafeArea().onTapGesture { onClose() }
-            wheel.frame(width: outer * 2, height: outer * 2).position(center)
+            wheel
+                .frame(width: outer * 2, height: outer * 2)
+                .onContinuousHover(coordinateSpace: .local) { handleHover($0) }
+                .onTapGesture { overRing ? launch(selected) : onClose() }
+                .position(center)
         }
         .focusable()
         .focused($focused)
@@ -315,12 +320,12 @@ struct RadialLauncherView: View {
 
             ForEach(apps.indices, id: \.self) { idx in
                 if let icon = apps[idx].icon {
-                    Button { launch(idx) } label: {
-                        Image(nsImage: icon).resizable().frame(width: iconSize, height: iconSize)
-                            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                    }
-                    .buttonStyle(.plain)
-                    .position(iconPosition(idx))
+                    Image(nsImage: icon).resizable().frame(width: iconSize, height: iconSize)
+                        .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                        .scaleEffect(idx == selected ? 1.14 : 1.0)
+                        .animation(.easeOut(duration: 0.12), value: selected)
+                        .position(iconPosition(idx))
+                        .allowsHitTesting(false)
                 }
             }
 
@@ -339,6 +344,22 @@ struct RadialLauncherView: View {
         let a = -Double.pi / 2 + (Double(idx) + 0.5) * seg
         let r = (inner + outer) / 2
         return CGPoint(x: outer + r * cos(a), y: outer + r * sin(a))
+    }
+
+    private func handleHover(_ phase: HoverPhase) {
+        switch phase {
+        case .active(let pt):
+            let dx = pt.x - outer, dy = pt.y - outer
+            let dist = hypot(dx, dy)
+            guard !apps.isEmpty, dist >= inner, dist <= outer else { overRing = false; return }
+            var phi = atan2(dy, dx) + Double.pi / 2          // 0 at the top wedge
+            phi = phi.truncatingRemainder(dividingBy: 2 * .pi)
+            if phi < 0 { phi += 2 * .pi }
+            overRing = true
+            selected = min(apps.count - 1, Int(phi / (2 * .pi / Double(apps.count))))
+        case .ended:
+            overRing = false
+        }
     }
 
     private func move(_ delta: Int) {
