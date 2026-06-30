@@ -42,14 +42,67 @@ struct CallBubbleRow: View {
 
 struct CallTranscriptView: View {
     @ObservedObject var session: CallSession
+    @State private var summary: String?
+    @State private var summarizing = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             transcript
+            endedFooter
         }
         .frame(minWidth: 360, idealWidth: 420, minHeight: 420, idealHeight: 560)
+    }
+
+    @ViewBuilder private var endedFooter: some View {
+        if session.endedAt != nil {
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if let url = session.savedFileURL {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green).font(.system(size: 11))
+                        Text("Saved to \(url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))")
+                            .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    } else {
+                        Text("Call ended").font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        summarizing = true
+                        Task {
+                            summary = await CallTranscriptArchive.summarize(session.snapshot(), fileURL: session.savedFileURL)
+                            summarizing = false
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            if summarizing { ProgressView().controlSize(.small) }
+                            Text(summarizing ? "Summarizing…" : "Summarize")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color.accentColor, in: Capsule())
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(summarizing || session.segments.isEmpty)
+                }
+                if let summary {
+                    ScrollView {
+                        Text(summary)
+                            .font(.system(size: 12))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 170)
+                    .padding(8)
+                    .background(Color(nsColor: .windowBackgroundColor),
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+            .padding(12)
+        }
     }
 
     private var header: some View {

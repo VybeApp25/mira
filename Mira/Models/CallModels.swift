@@ -101,6 +101,10 @@ final class CallSession: ObservableObject, Identifiable {
     let startedAt: Date
     @Published private(set) var endedAt: Date?
     @Published var segments: [CallSegment] = []
+    /// Where the finished transcript was saved (set on end).
+    @Published var savedFileURL: URL?
+    /// Last time any speech was transcribed — drives the inactivity auto-end.
+    private(set) var lastActivityAt = Date()
 
     init(source: CallSource, title: String? = nil, startedAt: Date = Date()) {
         self.source = source
@@ -125,6 +129,7 @@ final class CallSession: ObservableObject, Identifiable {
     /// transcripts arrive. There is at most one live segment per speaker.
     func updatePartial(_ text: String, speaker: CallSpeaker) {
         guard !text.isEmpty else { return }
+        lastActivityAt = Date()
         if let i = segments.lastIndex(where: { $0.speaker == speaker && !$0.isFinal }) {
             segments[i].text = text
         } else {
@@ -136,6 +141,7 @@ final class CallSession: ObservableObject, Identifiable {
     func finalize(_ text: String, speaker: CallSpeaker) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        lastActivityAt = Date()
         if let i = segments.lastIndex(where: { $0.speaker == speaker && !$0.isFinal }) {
             segments[i].text = trimmed
             segments[i].isFinal = true

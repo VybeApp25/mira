@@ -90,7 +90,10 @@ final class CallCaptureService: ObservableObject {
         callerStream?.stop(); callerStream = nil
 
         session.end()
-        // TODO Phase E: persist session.snapshot() to history + generate summary.
+        let snapshot = session.snapshot()
+        if !snapshot.segments.isEmpty {
+            session.savedFileURL = CallTranscriptArchive.save(snapshot)
+        }
         current = nil
     }
 }

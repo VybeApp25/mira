@@ -19,6 +19,8 @@ final class CallHUDManager {
     private let model = CallHUDModel()
     private var cardPanel: NSPanel?
     private var transcriptWindow: NSWindow?
+    private var watchdog: Timer?
+    private let inactivityTimeout: TimeInterval = 120   // call hung up but app left open
 
     // MARK: Launch wiring
 
@@ -72,13 +74,37 @@ final class CallHUDManager {
         model.promptSource = nil
         showCard()
         openTranscriptWindow()
+        startWatchdog()
     }
 
     private func endTranscribing() {
-        CallCaptureService.shared.endCall()
+        watchdog?.invalidate(); watchdog = nil
+        CallCaptureService.shared.endCall()   // saves transcript + sets savedFileURL
         model.session = nil
-        closeTranscriptWindow()
         hideCard()
+        // Leave the transcript window open so the user can read & summarize it;
+        // they close it with the window's own close button.
+    }
+
+    // Auto-end covers both cases: (A) the call app quits, (B) the call ends but
+    // the app stays open (no speech for `inactivityTimeout`). ✕ is the instant
+    // manual stop.
+    private func startWatchdog() {
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.watchdogTick() }
+        }
+    }
+
+    @MainActor
+    private func watchdogTick() {
+        guard let session = model.session else { return }
+        let ids = session.source.bundleIdentifiers
+        if !ids.isEmpty {
+            let running = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
+            if !ids.contains(where: { running.contains($0) }) { endTranscribing(); return }   // (A)
+        }
+        if Date().timeIntervalSince(session.lastActivityAt) > inactivityTimeout { endTranscribing() }  // (B)
     }
 
     private func dismissPrompt() {
