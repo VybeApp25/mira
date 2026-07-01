@@ -135,6 +135,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
               url.scheme == "mira" else { return }
         if urlString.contains("auth-callback") {
             Task { @MainActor in await AccountService.shared.handleAppleWebCallback(url) }
+        } else if urlString.contains("spotify/callback") {
+            Task { @MainActor in await SpotifyAuthService.shared.handleCallback(url) }
         }
     }
 

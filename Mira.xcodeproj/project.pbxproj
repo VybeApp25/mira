@@ -33,6 +33,7 @@
 		15D42BA945FF15778CA644D8 /* TeachingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E309308F9E87012D71CB8A /* TeachingModels.swift */; };
 		169B764F4B31BDCFD0182C9F /* github-repo-management.md in Resources */ = {isa = PBXBuildFile; fileRef = 2817F7CA87F73B39068FB317 /* github-repo-management.md */; };
 		17F483123B853BA0E27F0E1D /* googledocs.md in Resources */ = {isa = PBXBuildFile; fileRef = 216189A0F0FB6DEF096C0C03 /* googledocs.md */; };
+		19F7569B1FE5CE3D77761A9F /* MusicControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF3189EDE0C5C15FF535263 /* MusicControlService.swift */; };
 		1C441AC730240E409B811592 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 2431817516872C328A6D2900 /* Sparkle */; };
 		1CE085A40C3A4AD15B479924 /* ThreadsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FFDEBB61B4AF55FFBA61E1 /* ThreadsTabView.swift */; };
 		2056FD97981A02D2AF4288E8 /* MiraDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */; };
@@ -66,6 +67,7 @@
 		2FDF8D290B3689B7EB3F13AE /* MiraBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91346EA30D1B31122573AE9 /* MiraBackend.swift */; };
 		3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */; };
 		337C3FC5FE2A1271016E1791 /* googledrive.md in Resources */ = {isa = PBXBuildFile; fileRef = 088180F819F6CAD079F973DB /* googledrive.md */; };
+		3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3ABA2178F03DB65559DB946 /* MediaControls.swift */; };
 		344D95E382740D9C5F18B221 /* MiraMCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */; };
 		36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */; };
 		373C68AA6EF019FE3AC80567 /* WorkspaceReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77428E1C00142D230E8329 /* WorkspaceReview.swift */; };
@@ -82,6 +84,7 @@
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */; };
 		435235FBB96512337D08237E /* IntegrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */; };
+		450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */; };
 		452762C067D50B0C991CF939 /* ComputerUseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01ACF9118D36B54D9E00146F /* ComputerUseService.swift */; };
 		45DCD1E11E23C428C1E23DEC /* ReliabilityDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */; };
 		47129E290E702FE79EA1780A /* apple-reminders.md in Resources */ = {isa = PBXBuildFile; fileRef = D74433F31D3AC43D9E8F2B4F /* apple-reminders.md */; };
@@ -186,6 +189,7 @@
 		95F87A68B83C57A85CFDDB0D /* HoverSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */; };
 		96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */; };
 		96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */; };
+		987107B1EEA0CAC6FD1D2384 /* BrightnessControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63E5F50DC2B24AA3C2040141 /* BrightnessControl.swift */; };
 		98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */; };
 		999F596800BE317B7DD15FB4 /* CorrelationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D5BB4ABB1EFCD6F34122C /* CorrelationEngine.swift */; };
 		99C4AE57D626422B87B1FAD3 /* TelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA51C6434233B46081A0496 /* TelemetryService.swift */; };
@@ -371,6 +375,7 @@
 		28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionRecoveryCard.swift; sourceTree = "<group>"; };
 		299758A12C64451C7C8799E5 /* AXActuationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXActuationService.swift; sourceTree = "<group>"; };
 		2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionEngine.swift; sourceTree = "<group>"; };
+		2AF3189EDE0C5C15FF535263 /* MusicControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicControlService.swift; sourceTree = "<group>"; };
 		2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonsTabView.swift; sourceTree = "<group>"; };
 		2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingEngine.swift; sourceTree = "<group>"; };
 		2F3CF04D89D09EF7D66A6A2E /* hatching.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = hatching.wav; sourceTree = "<group>"; };
@@ -404,6 +409,7 @@
 		46A1297EEE877A44731A4D04 /* QualityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityStore.swift; sourceTree = "<group>"; };
 		479ABA35C69E7426DBC580D5 /* NotchOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingView.swift; sourceTree = "<group>"; };
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
+		499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthService.swift; sourceTree = "<group>"; };
 		4A77428E1C00142D230E8329 /* WorkspaceReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReview.swift; sourceTree = "<group>"; };
 		4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundScheduler.swift; sourceTree = "<group>"; };
 		4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationCard.swift; sourceTree = "<group>"; };
@@ -434,6 +440,7 @@
 		600F7145CE2FE8AF6E86A44C /* airtable.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = airtable.md; sourceTree = "<group>"; };
 		6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingManager.swift; sourceTree = "<group>"; };
 		628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraCursorManager.swift; sourceTree = "<group>"; };
+		63E5F50DC2B24AA3C2040141 /* BrightnessControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessControl.swift; sourceTree = "<group>"; };
 		63F52A13C8B02EEA4701166A /* ResponseCardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardService.swift; sourceTree = "<group>"; };
 		63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		641B7CB66B672FC642BC96AE /* AttentionDirective.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionDirective.swift; sourceTree = "<group>"; };
@@ -561,6 +568,7 @@
 		C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
 		C2173DE466719E2BE730C2CC /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementLocationDetector.swift; sourceTree = "<group>"; };
+		C3ABA2178F03DB65559DB946 /* MediaControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaControls.swift; sourceTree = "<group>"; };
 		C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		C5DE79D342341087305D2696 /* pdf_extract.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pdf_extract.py; sourceTree = "<group>"; };
 		C651FB15781FEA6544A06C24 /* PostHogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostHogService.swift; sourceTree = "<group>"; };
@@ -840,6 +848,7 @@
 				299758A12C64451C7C8799E5 /* AXActuationService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
 				1F3971B5E467CC08CB2DB4FE /* BatteryStatus.swift */,
+				63E5F50DC2B24AA3C2040141 /* BrightnessControl.swift */,
 				B41C5FF860F44DB7354F8359 /* BrowserService.swift */,
 				93490CFC9E751F8742BD6C34 /* CalendarTodayService.swift */,
 				4EF4D36984622D43BDC26EF2 /* CallAudioCaptures.swift */,
@@ -890,6 +899,7 @@
 				4F73902D6E3F8EE8514F79EA /* LearnerModel.swift */,
 				1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */,
 				69651A1F761E1E1338C095AA /* LiveTranscriptionStream.swift */,
+				C3ABA2178F03DB65559DB946 /* MediaControls.swift */,
 				4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */,
 				1D67D51F8B863530212BE3B1 /* MenuBarIconManager.swift */,
 				86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */,
@@ -900,6 +910,7 @@
 				979DE80CA67152EBCA55AC4D /* MiraToolService.swift */,
 				6C32360D76CD7D9599499DCA /* MisoTTSService.swift */,
 				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
+				2AF3189EDE0C5C15FF535263 /* MusicControlService.swift */,
 				6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
@@ -930,6 +941,7 @@
 				B78AD9EA6F1C38CE13EED661 /* SidecarSuggestionService.swift */,
 				6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */,
 				57C1C1240C045D738B98CC29 /* SkillStore.swift */,
+				499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */,
 				A266BE527831F1DF05489050 /* StripePurchaseService.swift */,
 				3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */,
 				70F49814EE23560DC880AF05 /* SupabaseService.swift */,
@@ -1253,6 +1265,7 @@
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				D9D5ADB021219BC46EF5AE86 /* BatteryStatus.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
+				987107B1EEA0CAC6FD1D2384 /* BrightnessControl.swift in Sources */,
 				12EC8F5AB9E2C753C4A66BE3 /* BrowserService.swift in Sources */,
 				C3F5CA4D3E6727EBBB54E5DF /* CalendarTodayService.swift in Sources */,
 				3FDD1117C1E6D7B88437055D /* CallAudioCaptures.swift in Sources */,
@@ -1343,6 +1356,7 @@
 				DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */,
 				96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */,
 				EE6A97662B9ED3C7E5487D83 /* LiveTranscriptionStream.swift in Sources */,
+				3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */,
 				292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */,
 				9C5365E19F360C429D3EEAD1 /* MemoryStore.swift in Sources */,
 				B8A30732977529D4BF431B35 /* MenuBarIconManager.swift in Sources */,
@@ -1363,6 +1377,7 @@
 				D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */,
 				633E12D061864B837775754C /* MisoTTSService.swift in Sources */,
 				24C340E30867418C85FA2608 /* MultiCopyQueueService.swift in Sources */,
+				19F7569B1FE5CE3D77761A9F /* MusicControlService.swift in Sources */,
 				CCAC15D7F188ADCDCEA50065 /* NotchCameraTabView.swift in Sources */,
 				C0381F14C871C577DA430BFB /* NotchDropZoneController.swift in Sources */,
 				D8F7DE0D6CBE08338593A56F /* NotchGeometryProvider.swift in Sources */,
@@ -1426,6 +1441,7 @@
 				B101A7E87F46F83E807086BE /* SkillCatalog.swift in Sources */,
 				C117552EE76C1FEF99EFCB5E /* SkillStore.swift in Sources */,
 				E29BDEF21A1B2762999F9340 /* SkillsTabView.swift in Sources */,
+				450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				FCA9289DB0963ED16EAC692D /* StreamingMarkdownView.swift in Sources */,
 				3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */,

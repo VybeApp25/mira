@@ -186,6 +186,25 @@ struct IslandChatView: View {
             input = prompt
             Task { await submit() }
         }
+        // Now-playing card action chips (Turn up / Skip / Favorite / …)
+        .onReceive(NotificationCenter.default.publisher(for: .miraMusicAction)) { note in
+            guard let raw = note.userInfo?["action"] as? String,
+                  let action = MusicControlService.Action(rawValue: raw) else { return }
+            Task { await runMusicAction(action) }
+        }
+    }
+
+    /// Executes a now-playing chip action and appends Mira's confirmation to the
+    /// thread. Reuses the same MusicControlService the voice tools call, so a tap
+    /// and a spoken command behave identically.
+    @MainActor
+    private func runMusicAction(_ action: MusicControlService.Action) async {
+        isLoading = true
+        let result = await MusicControlService.shared.perform(action)
+        messages.append(ChatMessage(role: .mira, text: result))
+        ConversationStore.shared.save(role: "mira", text: result)
+        AudioCueService.shared.playTextReceive()
+        isLoading = false
     }
 
     // Wire realtime callbacks once on appear
@@ -699,7 +718,7 @@ struct IslandChatView: View {
         }
 
         // Widget routes — fetch structured data; fall through to handle() on failure.
-        if [MiraRoute.stockLookup, .imageSearch, .placeSearch].contains(decision.route) {
+        if [MiraRoute.stockLookup, .imageSearch, .placeSearch, .musicQuery].contains(decision.route) {
             let widget = await fetchWidget(route: decision.route, prompt: prompt)
             if let widget {
                 messages.append(ChatMessage(role: .mira, widget: widget))
@@ -816,6 +835,17 @@ struct IslandChatView: View {
             if !imgs.isEmpty { return .images(imgs) }
         case .placeSearch:
             if let p = await ChatWidgetService.shared.fetchPlace(query: prompt) { return .place(p) }
+        case .musicQuery:
+            // Build a now-playing card from a fresh snapshot. nil (nothing playing)
+            // falls through to handle(), which speaks a "nothing's playing" reply.
+            let info = await NowPlayingService.shared.snapshot()
+            if info.hasContent {
+                return .nowPlaying(NowPlayingCardData(title: info.title,
+                                                      artist: info.artist,
+                                                      sourceApp: info.sourceApp,
+                                                      isMusic: info.isMusicService,
+                                                      chips: MediaControls.chips(for: info.sourceApp)))
+            }
         default:
             break
         }

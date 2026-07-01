@@ -1168,6 +1168,7 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             let app = args["app_name"] as? String ?? "app"
             return "Opening \(app)…"
         case "get_calendar_events":  return "Checking your calendar…"
+        case "now_playing":          return "Checking what's playing…"
         case "control_music":
             let action = (args["action"] as? String ?? "controlling").capitalized
             return "\(action) music…"
@@ -1181,7 +1182,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                            : [track, artist].filter { !$0.isEmpty }.joined(separator: " by ")
                 if !label.isEmpty { return "Playing \"\(label)\" on Spotify…" }
             }
-            return "\(action.capitalized.isEmpty ? "Controlling" : action.capitalized) Spotify…"
+            switch action {
+            case "volume_up":       return "Turning it up…"
+            case "volume_down":     return "Turning it down…"
+            case "favorite":        return "Saving to your library…"
+            case "add_to_playlist": return "Adding to a playlist…"
+            case "follow_artist":   return "Following the artist…"
+            case "next":            return "Skipping…"
+            case "previous":        return "Going back…"
+            default:
+                return "\(action.capitalized.isEmpty ? "Controlling" : action.capitalized) Spotify…"
+            }
         case "search_web":
             let q = args["query"] as? String ?? "the web"
             return "Searching for \"\(q)\"…"
@@ -1234,24 +1245,27 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
         resumeMusicPlayers()
     }
 
-    // Pause Spotify and Music during mic capture so they don't bleed into the recording.
-    // Resume is best-effort — only apps that were ACTUALLY playing when we paused are
-    // resumed. Tracking which apps we paused (instead of a single bool) is what keeps
-    // toggling voice from spuriously *starting* music that was stopped/paused: the old
-    // code set its flag whenever the AppleScript merely ran (the result descriptor is
-    // non-nil even when nothing was playing), so exiting voice sent `play` unconditionally.
-    private var pausedMusicApps: [String] = []
+    // DUCK (not pause) Spotify/Music during mic capture: lower their own volume so
+    // they don't bleed into the recording, but keep playing — so "what song is
+    // this?" still works mid-conversation and the music doesn't jarringly stop.
+    // We remember each app's real volume and restore it exactly when voice ends.
+    // Storing per-app original volumes (not a bool) is what keeps toggling voice
+    // from spuriously changing the volume of an app that wasn't actually playing.
+    private var duckedMusicVolumes: [String: Int] = [:]
+    private let duckLevel = 15   // % — quiet enough for the mic, still clearly "on"
 
-    private func pauseMusicPlayers() {
-        pausedMusicApps = []
+    private func pauseMusicPlayers() {   // name kept for call sites; now ducks
+        duckedMusicVolumes = [:]
         for app in ["Spotify", "Music"] {
-            // Returns "paused" ONLY when the app was running and actively playing.
+            // Returns the pre-duck volume ONLY when the app is running AND playing;
+            // otherwise "no" so we neither touch nor later restore a stopped app.
             let src = """
             tell application "\(app)"
                 if it is running then
                     if player state is playing then
-                        pause
-                        return "paused"
+                        set v to sound volume
+                        set sound volume to \(duckLevel)
+                        return v as string
                     end if
                 end if
             end tell
@@ -1259,17 +1273,17 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
             """
             var err: NSDictionary?
             let result = NSAppleScript(source: src)?.executeAndReturnError(&err)
-            if err == nil, result?.stringValue == "paused" {
-                pausedMusicApps.append(app)
+            if err == nil, let s = result?.stringValue, s != "no", let v = Int(s) {
+                duckedMusicVolumes[app] = v
             }
         }
     }
 
-    private func resumeMusicPlayers() {
-        let apps = pausedMusicApps
-        pausedMusicApps = []
-        for app in apps {
-            let src = "tell application \"\(app)\" to if it is running then play"
+    private func resumeMusicPlayers() {   // name kept for call sites; now un-ducks
+        let volumes = duckedMusicVolumes
+        duckedMusicVolumes = [:]
+        for (app, vol) in volumes {
+            let src = "tell application \"\(app)\" to if it is running then set sound volume to \(vol)"
             NSAppleScript(source: src)?.executeAndReturnError(nil)
         }
     }

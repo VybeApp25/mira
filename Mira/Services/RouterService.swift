@@ -10,6 +10,7 @@ enum MiraRoute: String, CaseIterable {
     case agentTask              = "agent_task"
     case websiteBuilder         = "website_builder"
     case spotifyControl         = "spotify_control"
+    case musicQuery             = "music_query"
     case openURL                = "open_url"
     case memoryQuery            = "memory_query"
     case memoryWrite            = "memory_write"
@@ -44,6 +45,7 @@ enum MiraRoute: String, CaseIterable {
         case .agentTask:              return "Agent"
         case .websiteBuilder:         return "Website Builder"
         case .spotifyControl:         return "Spotify"
+        case .musicQuery:             return "Now Playing"
         case .openURL:                return "Open URL"
         case .memoryQuery:            return "Memory"
         case .memoryWrite:            return "Remember"
@@ -228,7 +230,7 @@ final class RouterService: ObservableObject {
         let sync = route(prompt: prompt, context: context)
         switch sync.route {
         case .confirmationRequired, .permissionRequired,
-             .spotifyControl, .openURL, .memoryWrite, .memoryQuery,
+             .spotifyControl, .musicQuery, .openURL, .memoryWrite, .memoryQuery,
              .emailTask, .researchTask, .repoTask, .codexTask:
             return sync
         default: break
@@ -264,7 +266,8 @@ Routes and when to use them:
 - screen_guidance: explain screen content, "what is this", "what am I looking at"
 - agent_task: background automation, multi-step tasks requiring external tools
 - website_builder: build/create a website or landing page
-- spotify_control: play/pause/skip/volume music
+- spotify_control: play/pause/skip/volume music, favorite/like the current song, add it to a playlist, follow the artist
+- music_query: "what song is this", "what's playing", "who sings this", "who is this by", "what am I listening to", "name this song" — identify the currently playing track
 - open_url: open a URL or link
 - memory_query: recall stored preferences or facts about the user
 - memory_write: store a preference, fact, or instruction
@@ -365,6 +368,13 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             let args   = spotifyArgs(from: prompt)
             let result = await MiraToolService.execute(name: "control_spotify", argsJSON: args)
             return .reply(result, route: .spotifyControl)
+
+        case .musicQuery:
+            // Text fallback (used when nothing is playing, or when the chat view
+            // couldn't build the now-playing card). When a track IS playing, the
+            // chat view renders a card with tappable action chips instead.
+            let result = await MusicControlService.shared.identify()
+            return .reply(result, route: .musicQuery)
 
         case .openURL:
             if let url = extractURL(from: prompt) {
@@ -474,6 +484,12 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         }
 
         // Media
+        // "What song is this?" must beat the Spotify play matcher — it's a question
+        // about the current track, not a command to play something.
+        if matchesMusicQuery(lower) {
+            return RouteDecision(route: .musicQuery, confidence: 0.93,
+                                 explanation: "Identify the current track")
+        }
         if matchesSpotify(lower) {
             return RouteDecision(route: .spotifyControl, confidence: 0.92,
                                  explanation: "Spotify control")
@@ -683,6 +699,20 @@ Output ONLY the JSON line. No preamble, no markdown fences.
 
     private func matchesSpotify(_ lower: String) -> Bool {
         lower.contains("spotify")
+    }
+
+    /// "What song is this / who's this by / what's playing" — an identify request,
+    /// distinct from a play command. Kept tight so it doesn't swallow "play this song".
+    private func matchesMusicQuery(_ lower: String) -> Bool {
+        let phrases = [
+            "what song is this", "what song is playing", "what's this song", "whats this song",
+            "what is this song", "what track is this", "name this song", "name that song",
+            "what am i listening to", "what's playing", "whats playing", "what is playing",
+            "who is this by", "who's this by", "whos this by", "who sings this",
+            "who is this song by", "who's this song by", "who is singing this",
+            "what song", "song is this",
+        ]
+        return phrases.contains { lower.contains($0) }
     }
 
     func extractURL(from text: String) -> URL? {
@@ -956,6 +986,33 @@ Output ONLY the JSON line. No preamble, no markdown fences.
 
     private func spotifyArgs(from prompt: String) -> String {
         let lower = prompt.lowercased()
+        // Current-track actions on the playing song — check these BEFORE generic
+        // play/pause so "favorite this song" doesn't fall through to a toggle.
+        if lower.contains("favorite") || lower.contains("favourite")
+            || lower.contains("like this") || lower.contains("like the")
+            || lower.contains("save this") || lower.contains("save the") || lower.contains("heart this") {
+            return "{\"action\":\"favorite\"}"
+        }
+        if lower.contains("add") && (lower.contains("playlist")) {
+            // Try to pull a playlist name after "to " (e.g. "add this to my Gym playlist").
+            if let r = lower.range(of: "to ") {
+                var name = String(prompt[r.upperBound...])
+                    .replacingOccurrences(of: "playlist", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "my ", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "the ", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \"'.!?"))
+                name = name.replacingOccurrences(of: "\"", with: "")
+                if !name.isEmpty { return "{\"action\":\"add_to_playlist\",\"playlist\":\"\(name)\"}" }
+            }
+            return "{\"action\":\"add_to_playlist\"}"
+        }
+        if lower.contains("follow") && (lower.contains("artist") || lower.contains("them")) {
+            return "{\"action\":\"follow_artist\"}"
+        }
+        if lower.contains("turn it up") || lower.contains("turn up") || lower.contains("louder")
+            || lower.contains("volume up") { return "{\"action\":\"volume_up\"}" }
+        if lower.contains("turn it down") || lower.contains("turn down") || lower.contains("quieter")
+            || lower.contains("volume down") { return "{\"action\":\"volume_down\"}" }
         if lower.contains("pause")                                   { return "{\"action\":\"pause\"}" }
         if lower.contains("next") || lower.contains("skip")         { return "{\"action\":\"next\"}" }
         if lower.contains("previous") || lower.contains("back")     { return "{\"action\":\"previous\"}" }

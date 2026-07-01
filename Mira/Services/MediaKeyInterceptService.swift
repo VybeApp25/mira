@@ -38,10 +38,11 @@ final class MediaKeyInterceptService {
     private var runLoopSource: CFRunLoopSource?
     private var trustTimer: Timer?
 
-    // Optimistic local state — applied immediately so key-repeat feels instant
-    // even though brightness goes through a slower AppleScript round trip.
+    // Optimistic local state — applied immediately so key-repeat feels instant.
+    // Brightness is seeded from the display's ACTUAL level (not a 0.5 guess) so
+    // the HUD and the real backlight stay in sync from the first keypress.
     private var volumeStep: Float = SystemVolumeControl.currentVolume()
-    private var brightnessFraction: Double = 0.5
+    private var brightnessFraction: Double = Double(BrightnessControl.currentBrightness() ?? 0.5)
     private let step: Float = 1.0 / 16.0   // matches stock macOS's 16-step granularity
 
     private init() {}
@@ -145,18 +146,17 @@ final class MediaKeyInterceptService {
                                          userInfo: ["level": level])
     }
 
-    // MARK: - Brightness (AppleScript — optimistic update, async apply)
+    // MARK: - Brightness (DisplayServices/CoreDisplay — instant, real backlight)
 
     private func adjustBrightness(by delta: Float) {
-        brightnessFraction = max(0, min(1, brightnessFraction + Double(delta)))
-        postBrightnessChanged(brightnessFraction)
-
-        let fraction = brightnessFraction
-        DispatchQueue.global(qos: .userInitiated).async {
-            var err: NSDictionary?
-            let script = "tell application \"System Events\" to set brightness of display 1 to \(fraction)"
-            NSAppleScript(source: script)?.executeAndReturnError(&err)
+        // Re-read the actual level first so we track changes made elsewhere (auto
+        // brightness, Control Center) instead of drifting off our own cached value.
+        if let actual = BrightnessControl.currentBrightness() {
+            brightnessFraction = Double(actual)
         }
+        brightnessFraction = max(0, min(1, brightnessFraction + Double(delta)))
+        BrightnessControl.setBrightness(Float(brightnessFraction))
+        postBrightnessChanged(brightnessFraction)
     }
 
     private func postBrightnessChanged(_ level: Double) {

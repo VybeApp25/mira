@@ -280,10 +280,11 @@ private struct WidgetSlot: View {
                 }
             }
         case .appLauncher:
-            // The radial ring switcher is a Pro/Ultra feature; Free keeps the
-            // basic launcher popover.
-            if EntitlementService.shared.plan == .free { showDetail.toggle() }
-            else { RadialLauncherController.shared.show() }
+            // Dock tile opens the searchable, scrollable list of all installed apps
+            // (AppLauncherDetailPanel) for every plan. The radial ring switcher is
+            // still available to Pro/Ultra via its Option-tap hotkey — it's just no
+            // longer what this tile routes to.
+            showDetail.toggle()
         default:
             showDetail.toggle()
         }

@@ -199,12 +199,31 @@ enum MiraToolService {
                 "required": ["app_name"]
             ] as [String: Any]
         ],
+        // ── Now Playing ─────────────────────────────────────────────────────────────
+        [
+            "type": "function",
+            "name": "now_playing",
+            "description": """
+                Identify the song currently playing on this Mac (Spotify or Apple Music) \
+                and return its title and artist. Use this whenever the user asks \
+                "what song is this", "what's playing", "who sings this", "who is this by", \
+                "what am I listening to", or "name this song". \
+                After telling them the song, proactively offer a follow-up: turning it up \
+                or down, skipping, favoriting it, adding it to a playlist, or following the \
+                artist — then call control_spotify with the matching action if they say yes.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [:] as [String: Any],
+                "required": [] as [String]
+            ] as [String: Any]
+        ],
         // ── Spotify ───────────────────────────────────────────────────────────────
         [
             "type": "function",
             "name": "control_spotify",
             "description": """
-                Control Spotify or play a specific song. \
+                Control Spotify/Apple Music playback and act on the CURRENT track. \
                 action "quit": quits/closes Spotify entirely — use when the user says "close Spotify", "quit Spotify", "exit Spotify". \
                 action "play_song": finds the song and starts playing it immediately. \
                 Use this whenever the user asks to play a specific song, artist, or "play X on Spotify". \
@@ -212,14 +231,22 @@ enum MiraToolService {
                 "track" and "artist" fields for a precise match — word order in the user's \
                 request does not matter. Otherwise put the whole phrase in "song". \
                 action "play"/"pause"/"toggle"/"next"/"previous": basic playback control. \
-                Requires Spotify to be installed.
+                action "volume_up"/"volume_down": nudge the playing app's volume. \
+                action "shuffle"/"repeat": toggle shuffle or repeat (music apps only). \
+                action "favorite": save the current track to the user's library (Liked Songs). \
+                action "add_to_playlist": add the current track to a playlist (pass its name in "playlist", or omit for a default Mira playlist). \
+                action "follow_artist": follow the current track's artist (Spotify). \
+                favorite / add_to_playlist / follow_artist on Spotify need a one-time Spotify sign-in, which Mira launches automatically. \
+                Requires Spotify or Apple Music to be running.
                 """,
             "parameters": [
                 "type": "object",
                 "properties": [
                     "action": [
                         "type": "string",
-                        "enum": ["play", "pause", "toggle", "next", "previous", "play_song", "quit"],
+                        "enum": ["play", "pause", "toggle", "next", "previous", "play_song", "quit",
+                                 "volume_up", "volume_down", "shuffle", "repeat",
+                                 "favorite", "add_to_playlist", "follow_artist"],
                         "description": "The action to perform"
                     ],
                     "song": [
@@ -233,6 +260,10 @@ enum MiraToolService {
                     "artist": [
                         "type": "string",
                         "description": "Artist name for play_song, when known separately, e.g. 'The Weeknd'"
+                    ],
+                    "playlist": [
+                        "type": "string",
+                        "description": "Playlist name for add_to_playlist. Omit to use the default Mira playlist."
                     ]
                 ],
                 "required": ["action"]
@@ -656,6 +687,7 @@ enum MiraToolService {
         case "get_calendar_events": return await calendarEvents(args)
         case "create_calendar_event": return await createCalendarEvent(args)
         case "control_music":       return musicControl(args)
+        case "now_playing":         return await MusicControlService.shared.identify()
         case "control_spotify":     return await controlSpotify(args)
         case "search_web":          return searchWeb(args)
         case "run_shortcut":        return runShortcut(args)
@@ -1004,6 +1036,16 @@ enum MiraToolService {
         case "previous": return spotifyAppleScript("previous track")
         case "quit":     return spotifyAppleScript("quit")
 
+        // Current-track actions (source-aware: Spotify Web API or Apple Music AppleScript)
+        case "volume_up":       return await MusicControlService.shared.perform(.volumeUp)
+        case "volume_down":     return await MusicControlService.shared.perform(.volumeDown)
+        case "shuffle":         return await MusicControlService.shared.perform(.shuffle)
+        case "repeat":          return await MusicControlService.shared.perform(.repeatToggle)
+        case "favorite":        return await MusicControlService.shared.perform(.favorite)
+        case "follow_artist":   return await MusicControlService.shared.perform(.followArtist)
+        case "add_to_playlist":
+            return await MusicControlService.shared.perform(.addToPlaylist, playlist: args["playlist"] as? String)
+
         case "play_song":
             // Accept either a combined "song" string or separate track/artist — the
             // model may split them, and order doesn't matter (the Web API search
@@ -1198,24 +1240,15 @@ enum MiraToolService {
         guard let level = args["level"] as? Int, level >= 0, level <= 100 else {
             return "Level must be an integer 0–100."
         }
-        let fraction = Double(level) / 100.0
-        var err: NSDictionary?
-        // brightness via CoreDisplay if available, fall back to osascript
-        let script = "tell application \"System Events\" to set brightness of display 1 to \(fraction)"
-        NSAppleScript(source: script)?.executeAndReturnError(&err)
-        if err != nil {
-            // fallback: shell command using brightness CLI or osascript
-            let proc = Process()
-            proc.launchPath = "/usr/bin/osascript"
-            proc.arguments  = ["-e", "tell application \"System Preferences\" to quit"]
-            try? proc.run()
-            // Use IOKit via shell
-            let sh = Process()
-            sh.launchPath = "/bin/zsh"
-            sh.arguments  = ["-c", "brightness \(fraction) 2>/dev/null || true"]
-            try? sh.run()
-            sh.waitUntilExit()
+        let fraction = Float(level) / 100.0
+        // Real backlight via DisplayServices/CoreDisplay — the AppleScript
+        // "set brightness of display 1" path is a no-op on modern macOS. Also
+        // drives the custom HUD so the on-screen level matches.
+        guard BrightnessControl.setBrightness(fraction) else {
+            return "I couldn't change the brightness on this Mac."
         }
+        NotificationCenter.default.post(name: .miraBrightnessHUDChanged, object: nil,
+                                        userInfo: ["level": Double(fraction)])
         return "Brightness set to \(level)%."
     }
 

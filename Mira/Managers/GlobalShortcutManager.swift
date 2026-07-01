@@ -11,6 +11,8 @@ extension Notification.Name {
     static let miraShortcutsChanged       = Notification.Name("miraShortcutsChanged")
     static let miraScreenCompanionChanged = Notification.Name("miraScreenCompanionChanged")
     static let miraChipPromptSelected     = Notification.Name("miraChipPromptSelected")
+    // Now-playing card action chip tapped (userInfo: "action" = MusicControlService.Action raw)
+    static let miraMusicAction            = Notification.Name("miraMusicAction")
     static let miraTabSelected            = Notification.Name("miraTabSelected")
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
