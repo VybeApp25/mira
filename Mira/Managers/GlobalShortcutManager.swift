@@ -42,6 +42,10 @@ extension Notification.Name {
     // MiraIslandWindowManager. Resume restores the island's normal window level.
     static let miraSuspendForModal        = Notification.Name("miraSuspendForModal")
     static let miraResumeFromModal        = Notification.Name("miraResumeFromModal")
+    // A Finder (or other app) file drag entered the notch drop zone — NotchManager
+    // expands the island; MiraIslandView switches to the Shelf tab. Posted by
+    // NotchDropZoneController.
+    static let miraDragEnteredNotch       = Notification.Name("miraDragEnteredNotch")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)

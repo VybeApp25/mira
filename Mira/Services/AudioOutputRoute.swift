@@ -22,7 +22,9 @@ enum AudioOutputRoute {
         return transport != kAudioDeviceTransportTypeBuiltIn
     }
 
-    private static func defaultOutputDevice() -> AudioDeviceID? {
+    /// Exposed (not private) so SystemVolumeControl can reuse this lookup
+    /// instead of duplicating the same AudioObjectGetPropertyData call.
+    static func defaultOutputDevice() -> AudioDeviceID? {
         var deviceID = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var addr = AudioObjectPropertyAddress(

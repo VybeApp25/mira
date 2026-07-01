@@ -50,6 +50,7 @@ targets:
         CFBundleVersion: "5"
         CFBundleShortVersionString: "1.0.2"
         NSMicrophoneUsageDescription: "Mira listens for voice commands."
+        NSCameraUsageDescription: "Mira shows a quick camera preview so you can check how you look."
         NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."
         NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
         NSCalendarsUsageDescription: "Mira shows your upcoming events in the Home tab."

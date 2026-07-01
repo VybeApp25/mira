@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class FileShelfService: ObservableObject {
     static let shared = FileShelfService()
-    private init() {}
+    private init() { loadExisting() }
 
     @Published private(set) var items: [URL] = []
 
@@ -20,15 +20,96 @@ final class FileShelfService: ObservableObject {
     var limit: Int { EntitlementService.shared.plan == .ultra ? .max : Self.proLimit }
     var atLimit: Bool { items.count >= limit }
 
+    /// ~/Documents/Shelf — dropped files are copied here so the shelf is a real,
+    /// persistent folder the user can open in Finder, not just in-memory references.
+    static var shelfDirectory: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents")
+        return docs.appendingPathComponent("Shelf", isDirectory: true)
+    }
+
     func add(_ urls: [URL]) {
-        for url in urls where !items.contains(url) {
+        ensureShelfDirectory()
+        for src in urls {
             guard items.count < limit else { break }
-            items.append(url)
+            guard let dest = copyIntoShelf(src) else { continue }
+            if !items.contains(dest) { items.append(dest) }
+        }
+        MiraDebugLog.log("[Shelf] add complete, items=\(items.count) dir=\(Self.shelfDirectory.path)")
+    }
+
+    func remove(_ url: URL) {
+        // Remove the physical copy too — the shelf folder mirrors the shelf list.
+        if url.path.hasPrefix(Self.shelfDirectory.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        items.removeAll { $0 == url }
+    }
+
+    func clear() {
+        for url in items where url.path.hasPrefix(Self.shelfDirectory.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        items.removeAll()
+    }
+
+    func openShelfFolder() {
+        ensureShelfDirectory()
+        NSWorkspace.shared.open(Self.shelfDirectory)
+    }
+
+    // MARK: - Private
+
+    private func ensureShelfDirectory() {
+        try? FileManager.default.createDirectory(at: Self.shelfDirectory,
+                                                 withIntermediateDirectories: true)
+    }
+
+    /// Copy `src` into the Shelf folder, disambiguating name collisions. Returns the
+    /// destination URL (or the existing one if an identical path is already there).
+    private func copyIntoShelf(_ src: URL) -> URL? {
+        let fm = FileManager.default
+        let dest = uniqueDestination(for: src.lastPathComponent)
+        do {
+            try fm.copyItem(at: src, to: dest)
+            MiraDebugLog.log("[Shelf] copied \(src.lastPathComponent) → \(dest.path)")
+            return dest
+        } catch {
+            MiraDebugLog.log("[Shelf] COPY FAILED \(src.lastPathComponent): \(error.localizedDescription)")
+            return nil
         }
     }
 
-    func remove(_ url: URL) { items.removeAll { $0 == url } }
-    func clear() { items.removeAll() }
+    private func uniqueDestination(for name: String) -> URL {
+        let dir  = Self.shelfDirectory
+        var dest = dir.appendingPathComponent(name)
+        guard FileManager.default.fileExists(atPath: dest.path) else { return dest }
+        let base = (name as NSString).deletingPathExtension
+        let ext  = (name as NSString).pathExtension
+        var n = 2
+        repeat {
+            let candidate = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
+            dest = dir.appendingPathComponent(candidate)
+            n += 1
+        } while FileManager.default.fileExists(atPath: dest.path)
+        return dest
+    }
+
+    /// Rehydrate the shelf from whatever is already in ~/Documents/Shelf so drops
+    /// survive relaunches.
+    private func loadExisting() {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(
+            at: Self.shelfDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        items = contents.sorted {
+            let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return a < b
+        }
+    }
 }
 
 // MARK: - Labs tab view (drop zone + items)
@@ -49,6 +130,10 @@ struct FileShelfLabsView: View {
                     }
                     .buttonStyle(.plain).foregroundColor(.white.opacity(0.7)).help("AirDrop")
                 }
+                Button { shelf.openShelfFolder() } label: {
+                    Image(systemName: "folder").font(.system(size: 12))
+                }
+                .buttonStyle(.plain).foregroundColor(.white.opacity(0.7)).help("Open Shelf folder in Finder")
                 if !shelf.items.isEmpty {
                     Button("Clear") { shelf.clear() }
                         .font(.system(size: 11)).foregroundColor(.white.opacity(0.4)).buttonStyle(.plain)
@@ -90,16 +175,25 @@ struct FileShelfLabsView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        MiraDebugLog.log("[Shelf] handleDrop providers=\(providers.count)")
         let group = DispatchGroup()
+        let lock  = NSLock()
         var urls: [URL] = []
         for p in providers where p.canLoadObject(ofClass: URL.self) {
             group.enter()
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                if let url, url.isFileURL { urls.append(url) }
+            _ = p.loadObject(ofClass: URL.self) { url, error in
+                if let url, url.isFileURL {
+                    lock.lock(); urls.append(url); lock.unlock()
+                } else {
+                    MiraDebugLog.log("[Shelf] loadObject failed url=\(url?.absoluteString ?? "nil") error=\(String(describing: error))")
+                }
                 group.leave()
             }
         }
-        group.notify(queue: .main) { FileShelfService.shared.add(urls) }
+        group.notify(queue: .main) {
+            MiraDebugLog.log("[Shelf] adding \(urls.count) url(s) to shelf")
+            FileShelfService.shared.add(urls)
+        }
         return true
     }
 

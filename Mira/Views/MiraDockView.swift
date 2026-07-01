@@ -605,13 +605,8 @@ private struct BatteryWidget: View {
     }
 
     private func read() {
-        guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
-              let src  = list.first,
-              let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
-        else { return }
-        pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
-        charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+        guard let status = BatteryStatus.read() else { return }
+        pct = status.pct; charging = status.charging
     }
 }
 
@@ -624,13 +619,8 @@ private struct BatteryDetailPanel: View {
             Text(charging ? "Charging" : "On Battery").font(.system(size: 12)).foregroundColor(.white.opacity(0.4))
         }
         .onAppear {
-            guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-                  let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
-                  let src  = list.first,
-                  let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
-            else { return }
-            pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
-            charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+            guard let status = BatteryStatus.read() else { return }
+            pct = status.pct; charging = status.charging
         }
     }
 }

@@ -61,6 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Clipboard history + text expansion + clip reminders
         ClipboardMonitorService.shared.start()
         TextExpansionService.shared.start()
+        MediaKeyInterceptService.shared.start()
+        _ = HUDOverlayWindowController.shared   // wires up its NotificationCenter observers
         ClipReminderService.shared.requestPermission()
 
         // Custom dock (restores enabled state from previous launch)
@@ -88,6 +90,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBarController = StatusBarController(miraState: manager.miraState)
+        MenuBarIconManager.shared.startIfEnabled()
 
         #if DEBUG
         // Launch-time self-test for the autonomy pipeline (router → ledger →

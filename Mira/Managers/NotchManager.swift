@@ -11,6 +11,7 @@ final class NotchManager {
     private let geometry:      NotchGeometry
     private let windowManager: MiraIslandWindowManager
     private let hoverManager:  HoverTrackingManager
+    private let dropZone:      NotchDropZoneController
 
     private let taskStore:         AgentTaskStore
     private let overlay:           OverlayWindowController
@@ -33,6 +34,7 @@ final class NotchManager {
         animController = AnimationController(geometry: geo)
         windowManager  = MiraIslandWindowManager(geometry: geo)
         hoverManager   = HoverTrackingManager()
+        dropZone       = NotchDropZoneController(geometry: geo, animController: animController)
         taskStore      = AgentTaskStore.shared
         overlay           = OverlayWindowController()
         capture           = ScreenCaptureService()
@@ -69,6 +71,7 @@ final class NotchManager {
             geometry:       geometry
         )
         windowManager.install(rootView: island)
+        dropZone.install()
         insightManager = HoverInsightManager(
             miraState:      miraState,
             animController: animController,
@@ -120,6 +123,19 @@ final class NotchManager {
         }
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.expandForShortcut() }
+        }
+        // A file drag entered the notch drop zone — open the island straight to
+        // the Shelf tab so the user can see where the file is about to land.
+        // queue: nil + DispatchQueue.main.async (not .main OperationQueue) so this
+        // still fires while AppKit is running its drag-tracking run loop mode.
+        NotificationCenter.default.addObserver(forName: .miraDragEnteredNotch, object: nil, queue: nil) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    MiraDebugLog.log("[NotchManager] miraDragEnteredNotch → expand + Shelf tab")
+                    self?.expandForShortcut()
+                    NotificationCenter.default.post(name: .miraTabSelected, object: IslandTab.shelf)
+                }
+            }
         }
 
         // PTT — stays in the closed notch. Pause hover detection so dwell-triggered

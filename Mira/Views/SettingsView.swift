@@ -66,6 +66,7 @@ struct SettingsView: View {
     @State private var transcriptFolderPath: String = ""
     private static let defaultTranscriptFolder = NSHomeDirectory() + "/Documents/Transcripts"
     @ObservedObject private var radial = RadialLauncherModel.shared
+    @ObservedObject private var menuBar = MenuBarIconManager.shared
 
     enum RecordingTarget {
         case voice, text, draw
@@ -111,6 +112,9 @@ struct SettingsView: View {
                             guideCursorSection
                             autonomousSection
                             dockSection
+                        }
+                        settingsGroup("Menu Bar", icon: "menubar.rectangle") {
+                            menuBarIconManagerSection
                         }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
@@ -1636,6 +1640,58 @@ struct SettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             transcriptFolderPath = url.path
             UserDefaults.standard.set(url.path, forKey: "mira_transcript_folder")
+        }
+    }
+
+    // MARK: - Menu Bar Icon Manager section
+
+    private var menuBarIconManagerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Menu Bar Icons", systemImage: "menubar.rectangle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Hide menu bar clutter")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Adds a chevron and a divider to your menu bar. Icons to the left of the divider can be hidden or revealed with one click.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $menuBar.isEnabled)
+                    .toggleStyle(.switch).scaleEffect(0.8, anchor: .leading)
+                    .labelsHidden()
+                    .disabled(entitlements.plan == .free)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if menuBar.isEnabled {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SET IT UP").font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text("⌘-drag your menu bar icons into position: put the ones you want to hide to the LEFT of the new divider, and the ones you always want visible to the RIGHT of the chevron.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Click the chevron in your menu bar any time to show or hide them.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10).padding(.top, 2)
+            }
+
+            if entitlements.plan == .free {
+                Text("Hide menu bar icons. (Pro/Ultra)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.30))
+            }
         }
     }
 

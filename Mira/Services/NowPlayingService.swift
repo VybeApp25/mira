@@ -9,6 +9,8 @@ struct NowPlayingInfo {
     var duration:    Double   = 0       // total track length in seconds
     var elapsedTime: Double   = 0       // elapsed at `timestamp`
     var timestamp:   Date     = .distantPast
+    var isShuffled:  Bool     = false
+    var isRepeating: Bool     = false
 
     var hasContent: Bool { !title.isEmpty }
 
@@ -34,6 +36,13 @@ final class NowPlayingService: ObservableObject {
     private var timer:      Timer?
     private var isStarted   = false
     private var lastArtURL: String = ""  // avoid re-downloading unchanged artwork
+
+    // Which app the current AppleScript-sourced info came from — seek/shuffle/repeat
+    // writes target this app specifically rather than guessing. MediaRemote-sourced
+    // info (the fast path) has no equivalent write API wired up, so those controls
+    // are no-ops until the next AppleScript poll picks up a source.
+    private enum MusicSource { case none, spotify, appleMusic }
+    private var activeSource: MusicSource = .none
 
     // MediaRemote — kept as fast path; falls back to AppleScript when keys == 0
     private typealias GetInfoFn  = @convention(c) (DispatchQueue, @escaping ([String: Any]) -> Void) -> Void
@@ -66,6 +75,58 @@ final class NowPlayingService: ObservableObject {
     func togglePlayPause() { send(.togglePlayPause) }
     func nextTrack()       { send(.nextTrack) }
     func previousTrack()   { send(.previousTrack) }
+
+    /// Seek to an absolute position in seconds. Optimistically updates `info` so the
+    /// slider doesn't snap back before the next 2s poll confirms it.
+    func seek(to seconds: Double) {
+        info.elapsedTime = seconds
+        info.timestamp   = Date()
+        switch activeSource {
+        case .spotify:    runFireAndForget(#"tell application "Spotify" to set player position to \#(seconds)"#)
+        case .appleMusic: runFireAndForget(#"tell application "Music" to set player position to \#(seconds)"#)
+        case .none:       break
+        }
+    }
+
+    func toggleShuffle() {
+        info.isShuffled.toggle()
+        switch activeSource {
+        case .spotify:    runFireAndForget(#"tell application "Spotify" to set shuffling to not shuffling"#)
+        case .appleMusic: runFireAndForget(#"tell application "Music" to set shuffle enabled to not shuffle enabled"#)
+        case .none:       break
+        }
+    }
+
+    func toggleRepeat() {
+        info.isRepeating.toggle()
+        switch activeSource {
+        case .spotify:
+            runFireAndForget(#"tell application "Spotify" to set repeating to not repeating"#)
+        case .appleMusic:
+            runFireAndForget("""
+            tell application "Music"
+                if song repeat is off then
+                    set song repeat to all
+                else
+                    set song repeat to off
+                end if
+            end tell
+            """)
+        case .none:
+            break
+        }
+    }
+
+    private func runFireAndForget(_ source: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let p = Process()
+            p.launchPath = "/usr/bin/osascript"
+            p.arguments  = ["-e", source]
+            p.standardOutput = Pipe()
+            p.standardError  = Pipe()
+            try? p.run()
+        }
+    }
 
     // MARK: - Poll: try MediaRemote first, fall back to AppleScript
 
@@ -102,17 +163,18 @@ final class NowPlayingService: ObservableObject {
         Task.detached(priority: .userInitiated) { [weak self] in
             // Try Spotify first
             if let result = await Self.querySpotify() {
-                await MainActor.run { [weak self] in self?.applyResult(result) }
+                await MainActor.run { [weak self] in self?.applyResult(result, source: .spotify) }
                 return
             }
             // Try Apple Music
             if let result = await Self.queryAppleMusic() {
-                await MainActor.run { [weak self] in self?.applyResult(result) }
+                await MainActor.run { [weak self] in self?.applyResult(result, source: .appleMusic) }
                 return
             }
             // Nothing playing
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                self.activeSource = .none
                 if self.info.hasContent {
                     self.info = NowPlayingInfo()
                 }
@@ -120,7 +182,8 @@ final class NowPlayingService: ObservableObject {
         }
     }
 
-    private func applyResult(_ r: ScriptResult) {
+    private func applyResult(_ r: ScriptResult, source: MusicSource) {
+        activeSource = source
         Task.detached(priority: .background) { [weak self] in
             var image: NSImage? = await MainActor.run { self?.info.artwork }
             // Re-download artwork only when URL changes
@@ -140,7 +203,9 @@ final class NowPlayingService: ObservableObject {
                     isPlaying:   r.isPlaying,
                     duration:    r.duration,
                     elapsedTime: r.position,
-                    timestamp:   Date()
+                    timestamp:   Date(),
+                    isShuffled:  r.shuffled,
+                    isRepeating: r.repeating
                 )
             }
         }
@@ -151,6 +216,7 @@ final class NowPlayingService: ObservableObject {
     private struct ScriptResult {
         var title: String; var artist: String; var isPlaying: Bool
         var duration: Double; var position: Double; var artworkURL: String
+        var shuffled: Bool; var repeating: Bool
     }
 
     private static func querySpotify() async -> ScriptResult? {
@@ -163,7 +229,9 @@ final class NowPlayingService: ObservableObject {
                 set d to (duration of current track as real)
                 set p to (player position as real)
                 set u to artwork url of current track
-                return s & "|||" & t & "|||" & a & "|||" & d & "|||" & p & "|||" & u
+                set sh to (shuffling as string)
+                set rp to (repeating as string)
+                return s & "|||" & t & "|||" & a & "|||" & d & "|||" & p & "|||" & u & "|||" & sh & "|||" & rp
             end if
         end tell
         """
@@ -178,7 +246,9 @@ final class NowPlayingService: ObservableObject {
                 set a to artist of current track
                 set d to (duration of current track as real)
                 set p to (player position as real)
-                return "playing|||" & t & "|||" & a & "|||" & d & "|||" & p & "|||"
+                set sh to (shuffle enabled as string)
+                set rp to (song repeat as string)
+                return "playing|||" & t & "|||" & a & "|||" & d & "|||" & p & "|||" & "|||" & sh & "|||" & rp
             end if
         end tell
         """
@@ -193,13 +263,17 @@ final class NowPlayingService: ObservableObject {
         guard !title.isEmpty else { return nil }
         var dur = Double(parts[3].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
         if durationInMs { dur /= 1000.0 }
+        let shuffledStr  = parts.count > 6 ? parts[6].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let repeatingStr = parts.count > 7 ? parts[7].trimmingCharacters(in: .whitespacesAndNewlines) : ""
         return ScriptResult(
             title:      title,
             artist:     parts[2].trimmingCharacters(in: .whitespacesAndNewlines),
             isPlaying:  parts[0].trimmingCharacters(in: .whitespacesAndNewlines) == "playing",
             duration:   dur,
             position:   Double(parts[4].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
-            artworkURL: parts.count > 5 ? parts[5].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            artworkURL: parts.count > 5 ? parts[5].trimmingCharacters(in: .whitespacesAndNewlines) : "",
+            shuffled:   shuffledStr == "true",
+            repeating:  repeatingStr == "true" || repeatingStr == "all" || repeatingStr == "one"
         )
     }
 

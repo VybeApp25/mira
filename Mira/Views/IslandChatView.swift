@@ -245,59 +245,18 @@ struct IslandChatView: View {
         }
     }
 
-    // MARK: - Placeholder (NotchUseCaseCarousel port from HeyClicky)
-    // Shows contextual use-case chips so the empty state actively prompts engagement.
-
-    private static let suggestions: [(icon: String, label: String)] = [
-        ("calendar",           "What's on my calendar?"),
-        ("envelope",           "Draft an email"),
-        ("magnifyingglass",    "Search the web"),
-        ("sparkle",            "Plan my day"),
-        ("doc.text",           "Review my code"),
-        ("music.note",         "What's playing?"),
-    ]
+    // MARK: - Placeholder (empty chat state — media/calendar now live in the Home tab)
 
     private var placeholder: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("What can I help with?")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.18))
-                .padding(.top, 4)
-
-            // 2-column grid of suggestion chips
-            let cols = [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)]
-            LazyVGrid(columns: cols, spacing: 7) {
-                ForEach(Self.suggestions, id: \.label) { s in
-                    suggestionChip(icon: s.icon, s.label)
-                }
-            }
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 22))
+                .foregroundColor(.white.opacity(0.20))
+            Text("Ask Mira anything")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.30))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 10)
-    }
-
-    private func suggestionChip(icon: String, _ label: String) -> some View {
-        Button {
-            input = label
-            Task { await submit() }
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundColor(accent.opacity(0.75))
-                    .frame(width: 14)
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.60))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(DS.Colors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: 120)
     }
 
     // MARK: - Message row
