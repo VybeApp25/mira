@@ -10,6 +10,8 @@ enum MiraRoute: String, CaseIterable {
     case agentTask              = "agent_task"
     case websiteBuilder         = "website_builder"
     case spotifyControl         = "spotify_control"
+    case musicQuery             = "music_query"
+    case videoPlayback          = "video_playback"
     case openURL                = "open_url"
     case memoryQuery            = "memory_query"
     case memoryWrite            = "memory_write"
@@ -44,6 +46,8 @@ enum MiraRoute: String, CaseIterable {
         case .agentTask:              return "Agent"
         case .websiteBuilder:         return "Website Builder"
         case .spotifyControl:         return "Spotify"
+        case .musicQuery:             return "Now Playing"
+        case .videoPlayback:          return "Video"
         case .openURL:                return "Open URL"
         case .memoryQuery:            return "Memory"
         case .memoryWrite:            return "Remember"
@@ -140,6 +144,9 @@ struct ClarificationSpec {
 struct RouterContext {
     var recentMessageCount: Int = 0
     var activeApp: String?      = nil
+    /// Last few chat turns ("User: … / Mira: …") so the classifier and the
+    /// computer-use engine can resolve follow-ups like "pull it up for me".
+    var recentTranscript: String? = nil
 }
 
 struct RouteDecision {
@@ -228,13 +235,19 @@ final class RouterService: ObservableObject {
         let sync = route(prompt: prompt, context: context)
         switch sync.route {
         case .confirmationRequired, .permissionRequired,
-             .spotifyControl, .openURL, .memoryWrite, .memoryQuery,
-             .emailTask, .researchTask, .repoTask, .codexTask:
+             .spotifyControl, .musicQuery, .videoPlayback, .openURL, .memoryWrite, .memoryQuery,
+             .emailTask, .researchTask, .repoTask, .codexTask,
+             // An explicit "do this on my screen" match must not be second-guessed
+             // by Haiku — its narrower descriptor used to downgrade these to chat,
+             // which then told the user "I can't open YouTube" (it can).
+             .computerUse:
             return sync
         default: break
         }
 
-        guard let haiku = try? await haikuClassify(prompt: prompt, apiKey: apiKey) else {
+        guard let haiku = try? await haikuClassify(prompt: prompt,
+                                                   transcript: context.recentTranscript,
+                                                   apiKey: apiKey) else {
             return sync
         }
         return haiku
@@ -254,7 +267,7 @@ final class RouterService: ObservableObject {
         let route: String; let confidence: Double; let explanation: String
     }
 
-    private func haikuClassify(prompt: String, apiKey: String) async throws -> RouteDecision {
+    private func haikuClassify(prompt: String, transcript: String? = nil, apiKey: String) async throws -> RouteDecision {
         let system = """
 You are a routing classifier. Output JSON on one line:
 {"route":"<route>","confidence":<0-1>,"explanation":"<8 words max>"}
@@ -264,7 +277,9 @@ Routes and when to use them:
 - screen_guidance: explain screen content, "what is this", "what am I looking at"
 - agent_task: background automation, multi-step tasks requiring external tools
 - website_builder: build/create a website or landing page
-- spotify_control: play/pause/skip/volume music
+- spotify_control: play/pause/skip/volume music, favorite/like the current song, add it to a playlist, follow the artist
+- music_query: "what song is this", "what's playing", "who sings this", "who is this by", "what am I listening to", "name this song" — identify the currently playing track
+- video_playback: the user wants to WATCH a video — "show me the USA highlights", "play the game highlights", "pull up a YouTube video of X", "put on the trailer for Y", "find me a clip of Z", "watch highlights", anything naming YouTube. Route here (not computer_use) so Mira opens the video results instantly instead of driving a slow agent.
 - open_url: open a URL or link
 - memory_query: recall stored preferences or facts about the user
 - memory_write: store a preference, fact, or instruction
@@ -282,18 +297,23 @@ Routes and when to use them:
 - obsidian_action: Obsidian vault, open vault note, search vault, wikilinks, markdown notes in Obsidian
 - polymarket_query: Polymarket, prediction market odds, what are the chances, market probability, will X happen
 - maps_query: nearby, directions to, how far, distance between, find a coffee shop, geocode, navigate to, find nearest
-- computer_use: click on, type into, open the app, automate, fill out the form, control my Mac, screenshot desktop
+- computer_use: the user asks Mira to physically DO something on their Mac — open an app or website, click, type, play a video, pull something up on screen, show them something in an app ("show me the highlights on YouTube", "pull it up", "open the browser and play it"), fill out forms, automate, take over the computer
 - email_task: draft email, write email, send email, check inbox, unread emails, triage email, reply to email, email assistant
 - research_task: research report, market research, competitor analysis, web research, write a report on
 - repo_task: pull request, create PR, git commit, git push, code review, review this code, github issues
 - codex_task: use Codex, run Codex, codex CLI, openai codex, codex exec
 - higher_model: analysis, coding, writing, research, complex reasoning
 
+Action vs. answer: Mira CAN control the Mac. If the user wants Mira to PERFORM an action on screen (open / play / click / pull up / show them something in an app or browser), route computer_use. web_search and local_response are only for answering with text. A follow-up that refers back to a previous action request ("why can't you open it?", "just pull it up then") is computer_use.
+
 Output ONLY the JSON line. No preamble, no markdown fences.
 """
+        let userContent = transcript.map {
+            "Recent conversation:\n\($0)\n\nClassify this new message: \(prompt)"
+        } ?? prompt
         let body = HaikuReq(
             model: "claude-haiku-4-5-20251001", max_tokens: 80, system: system,
-            messages: [HaikuMsg(role: "user", content: prompt)]
+            messages: [HaikuMsg(role: "user", content: userContent)]
         )
         var req = URLRequest(url: MiraBackend.anthropicMessagesURL)
         req.httpMethod = "POST"
@@ -366,6 +386,27 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             let result = await MiraToolService.execute(name: "control_spotify", argsJSON: args)
             return .reply(result, route: .spotifyControl)
 
+        case .musicQuery:
+            // Text fallback (used when nothing is playing, or when the chat view
+            // couldn't build the now-playing card). When a track IS playing, the
+            // chat view renders a card with tappable action chips instead.
+            let result = await MusicControlService.shared.identify()
+            return .reply(result, route: .musicQuery)
+
+        case .videoPlayback:
+            // Instant, deterministic, Siri-style: open the YouTube results for the
+            // query right now (no screenshots, no agent loop, no quota consumed).
+            // The top clip is the first result — one tap away, or already playing
+            // if the user has autoplay on.
+            let query = videoQuery(from: prompt)
+            guard let url = youtubeSearchURL(for: query) else {
+                return .reply("I couldn't work out what to search for — try naming the video.",
+                              route: .videoPlayback)
+            }
+            let browser = BrowserService.shared.open(url)
+            return .reply("Pulling up \"\(query)\" on YouTube in \(browser) — top result's right there.",
+                          route: .videoPlayback)
+
         case .openURL:
             if let url = extractURL(from: prompt) {
                 guard validateURL(url) else {
@@ -413,7 +454,8 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             // Otherwise fall back to describing/guiding — a chat message can never
             // seize the computer unless the user has opted in.
             if UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") {
-                return await computerUseResult(prompt: prompt, apiKey: apiKey)
+                return await computerUseResult(prompt: prompt, apiKey: apiKey,
+                                               transcript: context.recentTranscript)
             }
             return await agentOrFallback(prompt: prompt, apiKey: apiKey, capture: capture, route: .computerUse, onStreamChunk: onStreamChunk)
 
@@ -474,6 +516,12 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         }
 
         // Media
+        // "What song is this?" must beat the Spotify play matcher — it's a question
+        // about the current track, not a command to play something.
+        if matchesMusicQuery(lower) {
+            return RouteDecision(route: .musicQuery, confidence: 0.93,
+                                 explanation: "Identify the current track")
+        }
         if matchesSpotify(lower) {
             return RouteDecision(route: .spotifyControl, confidence: 0.92,
                                  explanation: "Spotify control")
@@ -488,6 +536,23 @@ Output ONLY the JSON line. No preamble, no markdown fences.
             }
             return RouteDecision(route: .openURL, confidence: 0.92,
                                  explanation: "Open URL in browser")
+        }
+
+        // "Show me / play a video" is a WATCH intent — the Siri-style right answer
+        // is to open the video results instantly, not to spin up the desktop-control
+        // vision loop (which feels like a slow "agent task"). Must beat computerUse
+        // and web_search below.
+        if matchesVideoRequest(lower) {
+            return RouteDecision(route: .videoPlayback, confidence: 0.9,
+                                 explanation: "Open video results instantly")
+        }
+
+        // Desktop control beats the answer-in-text widget routes: "open YouTube
+        // and search for the highlights" must reach the autonomy engine, not
+        // web_search (which only opens a page and answers in text).
+        if matchesComputerUse(lower) {
+            return RouteDecision(route: .computerUse, confidence: 0.88,
+                                 explanation: "Desktop GUI automation request")
         }
 
         // Widget routes (structured data cards)
@@ -564,12 +629,6 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         if matchesMaps(lower) {
             return RouteDecision(route: .mapsQuery, confidence: 0.88,
                                  explanation: "Maps / location / directions query")
-        }
-
-        // Computer Use (explicit GUI automation request)
-        if matchesComputerUse(lower) {
-            return RouteDecision(route: .computerUse, confidence: 0.88,
-                                 explanation: "Desktop GUI automation request")
         }
 
         // App integrations
@@ -685,6 +744,73 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         lower.contains("spotify")
     }
 
+    /// "What song is this / who's this by / what's playing" — an identify request,
+    /// distinct from a play command. Kept tight so it doesn't swallow "play this song".
+    private func matchesMusicQuery(_ lower: String) -> Bool {
+        let phrases = [
+            "what song is this", "what song is playing", "what's this song", "whats this song",
+            "what is this song", "what track is this", "name this song", "name that song",
+            "what am i listening to", "what's playing", "whats playing", "what is playing",
+            "who is this by", "who's this by", "whos this by", "who sings this",
+            "who is this song by", "who's this song by", "who is singing this",
+            "what song", "song is this",
+        ]
+        return phrases.contains { lower.contains($0) }
+    }
+
+    /// A "watch this video" intent. Kept ahead of `matchesComputerUse` so these
+    /// resolve to an instant YouTube-results open instead of the slow vision loop.
+    /// Deliberately narrow: needs a watch verb + a video noun, or an explicit
+    /// mention of YouTube. "play X on spotify" never reaches here (Spotify matches
+    /// first), and plain questions ("who won the game?") have no video noun.
+    private func matchesVideoRequest(_ lower: String) -> Bool {
+        if lower.contains("youtube") { return true }
+        let watchVerbs = ["show me", "play", "pull up", "pull it up", "pull that up",
+                          "bring up", "put on", "throw on", "watch", "let me see",
+                          "i want to watch", "i wanna watch", "find me"]
+        let videoNouns = ["highlights", "the video", "a video", "music video",
+                          "trailer", "the clip", "a clip", "full match", "full game",
+                          "the game"]
+        let hasVerb = watchVerbs.contains { lower.contains($0) }
+        let hasNoun = videoNouns.contains { lower.contains($0) }
+        return hasVerb && hasNoun
+    }
+
+    /// Strip command verbs and platform/filler words to get the search subject.
+    /// "bring up a youtube video for me on the USA game highlights from last night"
+    /// → "usa game highlights from last night".
+    private func videoQuery(from prompt: String) -> String {
+        var q = " " + prompt.lowercased() + " "
+        let strip = [
+            "bring up", "pull up", "pull that up", "pull it up", "put on", "throw on",
+            "show me", "play me", "play the", "play a", "play", "find me", "let me see",
+            "i want to watch", "i wanna watch", "i want to see", "can you", "could you",
+            "would you", "please", "for me", "real quick",
+            "a youtube video", "the youtube video", "youtube video", "on youtube",
+            "the youtube", "youtube", "the video of", "a video of", "video of",
+            "the video", "a video", "the clip of", "a clip of", "clip of", "watch",
+        ]
+        // Two passes so adjacent phrases ("a youtube video for me") both clear.
+        for _ in 0..<2 {
+            for s in strip {
+                q = q.replacingOccurrences(of: " \(s) ", with: " ", options: .caseInsensitive)
+            }
+        }
+        // Drop a couple of leftover leading connectors ("on the …", "of …").
+        var words = q.split(separator: " ").map(String.init)
+        while let first = words.first, ["on", "of", "the", "for", "a", "an"].contains(first) {
+            words.removeFirst()
+        }
+        let cleaned = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return cleaned.isEmpty ? prompt.trimmingCharacters(in: .whitespaces) : cleaned
+    }
+
+    /// A YouTube search-results URL for a natural-language query.
+    private func youtubeSearchURL(for query: String) -> URL? {
+        guard let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        return URL(string: "https://www.youtube.com/results?search_query=\(q)")
+    }
+
     func extractURL(from text: String) -> URL? {
         // Explicit scheme
         let words = text.split(separator: " ").map(String.init)
@@ -779,15 +905,32 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     }
 
     private func matchesComputerUse(_ lower: String) -> Bool {
-        ["click on", "type into", "type in the", "open the app", "drive the app",
-         "automate this", "fill out the form", "use my mouse", "use computer use",
-         "control my mac", "control my computer", "operate the", "screenshot my desktop",
-         "click the button", "click submit", "scroll down in",
-         // Explicit "drive my Mac for me" autonomy phrasing — signals desktop
-         // control, not a specific app integration, so it's safe to route here
-         // ahead of calendar/notes.
-         "do it for me", "do this for me", "do that for me", "take over", "you do it"]
-            .contains { lower.contains($0) }
+        if ["click on", "type into", "type in the", "open the app", "drive the app",
+            "automate this", "fill out the form", "use my mouse", "use computer use",
+            "control my mac", "control my computer", "operate the", "screenshot my desktop",
+            "click the button", "click submit", "scroll down in",
+            // Explicit "drive my Mac for me" autonomy phrasing — signals desktop
+            // control, not a specific app integration, so it's safe to route here
+            // ahead of calendar/notes.
+            "do it for me", "do this for me", "do that for me", "take over", "you do it",
+            // Natural "put it on my screen" phrasings (demo failure 2026-07-02:
+            // "show me the highlights on YouTube" fell through to chat, which
+            // then claimed it can't open YouTube).
+            "pull it up", "pull that up", "pull this up", "pull up the", "pull up a",
+            "bring it up", "bring that up", "bring up the",
+            "play the video", "play a video", "play that video", "click a video",
+            "click the video", "play the highlights", "show me the highlights",
+            "open youtube", "go to youtube", "go on youtube",
+            "open the browser", "open my browser", "open a browser"]
+            .contains(where: { lower.contains($0) }) { return true }
+        // Action verb + on-screen surface ("show me X on YouTube", "open Chrome
+        // and play it") — the user is asking Mira to DO it, not answer in text.
+        let verbs    = ["show me", "open ", "play ", "watch ", "put on", "pull up",
+                        "bring up", "go to ", "go on "]
+        let surfaces = ["youtube", "browser", "chrome", "safari", "netflix",
+                        "twitch", "instagram", "tiktok", "reddit", "the video", "a video"]
+        return verbs.contains(where: { lower.contains($0) })
+            && surfaces.contains(where: { lower.contains($0) })
     }
 
     private func matchesObsidian(_ lower: String) -> Bool {
@@ -956,6 +1099,33 @@ Output ONLY the JSON line. No preamble, no markdown fences.
 
     private func spotifyArgs(from prompt: String) -> String {
         let lower = prompt.lowercased()
+        // Current-track actions on the playing song — check these BEFORE generic
+        // play/pause so "favorite this song" doesn't fall through to a toggle.
+        if lower.contains("favorite") || lower.contains("favourite")
+            || lower.contains("like this") || lower.contains("like the")
+            || lower.contains("save this") || lower.contains("save the") || lower.contains("heart this") {
+            return "{\"action\":\"favorite\"}"
+        }
+        if lower.contains("add") && (lower.contains("playlist")) {
+            // Try to pull a playlist name after "to " (e.g. "add this to my Gym playlist").
+            if let r = lower.range(of: "to ") {
+                var name = String(prompt[r.upperBound...])
+                    .replacingOccurrences(of: "playlist", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "my ", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "the ", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \"'.!?"))
+                name = name.replacingOccurrences(of: "\"", with: "")
+                if !name.isEmpty { return "{\"action\":\"add_to_playlist\",\"playlist\":\"\(name)\"}" }
+            }
+            return "{\"action\":\"add_to_playlist\"}"
+        }
+        if lower.contains("follow") && (lower.contains("artist") || lower.contains("them")) {
+            return "{\"action\":\"follow_artist\"}"
+        }
+        if lower.contains("turn it up") || lower.contains("turn up") || lower.contains("louder")
+            || lower.contains("volume up") { return "{\"action\":\"volume_up\"}" }
+        if lower.contains("turn it down") || lower.contains("turn down") || lower.contains("quieter")
+            || lower.contains("volume down") { return "{\"action\":\"volume_down\"}" }
         if lower.contains("pause")                                   { return "{\"action\":\"pause\"}" }
         if lower.contains("next") || lower.contains("skip")         { return "{\"action\":\"next\"}" }
         if lower.contains("previous") || lower.contains("back")     { return "{\"action\":\"previous\"}" }
@@ -1028,7 +1198,9 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// `detectDangerousCommand` → `confirmationRequired`, and the orchestrator has
     /// its own iteration cap + Stop kill-switch. Blocks until the task finishes,
     /// then returns the agent's closing summary as the chat reply.
-    private func computerUseResult(prompt: String, apiKey: String) async -> RouteResult {
+    // Internal (not private): also the entry point for voice/MCP via
+    // MiraToolService.controlComputer — same quota, engine routing, announce.
+    func computerUseResult(prompt: String, apiKey: String, transcript: String? = nil) async -> RouteResult {
         // Engine selection is INVISIBLE to the user: by default Mira picks Codex
         // computer-use vs the Claude vision loop itself (EngineRouter) and fails
         // over transparently, so they just see the task get done. "codex"/"claude"
@@ -1049,16 +1221,27 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         // double-charge the user's monthly task budget.
         let decision = await QuotaService.shared.consume(path: "computer-use")
         guard decision.allowed else {
+            MiraDebugLog.log("[ComputerUse] DENIED by quota — \(QuotaService.shared.tasksLeftText)")
             return .reply("You're out of autonomous tasks this month — \(QuotaService.shared.tasksLeftText).",
                           route: .computerUse)
         }
 
+        // Follow-ups like "pull it up for me" are meaningless without the chat
+        // that preceded them — give the engine the referent.
+        let task = transcript.map {
+            "\(prompt)\n\nRecent conversation (context — resolve references like \"it\" from here):\n\($0)"
+        } ?? prompt
+
+        MiraDebugLog.log("[ComputerUse] START plan=\(plan.primary.rawValue)→\(plan.secondary?.rawValue ?? "none") (\(plan.reason)) task=\(prompt.prefix(120))")
+
         // Run primary; on a refusal/failure (not a user Stop), silently retry on
         // the other engine.
-        var run = await runEngine(plan.primary, task: prompt, apiKey: apiKey, drawn: drawn)
+        var run = await runEngine(plan.primary, task: task, apiKey: apiKey, drawn: drawn)
+        MiraDebugLog.log("[ComputerUse] \(plan.primary.rawValue) finished success=\(run.success) summary=\(run.summary.prefix(200))")
         if !run.success, let secondary = plan.secondary {
-            NSLog("[EngineRouter] \(plan.primary.rawValue) did not complete (\(plan.reason)) — failing over to \(secondary.rawValue)")
-            let retry = await runEngine(secondary, task: prompt, apiKey: apiKey, drawn: drawn)
+            MiraDebugLog.log("[ComputerUse] failing over to \(secondary.rawValue)")
+            let retry = await runEngine(secondary, task: task, apiKey: apiKey, drawn: drawn)
+            MiraDebugLog.log("[ComputerUse] \(secondary.rawValue) finished success=\(retry.success) summary=\(retry.summary.prefix(200))")
             if retry.success || run.summary.isEmpty { run = retry }
         }
 

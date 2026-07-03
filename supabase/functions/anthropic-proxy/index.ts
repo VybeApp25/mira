@@ -14,6 +14,8 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 // Only models Mira actually uses — reject anything else so a stolen session
 // can't call arbitrary (e.g. more expensive) models.
 const ALLOWED_MODELS = new Set([
+  "claude-sonnet-5",         // computer-use brain (ComputerUseOrchestrator)
+  "claude-fable-5",          // legacy computer-use brain / Codex-lane fallback
   "claude-opus-4-8",
   "claude-sonnet-4-6",
   "claude-haiku-4-5",

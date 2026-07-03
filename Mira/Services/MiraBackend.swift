@@ -128,6 +128,11 @@ enum MiraBackend {
     /// via the Web API (Client Credentials). Keeps the Spotify client secret server-side.
     static var spotifySearchURL: URL { URL(string: "\(functionsBase)/spotify-search")! }
 
+    /// Edge function that returns the PUBLIC Spotify client ID (safe to expose — it
+    /// appears in every OAuth authorize URL). The app uses it for the client-side
+    /// PKCE user-authorization flow; the client SECRET never leaves the server.
+    static var spotifyConfigURL: URL { URL(string: "\(functionsBase)/spotify-config")! }
+
     // MARK: - Reactive 401 retry
     //
     // Even with proactive refresh (SupabaseService's wake hook + poll keeping the JWT

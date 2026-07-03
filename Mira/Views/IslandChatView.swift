@@ -186,6 +186,25 @@ struct IslandChatView: View {
             input = prompt
             Task { await submit() }
         }
+        // Now-playing card action chips (Turn up / Skip / Favorite / …)
+        .onReceive(NotificationCenter.default.publisher(for: .miraMusicAction)) { note in
+            guard let raw = note.userInfo?["action"] as? String,
+                  let action = MusicControlService.Action(rawValue: raw) else { return }
+            Task { await runMusicAction(action) }
+        }
+    }
+
+    /// Executes a now-playing chip action and appends Mira's confirmation to the
+    /// thread. Reuses the same MusicControlService the voice tools call, so a tap
+    /// and a spoken command behave identically.
+    @MainActor
+    private func runMusicAction(_ action: MusicControlService.Action) async {
+        isLoading = true
+        let result = await MusicControlService.shared.perform(action)
+        messages.append(ChatMessage(role: .mira, text: result))
+        ConversationStore.shared.save(role: "mira", text: result)
+        AudioCueService.shared.playTextReceive()
+        isLoading = false
     }
 
     // Wire realtime callbacks once on appear
@@ -245,59 +264,18 @@ struct IslandChatView: View {
         }
     }
 
-    // MARK: - Placeholder (NotchUseCaseCarousel port from HeyClicky)
-    // Shows contextual use-case chips so the empty state actively prompts engagement.
-
-    private static let suggestions: [(icon: String, label: String)] = [
-        ("calendar",           "What's on my calendar?"),
-        ("envelope",           "Draft an email"),
-        ("magnifyingglass",    "Search the web"),
-        ("sparkle",            "Plan my day"),
-        ("doc.text",           "Review my code"),
-        ("music.note",         "What's playing?"),
-    ]
+    // MARK: - Placeholder (empty chat state — media/calendar now live in the Home tab)
 
     private var placeholder: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("What can I help with?")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.18))
-                .padding(.top, 4)
-
-            // 2-column grid of suggestion chips
-            let cols = [GridItem(.flexible(), spacing: 7), GridItem(.flexible(), spacing: 7)]
-            LazyVGrid(columns: cols, spacing: 7) {
-                ForEach(Self.suggestions, id: \.label) { s in
-                    suggestionChip(icon: s.icon, s.label)
-                }
-            }
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 22))
+                .foregroundColor(.white.opacity(0.20))
+            Text("Ask Mira anything")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.30))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 10)
-    }
-
-    private func suggestionChip(icon: String, _ label: String) -> some View {
-        Button {
-            input = label
-            Task { await submit() }
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundColor(accent.opacity(0.75))
-                    .frame(width: 14)
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.60))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(DS.Colors.surface2)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: 120)
     }
 
     // MARK: - Message row
@@ -667,7 +645,13 @@ struct IslandChatView: View {
         isLoading         = true
 
         // Classify via Haiku gate — async, falls back to sync keyword router if key missing.
-        let context  = RouterContext(recentMessageCount: messages.count)
+        // Last few turns (excluding the message just sent) let the classifier and
+        // the autonomy engine resolve follow-ups like "pull it up for me".
+        let transcript = messages.dropLast().suffix(6)
+            .map { "\($0.role == .user ? "User" : "Mira"): \($0.text)" }
+            .joined(separator: "\n")
+        let context  = RouterContext(recentMessageCount: messages.count,
+                                     recentTranscript: transcript.isEmpty ? nil : transcript)
         let decision = await RouterService.shared.classifyIntent(
             prompt:  prompt,
             context: context,
@@ -740,7 +724,7 @@ struct IslandChatView: View {
         }
 
         // Widget routes — fetch structured data; fall through to handle() on failure.
-        if [MiraRoute.stockLookup, .imageSearch, .placeSearch].contains(decision.route) {
+        if [MiraRoute.stockLookup, .imageSearch, .placeSearch, .musicQuery].contains(decision.route) {
             let widget = await fetchWidget(route: decision.route, prompt: prompt)
             if let widget {
                 messages.append(ChatMessage(role: .mira, widget: widget))
@@ -857,6 +841,17 @@ struct IslandChatView: View {
             if !imgs.isEmpty { return .images(imgs) }
         case .placeSearch:
             if let p = await ChatWidgetService.shared.fetchPlace(query: prompt) { return .place(p) }
+        case .musicQuery:
+            // Build a now-playing card from a fresh snapshot. nil (nothing playing)
+            // falls through to handle(), which speaks a "nothing's playing" reply.
+            let info = await NowPlayingService.shared.snapshot()
+            if info.hasContent {
+                return .nowPlaying(NowPlayingCardData(title: info.title,
+                                                      artist: info.artist,
+                                                      sourceApp: info.sourceApp,
+                                                      isMusic: info.isMusicService,
+                                                      chips: MediaControls.chips(for: info.sourceApp)))
+            }
         default:
             break
         }

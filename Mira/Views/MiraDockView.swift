@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum DockWidgetType: String, CaseIterable, Identifiable {
-    case clock, weather, nowPlaying, battery, appLauncher, pomodoro, toggles, soundMeter
+    case clock, weather, nowPlaying, battery, appLauncher, pomodoro, toggles, soundMeter, systemStats
     var id: String { rawValue }
 
     var label: String {
@@ -22,6 +22,7 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
         case .pomodoro:    "Pomodoro"
         case .toggles:     "Quick Toggles"
         case .soundMeter:  "Sound Meter"
+        case .systemStats: "System"
         }
     }
 
@@ -35,6 +36,7 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
         case .pomodoro:    "timer"
         case .toggles:     "toggles"
         case .soundMeter:  "waveform"
+        case .systemStats: "cpu"
         }
     }
 }
@@ -277,6 +279,12 @@ private struct WidgetSlot: View {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Weather.app"))
                 }
             }
+        case .appLauncher:
+            // Dock tile opens the searchable, scrollable list of all installed apps
+            // (AppLauncherDetailPanel) for every plan. The radial ring switcher is
+            // still available to Pro/Ultra via its Option-tap hotkey — it's just no
+            // longer what this tile routes to.
+            showDetail.toggle()
         default:
             showDetail.toggle()
         }
@@ -293,6 +301,7 @@ private struct WidgetSlot: View {
         case .pomodoro:    PomodoroWidget()
         case .toggles:     QuickTogglesWidget()
         case .soundMeter:  SoundMeterWidget()
+        case .systemStats: SystemStatsWidget()
         }
     }
 
@@ -305,6 +314,7 @@ private struct WidgetSlot: View {
         case .appLauncher: AppLauncherDetailPanel()
         case .nowPlaying:  NowPlayingDetailPanel()
         case .battery:     BatteryDetailPanel()
+        case .systemStats: SystemStatsDetailPanel()
         default:           Text(wtype.label).foregroundColor(.white.opacity(0.5))
         }
     }
@@ -596,13 +606,8 @@ private struct BatteryWidget: View {
     }
 
     private func read() {
-        guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
-              let src  = list.first,
-              let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
-        else { return }
-        pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
-        charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+        guard let status = BatteryStatus.read() else { return }
+        pct = status.pct; charging = status.charging
     }
 }
 
@@ -615,13 +620,8 @@ private struct BatteryDetailPanel: View {
             Text(charging ? "Charging" : "On Battery").font(.system(size: 12)).foregroundColor(.white.opacity(0.4))
         }
         .onAppear {
-            guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-                  let list = IOPSCopyPowerSourcesList(snap)?.takeRetainedValue() as? [CFTypeRef],
-                  let src  = list.first,
-                  let info = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue() as? [String: Any]
-            else { return }
-            pct      = info[kIOPSCurrentCapacityKey] as? Int ?? pct
-            charging = (info[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue
+            guard let status = BatteryStatus.read() else { return }
+            pct = status.pct; charging = status.charging
         }
     }
 }

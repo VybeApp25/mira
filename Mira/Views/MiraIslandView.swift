@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, agents, learn, settings, crons, labs, skills }
+enum IslandTab: Equatable { case home, chat, shelf, camera, agents, learn, settings, crons, labs, skills }
 
 // MARK: - Main island view
 
@@ -607,6 +607,9 @@ struct MiraIslandView: View {
     private var navBar: some View {
         HStack(spacing: 4) {
             navTab(icon: "house.fill",         label: "Home",     tab: .home)
+            navTab(icon: "message.fill",       label: "Chat",     tab: .chat)
+            navTab(icon: "tray.full",          label: "Shelf",    tab: .shelf)
+            navTab(icon: "camera.fill",        label: "Camera",   tab: .camera)
             navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
             navTab(icon: "sparkles",           label: "Labs",     tab: .labs)
             navTab(icon: "puzzlepiece.extension.fill", label: "Skills", tab: .skills)
@@ -633,6 +636,9 @@ struct MiraIslandView: View {
                     .foregroundColor(.white.opacity(0.25))
                     .padding(.trailing, 2)
             }
+
+            NotchBatteryIndicator()
+                .padding(.trailing, 2)
 
             // Pinned to the far right, clear of the physical notch (the center
             // gap created by the Spacer above is where the notch sits).
@@ -672,6 +678,10 @@ struct MiraIslandView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    // MARK: - Battery indicator (compact — plain % + charging glyph, matches
+    // TheBoringNotch's reference layout; the dock's ring gauge doesn't fit
+    // this cramped nav-bar space)
+
 
     // MARK: - Tab content
 
@@ -679,6 +689,8 @@ struct MiraIslandView: View {
     private var tabContent: some View {
         switch selectedTab {
         case .home:
+            NotchHomeTabView()
+        case .chat:
             IslandChatView(
                 miraState: miraState,
                 overlay:   overlay,
@@ -694,6 +706,11 @@ struct MiraIslandView: View {
                 capture:   capture,
                 voice:     voice
             )
+        case .shelf:
+            FileShelfLabsView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .camera:
+            NotchCameraTabView()
         case .labs:
             LabsTabView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -709,6 +726,32 @@ struct MiraIslandView: View {
             SettingsView(state: miraState, embedded: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+private struct NotchBatteryIndicator: View {
+    @State private var pct = 100
+    @State private var charging = false
+    private let t = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("\(pct)%")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.45))
+            if charging {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 8))
+                    .foregroundColor(.yellow.opacity(0.85))
+            }
+        }
+        .onAppear { read() }
+        .onReceive(t) { _ in read() }
+    }
+
+    private func read() {
+        guard let status = BatteryStatus.read() else { return }
+        pct = status.pct; charging = status.charging
     }
 }
 

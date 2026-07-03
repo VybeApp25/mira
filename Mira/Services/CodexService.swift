@@ -162,11 +162,16 @@ final class CodexService {
             return "Not installed — run: npm install -g @openai/codex"
         }
         // Check auth by running a harmless version flag
-        let version = await PythonSkillRunner.shared.shellRun("\(bin.shellEscaped) --version 2>&1", timeout: 8)
+        let versionRaw = await PythonSkillRunner.shared.shellRun("\(bin.shellEscaped) --version 2>&1", timeout: 8)
+        // Last non-empty line strips any shell-startup noise printed before the
+        // real `--version` output (e.g. a broken ~/.zprofile writing to stderr).
+        let version = versionRaw.split(whereSeparator: { $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .last(where: { !$0.isEmpty }) ?? ""
         let hasKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] != nil
             || FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.codex/auth.json")
         let authStatus = hasKey ? "auth OK" : "no OPENAI_API_KEY — run: codex auth login"
-        return "Codex \(version.trimmingCharacters(in: .whitespacesAndNewlines)) · \(authStatus)"
+        return "Codex \(version) · \(authStatus)"
     }
 
     // MARK: - Internal

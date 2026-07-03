@@ -12,6 +12,108 @@ struct ChatWidgetCardView: View {
         case .images(let rs):     ImageSearchWidgetView(results: rs)
         case .place(let p):       PlaceWidgetView(place: p)
         case .artifact(let info): ArtifactCardView(info: info)
+        case .nowPlaying(let c):  MusicControlsWidgetView(card: c)
+        }
+    }
+}
+
+// MARK: - Now Playing + proactive controls
+
+struct MusicControlsWidgetView: View {
+    let card: NowPlayingCardData
+
+    private let surface = Color.white.opacity(0.06)
+    private let border  = Color.white.opacity(0.09)
+    private let accent  = Color(red: 0.20, green: 0.85, blue: 0.55)   // Spotify-ish green
+
+    // Controls are tailored per app upstream (MediaControls.chips), so the card
+    // just renders whatever the source supports.
+    private var chips: [MediaChip] { card.chips }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Track header
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(accent.opacity(0.15))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: card.isMusic ? "music.note" : "play.rectangle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(accent)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(card.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.92))
+                        .lineLimit(1)
+                    Text(card.artist.isEmpty ? card.sourceApp : card.artist)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.50))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if !card.sourceApp.isEmpty {
+                    Text(card.sourceApp)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(accent.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(accent.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+
+            // Proactive action chips
+            FlowChips(chips: chips, accent: accent)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background(surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(border, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Simple two-row wrap of chip buttons.
+    private struct FlowChips: View {
+        let chips: [MediaChip]
+        let accent: Color
+        private let cols = [GridItem(.adaptive(minimum: 96), spacing: 6)]
+
+        var body: some View {
+            LazyVGrid(columns: cols, alignment: .leading, spacing: 6) {
+                ForEach(chips) { chip in
+                    Button {
+                        NotificationCenter.default.post(
+                            name: .miraMusicAction,
+                            object: nil,
+                            userInfo: ["action": chip.action]
+                        )
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: chip.icon)
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(chip.label)
+                                .font(.system(size: 10, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(.white.opacity(0.82))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white.opacity(0.06))
+                        .overlay(
+                            Capsule().stroke(accent.opacity(0.22), lineWidth: 0.5)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }

@@ -48,6 +48,7 @@ struct SettingsView: View {
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
     @AppStorage("mira_analytics_enabled")  private var analyticsEnabled  = true
+    @AppStorage("mira_audio_muted")        private var audioMuted        = false
     @AppStorage(BrowserService.preferredKey) private var preferredBrowser = ""
     @State private var installedBrowsers: [BrowserService.Browser] = []
     @State private var micDevices:     [AVCaptureDevice] = []
@@ -62,6 +63,10 @@ struct SettingsView: View {
     @State private var agentFolderPath:  String = ""
 
     private static let defaultAgentFolder = NSHomeDirectory() + "/Desktop/Mira"
+    @State private var transcriptFolderPath: String = ""
+    private static let defaultTranscriptFolder = NSHomeDirectory() + "/Documents/Transcripts"
+    @ObservedObject private var radial = RadialLauncherModel.shared
+    @ObservedObject private var menuBar = MenuBarIconManager.shared
 
     enum RecordingTarget {
         case voice, text, draw
@@ -108,6 +113,9 @@ struct SettingsView: View {
                             autonomousSection
                             dockSection
                         }
+                        settingsGroup("Menu Bar", icon: "menubar.rectangle") {
+                            menuBarIconManagerSection
+                        }
                         settingsGroup("Shortcuts", icon: "keyboard") {
                             shortcutsSection
                             browserSection
@@ -116,6 +124,8 @@ struct SettingsView: View {
                             connectedAppsButton
                             knowledgeImportButton
                             agentFolderSection
+                            transcriptFolderSection
+                            radialLauncherSection
                             memorySection
                         }
                         settingsGroup("Advanced", icon: "wrench.and.screwdriver.fill") {
@@ -141,6 +151,7 @@ struct SettingsView: View {
             selectedMisoVoice = MisoVoice.saved
             orKeyInput = UserDefaults.standard.string(forKey: "mira_openrouter_key") ?? ""
             agentFolderPath = UserDefaults.standard.string(forKey: "mira_agent_folder") ?? Self.defaultAgentFolder
+            transcriptFolderPath = UserDefaults.standard.string(forKey: "mira_transcript_folder") ?? Self.defaultTranscriptFolder
         }
         .sheet(isPresented: $showTraces)          { ToolTraceView() }
         .sheet(isPresented: $showPaywall)         { PaywallView() }
@@ -1577,6 +1588,200 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Transcripts Folder section
+
+    private var transcriptFolderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Transcripts Folder", systemImage: "text.bubble.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                Text(transcriptFolderPath.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button("Change…") { chooseTranscriptFolder() }
+                    .font(.system(size: 11))
+                    .foregroundColor(accent)
+                    .buttonStyle(.plain)
+
+                if transcriptFolderPath != Self.defaultTranscriptFolder {
+                    Button("Reset") {
+                        UserDefaults.standard.removeObject(forKey: "mira_transcript_folder")
+                        transcriptFolderPath = Self.defaultTranscriptFolder
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Text("Call transcripts are saved here. Mira can read and summarize them.")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.30))
+        }
+    }
+
+    private func chooseTranscriptFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose where Mira saves call transcripts"
+        panel.prompt = "Select Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            transcriptFolderPath = url.path
+            UserDefaults.standard.set(url.path, forKey: "mira_transcript_folder")
+        }
+    }
+
+    // MARK: - Menu Bar Icon Manager section
+
+    private var menuBarIconManagerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Menu Bar Icons", systemImage: "menubar.rectangle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Hide menu bar clutter")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Adds a chevron and a divider to your menu bar. Icons to the left of the divider can be hidden or revealed with one click.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $menuBar.isEnabled)
+                    .toggleStyle(.switch).scaleEffect(0.8, anchor: .leading)
+                    .labelsHidden()
+                    .disabled(entitlements.plan == .free)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if menuBar.isEnabled {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SET IT UP").font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.35))
+                    Text("⌘-drag your menu bar icons into position: put the ones you want to hide to the LEFT of the new divider, and the ones you always want visible to the RIGHT of the chevron.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Click the chevron in your menu bar any time to show or hide them.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10).padding(.top, 2)
+            }
+
+            if entitlements.plan == .free {
+                Text("Hide menu bar icons. (Pro/Ultra)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.30))
+            }
+        }
+    }
+
+    // MARK: - Radial Launcher section
+
+    private var radialLauncherSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Radial Launcher", systemImage: "circle.grid.cross.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                Text("Size").font(.system(size: 11)).foregroundColor(.white.opacity(0.55))
+                    .frame(width: 64, alignment: .leading)
+                Picker("", selection: $radial.size) {
+                    ForEach(WheelSize.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+            HStack(spacing: 8) {
+                Text("Thickness").font(.system(size: 11)).foregroundColor(.white.opacity(0.55))
+                    .frame(width: 64, alignment: .leading)
+                Slider(value: $radial.thickness, in: 34...92)
+            }
+            Toggle(isOn: $radial.showAtCursor) {
+                Text("Open at mouse cursor").font(.system(size: 11)).foregroundColor(.white.opacity(0.75))
+            }
+            .toggleStyle(.switch).scaleEffect(0.8, anchor: .leading)
+
+            Text("APPS").font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.35)).padding(.top, 2)
+            ForEach(radial.palette) { app in
+                HStack(spacing: 8) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                        .resizable().frame(width: 20, height: 20)
+                    Text(app.name).font(.system(size: 11)).foregroundColor(.white.opacity(0.85)).lineLimit(1)
+                    Spacer()
+                    Menu {
+                        Toggle("Hide other apps on launch", isOn: bindHideOthers(app))
+                        Toggle("Hide wheel after launch", isOn: bindHidesAfter(app))
+                    } label: {
+                        Image(systemName: "slider.horizontal.3").font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    Button { radial.removeApp(app.id) } label: {
+                        Image(systemName: "minus.circle.fill").font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.35))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            Button { addPaletteApp() } label: {
+                Label(radial.atLimit ? "App limit reached — Ultra for unlimited" : "Add app", systemImage: "plus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(radial.atLimit ? .white.opacity(0.3) : accent)
+            }
+            .buttonStyle(.plain).disabled(radial.atLimit)
+
+            Text("Tap the Option key to open the wheel. Arrow keys to navigate, Enter to launch. (Pro/Ultra)")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.30))
+        }
+    }
+
+    private func bindHideOthers(_ app: PaletteApp) -> Binding<Bool> {
+        Binding(get: { app.hideOthers }, set: { var a = app; a.hideOthers = $0; radial.update(a) })
+    }
+    private func bindHidesAfter(_ app: PaletteApp) -> Binding<Bool> {
+        Binding(get: { app.hidesAfterLaunch }, set: { var a = app; a.hidesAfterLaunch = $0; radial.update(a) })
+    }
+
+    private func addPaletteApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["app"]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.message = "Add an app to the radial launcher"
+        panel.prompt = "Add"
+        if panel.runModal() == .OK, let url = panel.url {
+            radial.addApp(path: url.path)
+        }
+    }
+
     // MARK: - Developer Tools section
 
     @State private var codexStatus: String = "Checking…"
@@ -1632,8 +1837,13 @@ struct SettingsView: View {
                 proc.standardError  = pipe
                 proc.launch()
                 proc.waitUntilExit()
-                let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "not installed"
+                let raw = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                // Take the last non-empty line so noise from the user's shell
+                // startup (e.g. a broken ~/.zprofile writing to stderr) can't
+                // mask the real `claude --version` output.
+                let out = raw.split(whereSeparator: \.isNewline)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .last(where: { !$0.isEmpty }) ?? "not installed"
                 cont.resume(returning: out.isEmpty ? "not installed" : out)
             }
         }
@@ -1939,6 +2149,16 @@ struct SettingsView: View {
             .onChange(of: showInCapture) {
                 NotificationCenter.default.post(name: .miraShowInCaptureChanged, object: nil)
             }
+
+            // Global on/off for all of Mira's sound effects. Backed by the same
+            // "mira_audio_muted" flag AudioCueService.play() already checks, so the
+            // toggle is presented inverted (on = sounds play, off = fully silent).
+            toggleRow(
+                icon: "speaker.wave.2.fill",
+                title: "Mira sounds",
+                subtitle: "Sound effects for chimes, agent activity, and interactions",
+                binding: Binding(get: { !audioMuted }, set: { audioMuted = !$0 })
+            )
         }
     }
 

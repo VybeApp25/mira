@@ -7,6 +7,18 @@ enum ChatWidget: Equatable {
     case images([ImageResult])
     case place(PlaceResult)
     case artifact(ArtifactInfo)
+    case nowPlaying(NowPlayingCardData)
+}
+
+/// Backing data for the chat "now playing" card + its proactive action chips.
+/// `chips` is tailored to the playing app (see MediaControls), and `isMusic`
+/// picks the header icon (music note vs video).
+struct NowPlayingCardData: Equatable {
+    let title:     String
+    let artist:    String
+    let sourceApp: String   // "Spotify", "Apple Music", "YouTube", "Netflix", …
+    let isMusic:   Bool
+    let chips:     [MediaChip]
 }
 
 struct ArtifactInfo: Equatable {

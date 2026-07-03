@@ -11,6 +11,8 @@ extension Notification.Name {
     static let miraShortcutsChanged       = Notification.Name("miraShortcutsChanged")
     static let miraScreenCompanionChanged = Notification.Name("miraScreenCompanionChanged")
     static let miraChipPromptSelected     = Notification.Name("miraChipPromptSelected")
+    // Now-playing card action chip tapped (userInfo: "action" = MusicControlService.Action raw)
+    static let miraMusicAction            = Notification.Name("miraMusicAction")
     static let miraTabSelected            = Notification.Name("miraTabSelected")
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
@@ -42,6 +44,10 @@ extension Notification.Name {
     // MiraIslandWindowManager. Resume restores the island's normal window level.
     static let miraSuspendForModal        = Notification.Name("miraSuspendForModal")
     static let miraResumeFromModal        = Notification.Name("miraResumeFromModal")
+    // A Finder (or other app) file drag entered the notch drop zone — NotchManager
+    // expands the island; MiraIslandView switches to the Shelf tab. Posted by
+    // NotchDropZoneController.
+    static let miraDragEnteredNotch       = Notification.Name("miraDragEnteredNotch")
 }
 
 // MARK: - Carbon callback (free function — no captures, safe as C function pointer)
