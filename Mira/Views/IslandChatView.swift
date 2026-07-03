@@ -620,6 +620,12 @@ struct IslandChatView: View {
     // MARK: - Actions
 
     @MainActor
+    /// Short title for the bottom-right activity chip (first few words of the prompt).
+    private static func chatChipTitle(_ prompt: String) -> String {
+        let words = prompt.split(separator: " ").prefix(6).joined(separator: " ")
+        return words.isEmpty ? "Chat" : words
+    }
+
     private func submit() async {
         let prompt = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isLoading else { return }
@@ -668,6 +674,10 @@ struct IslandChatView: View {
             let ph = ChatMessage(role: .mira, text: "")
             streamingMsgId = ph.id
             messages.append(ph)
+            // Live bottom-right chip for the vision answer.
+            let chatActivity = AgentTaskManager.shared.start(
+                title: Self.chatChipTitle(prompt), subtitle: "Analyzing region…", status: .thinking)
+            var chatOK = true
             var reply = ""
             do {
                 // Token-efficient: send a tight crop of just what the user circled,
@@ -689,8 +699,10 @@ struct IslandChatView: View {
             } catch {
                 NSLog("[DrawContext] askStreaming FAILED: \(error)")
                 reply = "I couldn't read your marked screen region (\(error.localizedDescription))."
+                chatOK = false
             }
             streamingMsgId = nil
+            AgentTaskManager.shared.finish(chatActivity, success: chatOK)
             if let idx = messages.firstIndex(where: { $0.id == ph.id }), messages[idx].text.isEmpty {
                 messages[idx].text = reply
             }
@@ -746,6 +758,15 @@ struct IslandChatView: View {
             messages.append(ph)
         }
 
+        // Live bottom-right chip while Mira generates a text reply. Excludes
+        // .computerUse (self-chips via the orchestrator) — placeholder routes
+        // that don't stream (clarification/confirmation/permission) never get here.
+        var chatActivityID: UUID? = nil
+        if placeholderID != nil && decision.route != .computerUse {
+            chatActivityID = AgentTaskManager.shared.start(
+                title: Self.chatChipTitle(prompt), subtitle: "Responding…", status: .responding)
+        }
+
         // Extract callback with explicit type so the compiler can check the closure independently.
         var onStreamChunk: (@MainActor @Sendable (String) -> Void)? = nil
         if placeholderID != nil {
@@ -765,6 +786,7 @@ struct IslandChatView: View {
             onStreamChunk: onStreamChunk
         )
         streamingMsgId = nil
+        if let id = chatActivityID { AgentTaskManager.shared.finish(id, success: true) }
 
         switch result.route {
         case .clarificationRequired:
@@ -901,6 +923,11 @@ struct IslandChatView: View {
         let miraMsgId = miraMsg.id
         streamingMsgId = miraMsgId
 
+        // Live bottom-right chip for the coding-agent run.
+        let chatActivity = AgentTaskManager.shared.start(
+            title: Self.chatChipTitle(prompt), subtitle: "Coding…", status: .callingTools)
+        var chatOK = true
+
         // Start cursor bubble for collapsed-pill streaming
         CursorBubbleService.shared.showStreaming()
 
@@ -935,9 +962,11 @@ struct IslandChatView: View {
             if let idx = messages.firstIndex(where: { $0.id == miraMsgId }) {
                 messages[idx].text = "*Claude Code error: \(error.localizedDescription)*"
             }
+            chatOK = false
         }
 
         streamingMsgId = nil
+        AgentTaskManager.shared.finish(chatActivity, success: chatOK)
         isLoading = false
         miraState.isLoading = false
         CursorBubbleService.shared.finishStreaming()
