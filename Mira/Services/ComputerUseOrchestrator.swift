@@ -69,13 +69,33 @@ final class ComputerUseOrchestrator: ObservableObject {
         latestScreenshot = nil
         var taskSucceeded = false
 
+        // Live bottom-right chip: one per task, updated in place through the
+        // perception → reasoning → action phases. See AgentTaskManager.
+        let activityID = AgentTaskManager.shared.start(
+            title: Self.activityTitle(for: task),
+            subtitle: "Reading screen…"
+        )
+        defer { AgentTaskManager.shared.finish(activityID, success: taskSucceeded, summary: result.isEmpty ? nil : String(result.prefix(60))) }
+
         let cua = ComputerUseService.shared
         let w   = cua.displayWidth
         let h   = cua.displayHeight
+        MiraDebugLog.log("[Orchestrator] vision loop START display=\(w)x\(h) task=\(task.prefix(120))")
+        // HeyClicky-style visibility: persistent click-through overlay marks every
+        // click so the user SEES the agent working. Orchestrator coords are
+        // logical points — don't let the overlay divide by backing scale.
+        CodexLiveOverlay.shared.assumePixelsAreNative = false
+        CodexLiveOverlay.shared.begin()
+        defer {
+            CodexLiveOverlay.shared.end()
+            CodexLiveOverlay.shared.assumePixelsAreNative = true
+        }
 
         let systemPrompt = """
             You are controlling a macOS computer. Display size: \(w)×\(h) points (top-left origin).
-            Use the computer tool to accomplish the task. Always take a screenshot first to understand the current state.
+            Use the computer tool to accomplish the task. Take a screenshot first to see the current state.
+            After every click, type, key press, scroll, or drag you receive a fresh screenshot showing the result. Study it and verify the action had the intended effect before moving on. If it didn't (nothing happened, wrong element, unexpected state), do not repeat the same action blindly — re-locate the target in the screenshot and adjust.
+            Never claim an action succeeded unless the screenshot proves it. Only declare the task complete once the final screenshot visibly shows the goal state; if you cannot get there, say plainly what failed instead of claiming success.
             Common macOS shortcuts: cmd+c (copy), cmd+v (paste), cmd+z (undo), cmd+a (select all), cmd+tab (app switcher).
             The "super" key is the macOS Command (⌘) key.
             """
@@ -101,13 +121,26 @@ final class ComputerUseOrchestrator: ObservableObject {
         var stepsLeft = perTaskStepCeiling
         while !stopRequested, stepsLeft > 0 {
             stepsLeft -= 1
+            AgentTaskManager.shared.update(activityID, status: .thinking, subtitle: "Thinking…")
+            AgentTaskManager.shared.creepProgress(activityID)
             guard let response = await sendRequest(messages: messages, apiKey: apiKey, system: systemPrompt, width: w, height: h) else {
                 result = "API request failed."
+                MiraDebugLog.log("[Orchestrator] sendRequest returned nil — aborting loop at step \(perTaskStepCeiling - stepsLeft)")
                 break
             }
 
             let content    = response["content"]    as? [[String: Any]] ?? []
             let stopReason = response["stop_reason"] as? String         ?? "end_turn"
+            let toolCount  = content.filter { $0["type"] as? String == "tool_use" }.count
+            MiraDebugLog.log("[Orchestrator] turn \(perTaskStepCeiling - stepsLeft): stop=\(stopReason) toolUses=\(toolCount) model=\(response["model"] as? String ?? "?")")
+
+            // Sonnet 5 safety classifiers can decline a request (HTTP 200 +
+            // stop_reason "refusal") — rare for ordinary desktop tasks. Surface
+            // it rather than looping.
+            if stopReason == "refusal" {
+                result = "I couldn't complete that — the request was declined by the model's safety system."
+                break
+            }
 
             let turnText = content.compactMap { ($0["type"] as? String == "text") ? $0["text"] as? String : nil }.joined()
 
@@ -118,6 +151,7 @@ final class ComputerUseOrchestrator: ObservableObject {
             if toolUses.isEmpty || stopReason == "end_turn" {
                 result = turnText
                 taskSucceeded = true
+                MiraDebugLog.log("[Orchestrator] DONE after \(perTaskStepCeiling - stepsLeft) turns: \(turnText.prefix(200))")
                 break
             }
 
@@ -126,6 +160,11 @@ final class ComputerUseOrchestrator: ObservableObject {
                 let toolID = tool["id"]    as? String       ?? ""
                 let input  = tool["input"] as? [String: Any] ?? [:]
                 let action = input["action"] as? String      ?? ""
+
+                AgentTaskManager.shared.update(activityID,
+                                               status: .callingTools,
+                                               subtitle: Self.activitySubtitle(for: action))
+                AgentTaskManager.shared.creepProgress(activityID)
 
                 let (resultContent, step) = await executeAction(action: action, input: input)
                 toolResults.append([
@@ -145,6 +184,31 @@ final class ComputerUseOrchestrator: ObservableObject {
     }
 
     func stop() { stopRequested = true }
+
+    // MARK: - Live-chip text
+
+    /// Short, human title for the floating activity chip (first few words of the task).
+    static func activityTitle(for task: String) -> String {
+        let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = trimmed.split(separator: " ").prefix(6).joined(separator: " ")
+        return words.isEmpty ? "Working" : words
+    }
+
+    /// Maps a computer_use action to a live "what's happening now" subtitle.
+    static func activitySubtitle(for action: String) -> String {
+        switch action {
+        case "screenshot":                 return "Reading screen…"
+        case "left_click", "click",
+             "double_click", "right_click": return "Clicking…"
+        case "type":                       return "Typing…"
+        case "key", "hold_key":            return "Pressing keys…"
+        case "scroll":                     return "Scrolling…"
+        case "left_click_drag", "drag":    return "Dragging…"
+        case "mouse_move", "cursor_position": return "Moving cursor…"
+        case "wait":                       return "Waiting…"
+        default:                           return "Acting…"
+        }
+    }
 
     // MARK: - Structured autonomous entry (router-first)
 
@@ -258,29 +322,38 @@ final class ComputerUseOrchestrator: ObservableObject {
             }
             return ([ok], CUAStep(action: action, details: "Screenshot failed"))
 
-        case "left_click", "right_click", "middle_click":
+        case "left_click", "right_click", "middle_click", "double_click", "triple_click":
             let coord = input["coordinate"] as? [Int] ?? [0, 0]
             let x = coord.count > 0 ? coord[0] : 0
             let y = coord.count > 1 ? coord[1] : 0
-            let btn = action == "right_click" ? "right" : action == "middle_click" ? "middle" : "left"
-            cua.click(x: x, y: y, button: btn)
-            return ([ok], CUAStep(action: action, details: "\(action.replacingOccurrences(of: "_", with: " ").capitalized) at (\(x), \(y))"))
-
-        case "double_click":
-            let coord = input["coordinate"] as? [Int] ?? [0, 0]
-            cua.doubleClick(x: coord.count > 0 ? coord[0] : 0, y: coord.count > 1 ? coord[1] : 0)
-            return ([ok], CUAStep(action: action, details: "Double-click at (\(coord[0]), \(coord[1]))"))
-
-        case "triple_click":
-            let coord = input["coordinate"] as? [Int] ?? [0, 0]
-            cua.tripleClick(x: coord.count > 0 ? coord[0] : 0, y: coord.count > 1 ? coord[1] : 0)
-            return ([ok], CUAStep(action: action, details: "Triple-click at (\(coord[0]), \(coord[1]))"))
+            let label = action.replacingOccurrences(of: "_", with: " ").capitalized
+            // Fingerprint before/after so a click that hit nothing is reported
+            // as such instead of a blind "OK" the model mistakes for success.
+            let before = await cua.screenFingerprint()
+            MiraDebugLog.log("[Orchestrator] \(action) at (\(x),\(y))")
+            CodexLiveOverlay.shared.mark(rawX: Double(x), rawY: Double(y))
+            switch action {
+            case "double_click": cua.doubleClick(x: x, y: y)
+            case "triple_click": cua.tripleClick(x: x, y: y)
+            default:
+                let btn = action == "right_click" ? "right" : action == "middle_click" ? "middle" : "left"
+                cua.click(x: x, y: y, button: btn)
+            }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            var note = "\(label) at (\(x), \(y)). The screenshot below shows the screen after the click — verify it had the intended effect before continuing."
+            if let before, let after = await cua.screenFingerprint(),
+               cua.changedFraction(before, after) < 0.005 {
+                note = "\(label) at (\(x), \(y)) — WARNING: the screen did not visibly change, so the click likely missed its target or hit an inert area. Re-examine the screenshot below and try a different location."
+            }
+            let (content, shot) = await actionFeedback(note: note, settle: 0)
+            return (content, CUAStep(action: action, details: "\(label) at (\(x), \(y))", screenshot: shot))
 
         case "left_click_drag":
             let s = input["start_coordinate"] as? [Int] ?? [0, 0]
             let e = input["coordinate"]       as? [Int] ?? [0, 0]
             cua.drag(fromX: s[0], fromY: s[1], toX: e[0], toY: e[1])
-            return ([ok], CUAStep(action: action, details: "Drag (\(s[0]),\(s[1])) → (\(e[0]),\(e[1]))"))
+            let (content, shot) = await actionFeedback(note: "Drag performed (\(s[0]),\(s[1])) → (\(e[0]),\(e[1])). Verify the result in the screenshot below.")
+            return (content, CUAStep(action: action, details: "Drag (\(s[0]),\(s[1])) → (\(e[0]),\(e[1]))", screenshot: shot))
 
         case "mouse_move":
             let coord = input["coordinate"] as? [Int] ?? [0, 0]
@@ -291,12 +364,14 @@ final class ComputerUseOrchestrator: ObservableObject {
             let text = input["text"] as? String ?? ""
             cua.type(text: text)
             let preview = text.count > 50 ? String(text.prefix(50)) + "…" : text
-            return ([ok], CUAStep(action: action, details: "Type: \"\(preview)\""))
+            let (content, shot) = await actionFeedback(note: "Typed \"\(preview)\". The screenshot below shows the screen after typing — verify the text landed where intended.")
+            return (content, CUAStep(action: action, details: "Type: \"\(preview)\"", screenshot: shot))
 
         case "key":
             let combo = input["text"] as? String ?? ""
             cua.key(combination: combo)
-            return ([ok], CUAStep(action: action, details: "Key: \(combo)"))
+            let (content, shot) = await actionFeedback(note: "Pressed \(combo). The screenshot below shows the screen after the key press.")
+            return (content, CUAStep(action: action, details: "Key: \(combo)", screenshot: shot))
 
         case "scroll":
             let coord     = input["coordinate"] as? [Int]    ?? [0, 0]
@@ -304,7 +379,8 @@ final class ComputerUseOrchestrator: ObservableObject {
             let amount    = input["amount"]     as? Int      ?? 3
             cua.scroll(x: coord.count > 0 ? coord[0] : 0, y: coord.count > 1 ? coord[1] : 0,
                        direction: direction, amount: amount)
-            return ([ok], CUAStep(action: action, details: "Scroll \(direction) ×\(amount) at (\(coord[0]), \(coord[1]))"))
+            let (content, shot) = await actionFeedback(note: "Scrolled \(direction) ×\(amount) at (\(coord[0]), \(coord[1])). The screenshot below shows the screen after scrolling.")
+            return (content, CUAStep(action: action, details: "Scroll \(direction) ×\(amount) at (\(coord[0]), \(coord[1]))", screenshot: shot))
 
         case "cursor_position":
             let pos = cua.cursorPosition()
@@ -324,6 +400,22 @@ final class ComputerUseOrchestrator: ObservableObject {
 
     private var ok: [String: Any] { ["type": "text", "text": "OK"] }
 
+    /// Post-action feedback: waits for the UI to settle, then returns a note plus
+    /// a fresh screenshot so the model SEES what its action did instead of
+    /// trusting a blind "OK" — the fix for "said it clicked but nothing happened".
+    private func actionFeedback(note: String, settle: Double = 0.7) async -> ([[String: Any]], NSImage?) {
+        if settle > 0 { try? await Task.sleep(nanoseconds: UInt64(settle * 1_000_000_000)) }
+        var content: [[String: Any]] = [["type": "text", "text": note]]
+        var image: NSImage? = nil
+        if let data = await ComputerUseService.shared.screenshot() {
+            content.append(["type": "image",
+                            "source": ["type": "base64", "media_type": "image/png",
+                                       "data": data.base64EncodedString()]])
+            image = NSImage(data: data)
+        }
+        return (content, image)
+    }
+
     // MARK: - API
 
     private func sendRequest(
@@ -334,11 +426,13 @@ final class ComputerUseOrchestrator: ObservableObject {
         height: Int
     ) async -> [String: Any]? {
         let body: [String: Any] = [
-            "model":      "claude-sonnet-4-6",
-            "max_tokens": 4096,
+            // Sonnet 5 runs adaptive thinking by default when `thinking` is
+            // omitted (sending `budget_tokens` or sampling params 400s), and
+            // thinking tokens count toward max_tokens, so give headroom (the
+            // proxy clamps to the plan cap anyway).
+            "model":      "claude-sonnet-5",
+            "max_tokens": 16000,
             "system":     system,
-            // claude-sonnet-4-6 only supports computer_20251124 — older tool
-            // versions (20241022/20250124) are rejected with invalid_request_error.
             "tools": [[
                 "type":              "computer_20251124",
                 "name":              "computer",
@@ -352,18 +446,32 @@ final class ComputerUseOrchestrator: ObservableObject {
 
         var req = URLRequest(url: apiURL)
         req.httpMethod  = "POST"
-        req.timeoutInterval = 180
+        // Sonnet 5 vision turns can run a while when thinking hard — don't cut them off.
+        req.timeoutInterval = 300
         MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
         req.setValue("2023-06-01",              forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json",        forHTTPHeaderField: "content-type")
         req.setValue("computer-use-2025-11-24", forHTTPHeaderField: "anthropic-beta")
         req.httpBody = data
 
-        guard let (respData, resp) = try? await MiraBackend.proxyData(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: respData) as? [String: Any] else {
+        do {
+            let (respData, resp) = try await MiraBackend.proxyData(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else {
+                // The failure trail was invisible before — a rejected model,
+                // clamped body, or auth error just became "API request failed."
+                let body = String(data: respData, encoding: .utf8) ?? "<non-utf8>"
+                MiraDebugLog.log("[Orchestrator] API \(status): \(body.prefix(500))")
+                return nil
+            }
+            guard let json = try JSONSerialization.jsonObject(with: respData) as? [String: Any] else {
+                MiraDebugLog.log("[Orchestrator] API 200 but non-JSON body")
+                return nil
+            }
+            return json
+        } catch {
+            MiraDebugLog.log("[Orchestrator] request error: \(error.localizedDescription)")
             return nil
         }
-        return json
     }
 }

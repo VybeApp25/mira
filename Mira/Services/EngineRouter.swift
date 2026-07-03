@@ -13,8 +13,9 @@
 //                    Terminal, Keychain, etc.). For those, skip Codex entirely so
 //                    we don't burn a run on a guaranteed refusal — Claude's AX /
 //                    vision path has no such block.
-//   • Default      — Codex leads for general multi-step GUI control (its
-//                    computer-use plugin is the specialist), Claude is the failover.
+//   • Default      — the Claude (Sonnet 5) vision loop leads: it verifies every
+//                    action against a fresh screenshot, so it doesn't claim
+//                    clicks it didn't land. Codex is the failover.
 
 import Foundation
 
@@ -57,7 +58,8 @@ final class EngineRouter {
             return Plan(primary: .claude, secondary: nil, reason: "Codex CLI unavailable")
         }
 
-        // Default: Codex leads, Claude fails over.
-        return Plan(primary: .codex, secondary: .claude, reason: "general GUI control")
+        // Default: the Claude (Sonnet 5) vision loop leads — it verifies every
+        // action against a post-action screenshot — with Codex as the failover.
+        return Plan(primary: .claude, secondary: .codex, reason: "general GUI control")
     }
 }

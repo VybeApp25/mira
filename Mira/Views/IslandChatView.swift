@@ -645,7 +645,13 @@ struct IslandChatView: View {
         isLoading         = true
 
         // Classify via Haiku gate — async, falls back to sync keyword router if key missing.
-        let context  = RouterContext(recentMessageCount: messages.count)
+        // Last few turns (excluding the message just sent) let the classifier and
+        // the autonomy engine resolve follow-ups like "pull it up for me".
+        let transcript = messages.dropLast().suffix(6)
+            .map { "\($0.role == .user ? "User" : "Mira"): \($0.text)" }
+            .joined(separator: "\n")
+        let context  = RouterContext(recentMessageCount: messages.count,
+                                     recentTranscript: transcript.isEmpty ? nil : transcript)
         let decision = await RouterService.shared.classifyIntent(
             prompt:  prompt,
             context: context,

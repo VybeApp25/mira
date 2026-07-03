@@ -39,8 +39,10 @@
 		2056FD97981A02D2AF4288E8 /* MiraDockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */; };
 		206924BFA4E8C16546C096CA /* google-workspace.md in Resources */ = {isa = PBXBuildFile; fileRef = D0C51B0CE61AD6DDE4EA2B06 /* google-workspace.md */; };
 		21420C753E74EF0F2F60B5B8 /* CursorBubbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */; };
+		2162B1166A62ADB40B6B2440 /* AgentTaskManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54C5F3494EE98B7199C6D7E /* AgentTaskManager.swift */; };
 		21C11CB603C81EEA0B101A39 /* powerpoint.md in Resources */ = {isa = PBXBuildFile; fileRef = EB0848094B0493DE9157E662 /* powerpoint.md */; };
 		21EEDF39AC44128C8FEBD7F5 /* spotify.md in Resources */ = {isa = PBXBuildFile; fileRef = EBB7394DB7201E80D6B15BA3 /* spotify.md */; };
+		23A6E2AD7659C4A30D3120C6 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561078F647683F692AC8613D /* AgentActivity.swift */; };
 		23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */; };
 		240843308092A906750786AC /* AgentHUDWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */; };
 		2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */; };
@@ -198,6 +200,7 @@
 		9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F49814EE23560DC880AF05 /* SupabaseService.swift */; };
 		9F6476CCB1151DDCBE55BCC1 /* ErrorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC4FD2846DA1EEBA136C9D7 /* ErrorService.swift */; };
 		A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16778FFCF54471FB1ABBB110 /* VoiceService.swift */; };
+		A141C1C9AFCD0C73632B9FBB /* AgentActivityChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 261149E01726C1DC29E227B7 /* AgentActivityChipView.swift */; };
 		A1B55B66B48FB225945A0B20 /* pptx_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = A782277C3717512EB6C03900 /* pptx_rw.py */; };
 		A203B2E97FF34162072AC381 /* ProposalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE89AA4E41C972A58C582686 /* ProposalStore.swift */; };
 		A207BDA0F69204FBCB1CFA9C /* FloatingButtonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30DBCAAD8D19FFE4F04F3375 /* FloatingButtonService.swift */; };
@@ -368,6 +371,7 @@
 		2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentProcessManager.swift; sourceTree = "<group>"; };
 		2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReliabilityDashboardView.swift; sourceTree = "<group>"; };
 		24B4FD4FFA5539F9EDC9F1DE /* OnboardingNarrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingNarrator.swift; sourceTree = "<group>"; };
+		261149E01726C1DC29E227B7 /* AgentActivityChipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityChipView.swift; sourceTree = "<group>"; };
 		26CF799162D6500DB5D454C4 /* ControlGroupTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlGroupTracker.swift; sourceTree = "<group>"; };
 		2817F7CA87F73B39068FB317 /* github-repo-management.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "github-repo-management.md"; sourceTree = "<group>"; };
 		2824EFB7442C6F4AF52C6FBE /* Mira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mira.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -426,6 +430,7 @@
 		54EE6C76840A879706154B2F /* CoordinationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinationModels.swift; sourceTree = "<group>"; };
 		556FE075FEBF1DA1129BA4C8 /* OutputStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputStore.swift; sourceTree = "<group>"; };
 		55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutcomeEvaluator.swift; sourceTree = "<group>"; };
+		561078F647683F692AC8613D /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
 		569D921EDA2E4519F8512B35 /* imessage.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = imessage.md; sourceTree = "<group>"; };
 		56EC347B47F1C0B55FBAD734 /* slack.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = slack.md; sourceTree = "<group>"; };
 		5730D96274E04D43ABA9738A /* CallHUDManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallHUDManager.swift; sourceTree = "<group>"; };
@@ -547,6 +552,7 @@
 		B39AB07565BD483C4C55CD53 /* github-pr-workflow.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "github-pr-workflow.md"; sourceTree = "<group>"; };
 		B41C5FF860F44DB7354F8359 /* BrowserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserService.swift; sourceTree = "<group>"; };
 		B4B324BC14AED4E3627AA2C7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		B54C5F3494EE98B7199C6D7E /* AgentTaskManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskManager.swift; sourceTree = "<group>"; };
 		B5D41497F7635F087FD3D293 /* GroundingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroundingService.swift; sourceTree = "<group>"; };
 		B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = imessage_read.py; sourceTree = "<group>"; };
 		B78AD9EA6F1C38CE13EED661 /* SidecarSuggestionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidecarSuggestionService.swift; sourceTree = "<group>"; };
@@ -838,6 +844,7 @@
 				7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */,
 				2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */,
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
+				B54C5F3494EE98B7199C6D7E /* AgentTaskManager.swift */,
 				CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */,
 				6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */,
 				9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */,
@@ -969,6 +976,7 @@
 		D81C426E76C691B29275C7BA /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				561078F647683F692AC8613D /* AgentActivity.swift */,
 				A402B112ABE83ADE3C4489E6 /* AgentJob.swift */,
 				376F1CDCA756B5368F057786 /* AgentTaskStore.swift */,
 				641B7CB66B672FC642BC96AE /* AttentionDirective.swift */,
@@ -1021,6 +1029,7 @@
 			isa = PBXGroup;
 			children = (
 				83B706458B64024088E8769D /* ActionChipsView.swift */,
+				261149E01726C1DC29E227B7 /* AgentActivityChipView.swift */,
 				EEA12B26A9743FAB1D118372 /* AgentHUDColumnView.swift */,
 				E814E13E9DB836D50FA2620E /* AgentHUDView.swift */,
 				42036566FF695AD6554E8E01 /* AgentOutputsView.swift */,
@@ -1238,6 +1247,8 @@
 				D6BC0011333BD8D5DC98B090 /* ActionChipService.swift in Sources */,
 				2BC76E2CC98B202D34533CAE /* ActionChipsView.swift in Sources */,
 				D4992E88735ED08374C4577B /* ActuationRouter.swift in Sources */,
+				23A6E2AD7659C4A30D3120C6 /* AgentActivity.swift in Sources */,
+				A141C1C9AFCD0C73632B9FBB /* AgentActivityChipView.swift in Sources */,
 				4F78913E764350E22C107F25 /* AgentCoordinator.swift in Sources */,
 				C1670E21C86DE21B68A77C5B /* AgentHUDColumnView.swift in Sources */,
 				E474466EAFA6CF0EC8D283D0 /* AgentHUDView.swift in Sources */,
@@ -1248,6 +1259,7 @@
 				421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */,
 				5115F2CE84E84A8009B70C81 /* AgentResultView.swift in Sources */,
 				F957E4929A175438F6FA0F24 /* AgentService.swift in Sources */,
+				2162B1166A62ADB40B6B2440 /* AgentTaskManager.swift in Sources */,
 				4BB2FA433AD9068D08466EEB /* AgentTaskStore.swift in Sources */,
 				BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */,
 				B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */,

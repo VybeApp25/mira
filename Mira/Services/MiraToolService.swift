@@ -568,6 +568,51 @@ enum MiraToolService {
                 "required": ["prompt"]
             ] as [String: Any]
         ],
+        // ── Watch a video (INSTANT — no agent) ──────────────────────────────────
+        [
+            "type": "function",
+            "name": "play_video",
+            "description": """
+                INSTANTLY open YouTube results for a video the user wants to WATCH — game \
+                highlights, a clip, a trailer, a music video, "show me / play / pull it up / \
+                put on" a video, or anything mentioning YouTube. This just opens the results \
+                page (top clip first) and returns immediately. ALWAYS use this for watch \
+                requests instead of control_computer — never spin up desktop control to open \
+                a video. Resolve "it" / "them" / "those" from the conversation into a full \
+                search query.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "query": ["type": "string",
+                              "description": "Full search query, e.g. 'USA vs Bosnia highlights last night' or 'Oppenheimer official trailer'"]
+                ],
+                "required": ["query"]
+            ] as [String: Any]
+        ],
+        // ── Desktop control (computer use) ───────────────────────────────────────
+        [
+            "type": "function",
+            "name": "control_computer",
+            "description": """
+                Physically control the user's Mac for a genuine MULTI-STEP task that needs \
+                mouse/keyboard automation: open an app and reply to an email, fill out a form, \
+                navigate through an app's UI, click through several steps. This runs a slow \
+                background agent — use it ONLY when the task truly needs it. To simply WATCH a \
+                video (highlights, a clip, YouTube, a trailer), use play_video instead — it is \
+                instant. The task runs in the background and the user is notified when it \
+                finishes. NEVER tell the user you can't do something on their Mac — pick \
+                play_video for videos, or this tool for real multi-step automation.
+                """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "task": ["type": "string",
+                             "description": "Complete, self-contained description of the multi-step task, including context from the conversation (e.g. 'Open Mail, find the latest email from Alex, and start a reply saying I'll be there at 3')"]
+                ],
+                "required": ["task"]
+            ] as [String: Any]
+        ],
         // ── Coding agent ──────────────────────────────────────────────────────────
         [
             "type": "function",
@@ -673,7 +718,50 @@ enum MiraToolService {
 
     // MARK: - Execution router
 
+    // MARK: - Live activity chip
+    //
+    // A curated set of genuinely slow / agentic tools that do otherwise-invisible
+    // background work worth surfacing as a floating chip. Deliberately EXCLUDES
+    // instant tools (volume/mute/brightness/now_playing/reads) to avoid chip spam,
+    // and control_computer (which already drives its own chip via the vision loop).
+    // Only tools that AWAIT genuinely long work AND don't already surface their
+    // own chip. Excluded on purpose: control_computer + spawn_agent (self-chip via
+    // the vision loop / AgentJobStore), and every instant tool (volume, mute,
+    // now_playing, search_web→opens browser, reads) which would just flash.
+    private static let chipWorthyTools: [String: String] = [
+        "run_coding_agent":   "Coding agent",
+        "deep_reasoning":     "Deep reasoning",
+        "run_python_skill":   "Running skill",
+        "run_shell_command":  "Running command",
+        "ask_gpt":            "Asking GPT",
+    ]
+
+    /// Public front door for every tool call (voice, chat, shortcuts). Wraps the
+    /// actual work with a live activity chip for chip-worthy tools; everything
+    /// else runs unchanged. This is the single emitter — one call site surfaces
+    /// all chip-visible tool activity.
     static func execute(name: String, argsJSON: String) async -> String {
+        guard let title = chipWorthyTools[name] else {
+            return await runTool(name: name, argsJSON: argsJSON)
+        }
+        let activityID = await AgentTaskManager.shared.start(title: title, subtitle: "Working…")
+        let result = await runTool(name: name, argsJSON: argsJSON)
+        await AgentTaskManager.shared.finish(activityID, success: !Self.looksLikeToolError(result),
+                                             summary: Self.looksLikeToolError(result) ? "Failed" : "Done")
+        return result
+    }
+
+    /// Heuristic: tool results are natural-language strings with no success flag.
+    /// Treat a few common error shapes as failure so the chip doesn't show a
+    /// green check on an obvious error.
+    private static func looksLikeToolError(_ result: String) -> Bool {
+        let r = result.lowercased()
+        return r.hasPrefix("missing ") || r.hasPrefix("unknown tool")
+            || r.hasPrefix("error") || r.hasPrefix("failed")
+            || r.contains("requires a ")
+    }
+
+    private static func runTool(name: String, argsJSON: String) async -> String {
         NSLog("[MiraTool] execute \(name) args=\(argsJSON)")
         let args = parse(argsJSON)
         switch name {
@@ -708,6 +796,8 @@ enum MiraToolService {
         case "query_project_history": return await queryProjectHistory(args)
         case "run_python_skill":      return await runPythonSkill(args)
         case "run_coding_agent":      return await runCodingAgent(args)
+        case "play_video":            return await playVideo(args)
+        case "control_computer":      return await controlComputer(args)
         case "ask_gpt":               return await askGPT(args)
         case "deep_reasoning":        return await deepReasoning(args)
         case "spawn_agent":           return await spawnAgentFromVoice(args)
@@ -1465,6 +1555,49 @@ enum MiraToolService {
         let service = OpenAIService(apiKey: key)
         let reply   = await service.chatOrEmpty(prompt: prompt, model: model, maxTokens: 800)
         return reply.isEmpty ? "GPT-4o returned an empty response." : reply
+    }
+
+    // MARK: - control_computer (desktop autonomy from voice / MCP)
+
+    /// Hands the task to the SAME engine pipeline as chat computer-use
+    /// (EngineRouter → Fable 5 vision loop, Codex failover). Fire-and-forget:
+    /// a run takes minutes, so blocking the Realtime function-call round-trip
+    /// would stall the voice session — instead return immediately and let
+    /// TaskAnnouncer notify + speak when the run completes.
+    /// Instant "watch a video" — open YouTube results in the user's browser. No
+    /// screenshots, no agent loop, no HUD, no quota. This is the fast path the
+    /// voice model should use for "pull up the highlights" instead of control_computer.
+    private static func playVideo(_ args: [String: Any]) async -> String {
+        let query = (args["query"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else {
+            return "play_video needs a 'query' — what should I search for?"
+        }
+        guard let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://www.youtube.com/results?search_query=\(q)") else {
+            return "I couldn't build a YouTube search for that."
+        }
+        MiraDebugLog.log("[MiraTool] play_video → \(url.absoluteString)")
+        let browser = await MainActor.run { BrowserService.shared.open(url) }
+        return "Opened YouTube results for \"\(query)\" in \(browser) — the top clip is right there. Tell the user it's up."
+    }
+
+    private static func controlComputer(_ args: [String: Any]) async -> String {
+        guard let task = args["task"] as? String, !task.isEmpty else {
+            return "control_computer requires a 'task'."
+        }
+        let enabled = await MainActor.run {
+            UserDefaults.standard.bool(forKey: "mira_autonomous_enabled")
+        }
+        guard enabled else {
+            return "Autonomous mode is off. Tell the user to enable it in Settings → Autonomous, then try again."
+        }
+        Task { @MainActor in
+            MiraDebugLog.log("[MiraTool] control_computer launching: \(task.prefix(120))")
+            // Empty key = proxy mode (Supabase JWT auth), same as the chat path.
+            let result = await RouterService.shared.computerUseResult(prompt: task, apiKey: "")
+            MiraDebugLog.log("[MiraTool] control_computer finished: \(result.reply?.prefix(200) ?? "<no reply>")")
+        }
+        return "Started — Mira is now controlling the screen to do this. Tell the user it's underway and they'll be notified when it's done."
     }
 
     // MARK: - run_coding_agent

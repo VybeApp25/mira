@@ -8,6 +8,7 @@ import SwiftUI
 
 struct AgentHUDColumnView: View {
     @StateObject private var store = AgentJobStore.shared
+    @StateObject private var activities = AgentTaskManager.shared
 
     private var activeJobs: [AgentJob] {
         store.jobs.filter { !$0.status.isTerminal && !store.hudHidden.contains($0.id) }
@@ -25,6 +26,14 @@ struct AgentHUDColumnView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 8) {
+                // Ephemeral live activities (computer-use / autonomy) — newest on
+                // top, above the persisted job chips. In-memory only.
+                ForEach(activities.activeTasks) { activity in
+                    AgentActivityChipView(activity: activity)
+                        .id(activity.id)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+
                 // Running / active jobs (at top of the stack)
                 ForEach(activeJobs) { job in
                     FloatingAgentChipView(job: job)
@@ -52,6 +61,7 @@ struct AgentHUDColumnView: View {
             }
             .padding(.bottom, 28)
             .padding(.trailing, 0)
+            .animation(.spring(response: 0.32, dampingFraction: 0.84), value: activities.activeTasks.map(\.id))
             .animation(.spring(response: 0.32, dampingFraction: 0.84), value: activeJobs.map(\.id))
             .animation(.spring(response: 0.32, dampingFraction: 0.84), value: recentTerminal.map(\.id))
         }
