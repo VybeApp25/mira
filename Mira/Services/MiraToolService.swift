@@ -320,10 +320,12 @@ enum MiraToolService {
             "name": "run_in_terminal",
             "description": """
                 Open a brand-new Terminal window and run a command visibly so the user \
-                can watch it. Use for: brew installs, npm/pip installs, builds, git clones, \
+                can watch it. Use for: brew installs, npm/pip installs, git clones, \
                 long-running scripts, or any command where the user said "run it in terminal" \
-                or should see the output live. Always opens a NEW window — never reuses an \
-                existing Terminal session. Returns immediately; the command runs in the window.
+                or should see the output live. Do NOT use this to build a website or app — use \
+                spawn_agent for that (it runs in the background with no Terminal). Always opens a \
+                NEW window — never reuses an existing Terminal session. Returns immediately; the \
+                command runs in the window.
                 """,
             "parameters": [
                 "type": "object",
@@ -600,8 +602,9 @@ enum MiraToolService {
                 navigate through an app's UI, click through several steps. This runs a slow \
                 background agent — use it ONLY when the task truly needs it. To simply WATCH a \
                 video (highlights, a clip, YouTube, a trailer), use play_video instead — it is \
-                instant. The task runs in the background and the user is notified when it \
-                finishes. NEVER tell the user you can't do something on their Mac — pick \
+                instant. To BUILD a website or app, use spawn_agent instead — never drive the \
+                screen to build one. The task runs in the background and the user is notified when \
+                it finishes. NEVER tell the user you can't do something on their Mac — pick \
                 play_video for videos, or this tool for real multi-step automation.
                 """,
             "parameters": [
@@ -701,9 +704,12 @@ enum MiraToolService {
             "type": "function",
             "name": "spawn_agent",
             "description": """
-                Launch a background coding or research agent for tasks that take more than a few seconds. \
-                Use for: writing code, building features, doing research, creating files, running multi-step tasks. \
-                The agent runs in the background — tell the user you've launched it and they'll see progress in the Agents tab.
+                Launch a background agent to BUILD or CREATE a deliverable — a website, landing page, web app, \
+                research report, document, or any multi-step build task. This is the SAME background workflow as \
+                the Agents tab: it runs fully headless with NO Terminal window and NO screen takeover, and the \
+                user watches live progress in the Agents tab. This is the correct tool for "build me a website / \
+                landing page / app" — never use run_in_terminal, control_computer, or run_coding_agent for that. \
+                Tell the user you've launched it and they'll see progress in the Agents tab.
                 """,
             "parameters": [
                 "type": "object",
@@ -763,6 +769,7 @@ enum MiraToolService {
 
     private static func runTool(name: String, argsJSON: String) async -> String {
         NSLog("[MiraTool] execute \(name) args=\(argsJSON)")
+        MiraDebugLog.log("[MiraTool] execute \(name) args=\(argsJSON.prefix(120))")
         let args = parse(argsJSON)
         switch name {
         case "save_content":        return await saveContent(args)
@@ -1585,6 +1592,12 @@ enum MiraToolService {
         guard let task = args["task"] as? String, !task.isEmpty else {
             return "control_computer requires a 'task'."
         }
+        // Building a website/app is NEVER a screen-control task — it must run 100%
+        // in the background. Reroute to the headless Agents workflow before we ever
+        // touch the mouse/keyboard or open a visible app.
+        if RouterService.isBackgroundBuildTask(task) {
+            return await spawnAgentFromVoice(["task": task])
+        }
         let enabled = await MainActor.run {
             UserDefaults.standard.bool(forKey: "mira_autonomous_enabled")
         }
@@ -1605,6 +1618,11 @@ enum MiraToolService {
     private static func runCodingAgent(_ args: [String: Any]) async -> String {
         guard let prompt = args["prompt"] as? String, !prompt.isEmpty else {
             return "run_coding_agent requires a 'prompt'."
+        }
+        // A website/app build belongs in the background Agents workflow, not a CLI
+        // subprocess that writes into an arbitrary directory.
+        if RouterService.isBackgroundBuildTask(prompt) {
+            return await spawnAgentFromVoice(["task": prompt])
         }
         let cwd       = args["cwd"] as? String
         let modelArg  = args["model"] as? String ?? "sonnet"
@@ -1709,10 +1727,16 @@ enum MiraToolService {
         guard let task = args["task"] as? String, !task.isEmpty else {
             return "spawn_agent requires a 'task' description."
         }
-        let key = MiraState.shared?.effectiveAPIKey ?? AppSecrets.anthropicAPIKey
-        guard !key.isEmpty else {
-            return "No API key available to spawn agent."
+        // Readiness = `hasKey`, which in proxy mode means SIGNED IN (the provider
+        // key lives server-side and the local key is intentionally empty). The old
+        // `guard !key.isEmpty` was wrong for proxy mode — it always failed and made
+        // Mira claim it needs "an API key set up" even though the signed-in JWT is
+        // all the background builder needs.
+        guard MiraState.shared?.hasKey == true else {
+            return "The user needs to sign in to Mira first (Settings → Account) before I can launch a background agent."
         }
+        let key = MiraState.shared?.effectiveAPIKey ?? ""
+        MiraDebugLog.log("[spawn_agent] launching build, hasKey=true keyEmpty=\(key.isEmpty) task=\(task.prefix(60))")
         let job = AgentJobStore.shared.submitJob(
             prompt:    task,
             apiKey:    key,

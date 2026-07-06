@@ -17,6 +17,14 @@ final class AgentJobStore: ObservableObject {
     private var variantContinuations: [UUID: CheckedContinuation<String, Never>] = [:]
     private var variantPreviewCache: [UUID: [NSImage?]] = [:]
 
+    // In-memory only. Retained runner tasks so Stop can cooperatively cancel the
+    // agent (URLSession honors Task cancellation), keyed by job id.
+    private var runnerTasks: [UUID: Task<Void, Never>] = [:]
+
+    // In-memory only. Jobs the user has paused; the runner suspends at its next
+    // step boundary (see updateStep → waitWhilePaused) until Resume or Stop.
+    @Published private(set) var pausedJobs: Set<UUID> = []
+
     private let fileURL: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = support.appendingPathComponent("Mira", isDirectory: true)
@@ -44,7 +52,7 @@ final class AgentJobStore: ObservableObject {
         NotificationCenter.default.post(name: .miraAgentFlightLaunched, object: nil)
 
         let jobId = job.id
-        Task.detached(priority: .userInitiated) { [weak self] in
+        let runner = Task.detached(priority: .userInitiated) { [weak self] in
             guard let store = self else { return }
             await store.markRunning(id: jobId)
             switch type {
@@ -59,6 +67,7 @@ final class AgentJobStore: ObservableObject {
                 await GenericAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
             }
         }
+        runnerTasks[jobId] = runner
 
         return job
     }
@@ -203,6 +212,16 @@ final class AgentJobStore: ObservableObject {
         hudHidden.remove(id)
     }
 
+    /// Permanently remove a job from the store (used by the chip's Delete action).
+    func removeJob(id: UUID) {
+        runnerTasks[id]?.cancel()
+        runnerTasks.removeValue(forKey: id)
+        pausedJobs.remove(id)
+        hudHidden.remove(id)
+        jobs.removeAll { $0.id == id }
+        save()
+    }
+
     // MARK: - Cancel
 
     func cancelJob(id: UUID) {
@@ -219,6 +238,44 @@ final class AgentJobStore: ObservableObject {
             job.status = .cancelled
             job.completedAt = Date()
             job.currentStep = "Cancelled"
+        }
+        runnerTasks.removeValue(forKey: id)
+        pausedJobs.remove(id)
+    }
+
+    // MARK: - Pause / Resume / Stop (live control of a running job)
+
+    /// Pause a running job. It suspends at its next step boundary (updateStep)
+    /// and holds there until resumed or stopped.
+    func pauseJob(id: UUID) {
+        guard let job = job(id: id), job.status.isActive else { return }
+        pausedJobs.insert(id)
+        update(id) { $0.currentStep = "Paused" }
+        AccessibilityService.shared.announce("Task paused")
+    }
+
+    /// Resume a paused job — the runner's waitWhilePaused loop falls through.
+    func resumeJob(id: UUID) {
+        guard pausedJobs.contains(id) else { return }
+        pausedJobs.remove(id)
+        update(id) { $0.currentStep = "Resuming" }
+        AccessibilityService.shared.announce("Task resumed")
+    }
+
+    /// Stop a running job for good. Cancels the underlying runner Task (URLSession
+    /// requests throw on cancellation) and marks the job cancelled.
+    func stopJob(id: UUID) {
+        runnerTasks[id]?.cancel()
+        cancelJob(id: id)
+        AccessibilityService.shared.announce("Task stopped")
+    }
+
+    /// Suspends the calling runner while the job is paused. Cheap main-actor poll;
+    /// returns immediately once resumed, or if the runner Task is cancelled (Stop).
+    private func waitWhilePaused(id: UUID) async {
+        while pausedJobs.contains(id) {
+            if Task.isCancelled { return }
+            try? await Task.sleep(nanoseconds: 200_000_000)
         }
     }
 
@@ -389,23 +446,23 @@ final class AgentJobStore: ObservableObject {
 
     // MARK: - Progress Updates (called by agent runners via await)
 
+    // A running job renders its OWN bottom-right chip via FloatingAgentChipView
+    // (see AgentHUDColumnView → activeJobs). We deliberately do NOT also spin up
+    // an ephemeral AgentTaskManager activity chip here — doing so produced two
+    // cards for a single task. The persisted job chip is the single source.
+
     func markRunning(id: UUID) {
         update(id) { job in
             job.status = .running
             job.startedAt = Date()
         }
         if let job = job(id: id) {
-            let title = job.result?.metadata["siteName"]
-                ?? String(job.prompt.prefix(40))
-            CursorCompanionManager.shared.send(
-                .agentStarted(title: title, totalSteps: job.steps.count)
-            )
             TelemetryService.shared.track(.agentStarted(jobId: job.id, jobType: job.type.rawValue))
             AccessibilityService.shared.announce("\(job.type.rawValue) started")
         }
     }
 
-    func updateStep(id: UUID, stepTitle: String, progress: Double, stepIndex: Int? = nil) {
+    func updateStep(id: UUID, stepTitle: String, progress: Double, stepIndex: Int? = nil) async {
         update(id) { job in
             job.currentStep = stepTitle
             job.progress = min(max(progress, 0), 1)
@@ -417,15 +474,10 @@ final class AgentJobStore: ObservableObject {
                 job.steps[i].completedAt = Date()
             }
         }
-        if let job = job(id: id) {
-            let current = (stepIndex ?? 0) + 1
-            CursorCompanionManager.shared.send(.agentProgress(
-                step:     stepTitle,
-                current:  current,
-                total:    job.steps.count,
-                progress: progress
-            ))
-        }
+        // Pause checkpoint: if the user tapped Pause, suspend the runner here (at
+        // the step boundary) until they Resume or Stop. Cheap poll on the main
+        // actor — it suspends, it does not block.
+        await waitWhilePaused(id: id)
     }
 
     func appendLog(id: UUID, stepIndex: Int, message: String) {
@@ -448,15 +500,12 @@ final class AgentJobStore: ObservableObject {
                 if job.steps[i].completedAt == nil { job.steps[i].completedAt = Date() }
             }
         }
+        runnerTasks.removeValue(forKey: id)
+        pausedJobs.remove(id)
         if let job = job(id: id) {
             AudioCueService.shared.playAgentComplete()
             postNotification(for: job)
             OutputStore.shared.register(from: job)
-
-            let name    = result.metadata["siteName"] ?? String(job.prompt.prefix(30))
-            let title   = "\(name) ready"
-            let actions = buildCompletionActions(for: job)
-            CursorCompanionManager.shared.send(.agentCompleted(title: title, actions: actions))
 
             // Telemetry — differentiate by job type
             let duration = job.completedAt?.timeIntervalSince(job.startedAt ?? job.createdAt) ?? 0
@@ -492,6 +541,8 @@ final class AgentJobStore: ObservableObject {
             job.completedAt   = Date()
             job.currentStep   = "Failed"
         }
+        runnerTasks.removeValue(forKey: id)
+        pausedJobs.remove(id)
         AudioCueService.shared.playAgentBlocked()
         CursorCompanionManager.shared.send(.agentFailed(
             message: resolution.userMessage,
@@ -516,23 +567,6 @@ final class AgentJobStore: ObservableObject {
     }
 
     // MARK: - Private Helpers
-
-    private func buildCompletionActions(for job: AgentJob) -> [CompanionActionSpec] {
-        switch job.type {
-        case .publishWebsite:
-            var actions: [CompanionActionSpec] = []
-            if let url = job.result?.metadata["deployedUrl"] ?? job.result?.metadata["publishedUrl"],
-               !url.isEmpty {
-                actions.append(.openSite())
-            }
-            actions.append(.viewLibrary())
-            return actions
-        case .websiteBuilder, .websiteEdit, .websiteImprovement:
-            return [.viewLibrary(), .openIsland()]
-        default:
-            return [.openIsland()]
-        }
-    }
 
     private func update(_ id: UUID, mutation: (inout AgentJob) -> Void) {
         guard let idx = jobs.firstIndex(where: { $0.id == id }) else { return }

@@ -650,6 +650,33 @@ struct IslandChatView: View {
         AudioCueService.shared.playTextSend()
         isLoading         = true
 
+        // Deterministic build override: "build me a website / landing page / app" ALWAYS
+        // goes straight to the background Agents workflow — never plain chat (which can
+        // wrongly refuse with a made-up "API setup" excuse) and never screen control.
+        // This removes the Haiku classifier's coin-flip on identical build prompts, so
+        // the same request behaves consistently every time. Mirrors the voice guardrail
+        // (RouterService.computerUseResult / MiraToolService).
+        MiraDebugLog.log("[TextBuild] prompt=\(prompt.prefix(60)) isBuildTask=\(RouterService.isBackgroundBuildTask(prompt)) isSignedIn=\(miraState.isSignedIn)")
+        if RouterService.isBackgroundBuildTask(prompt) {
+            // Not signed in → the background builder can't authenticate. Say so
+            // clearly and point to the RIGHT place (Account sign-in), instead of
+            // letting the request fall through to a chat reply that improvises a
+            // misleading "set up an API key under Integrations" excuse.
+            guard miraState.isSignedIn else {
+                messages.append(ChatMessage(role: .mira, text: "I can build that in the background — I just need you signed in first. Open Mira Settings → Account and sign in, then send it again and I'll get started."))
+                ConversationStore.shared.save(role: "mira", text: "Sign in under Settings → Account to build.")
+                isLoading = false
+                return
+            }
+            let job = AgentJobStore.shared.submitJob(
+                prompt: prompt, apiKey: miraState.effectiveAPIKey, buildMode: .pro)
+            MiraDebugLog.log("[TextBuild] submitted job=\(job.id.uuidString.prefix(8))")
+            messages.append(ChatMessage(role: .mira, jobId: job.id))
+            miraState.recordUsage()
+            isLoading = false
+            return
+        }
+
         // Classify via Haiku gate — async, falls back to sync keyword router if key missing.
         // Last few turns (excluding the message just sent) let the classifier and
         // the autonomy engine resolve follow-ups like "pull it up for me".

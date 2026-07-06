@@ -118,7 +118,10 @@ struct MiraIslandView: View {
     }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
-        return isExpanded ? expandedHeight : geometry.notchHeight + collapsedDropH
+        // Expanded: add the notch-height band on top so seating content below the
+        // cutout doesn't steal vertical room from the tabs (see expandedContent).
+        return isExpanded ? expandedHeight + geometry.notchHeight
+                          : geometry.notchHeight + collapsedDropH
     }
     private var topR:  CGFloat { isExpanded ? AnimationController.expandedTopR : AnimationController.collapsedTopR }
     private var botR:  CGFloat { isExpanded ? AnimationController.expandedBotR : AnimationController.collapsedBotR }
@@ -216,7 +219,11 @@ struct MiraIslandView: View {
                     DS.Colors.background.opacity(0.75)
                         .background(.ultraThinMaterial)
                 } else {
-                    DS.Colors.background
+                    // Pure black — same as the top band and the hardware notch — so the
+                    // whole expanded island reads as one uniform black shape. Any off-black
+                    // (e.g. DS.Colors.background #101211) shows up as a lighter region right
+                    // below the cutout, breaking the "grows from the notch" illusion.
+                    Color.black
                 }
             } else {
                 // Pure black matches the hardware notch exactly — any off-black creates a visible seam.
@@ -391,26 +398,37 @@ struct MiraIslandView: View {
     // MARK: - Expanded layout
 
     private var expandedContent: some View {
-        ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                navBar
-                Rectangle()
-                    .fill(Color.white.opacity(0.07))
-                    .frame(height: 0.5)
-                if let summary = miraState.hoverSummary {
-                    hoverSummaryBar(summary)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.06))
-                        .frame(height: 0.5)
-                }
-                continuationBanner
-                SidecarSuggestionBanner()
-                tabContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+        VStack(spacing: 0) {
+            // Black band the height of the hardware notch. The panel's top edge stays
+            // fused to the cutout (Dynamic Island illusion — it reads as growing FROM
+            // the notch), while every interactive element sits BELOW this band, so the
+            // camera cutout can never occlude a tab (Skills/Learn/Crons). Full width so
+            // it merges seamlessly with the surrounding menu-bar black.
+            Color.black
+                .frame(maxWidth: .infinity)
+                .frame(height: geometry.notchHeight)
 
-            // Phase 2: HUD overlay — sits on top of tabs, invisible when idle
-            hudOverlay
+            ZStack(alignment: .top) {
+                VStack(spacing: 0) {
+                    navBar
+                    Rectangle()
+                        .fill(Color.white.opacity(0.07))
+                        .frame(height: 0.5)
+                    if let summary = miraState.hoverSummary {
+                        hoverSummaryBar(summary)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.06))
+                            .frame(height: 0.5)
+                    }
+                    continuationBanner
+                    SidecarSuggestionBanner()
+                    tabContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                // Phase 2: HUD overlay — sits on top of tabs, invisible when idle
+                hudOverlay
+            }
         }
     }
 

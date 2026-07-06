@@ -11,11 +11,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         EvidenceEvaluator.runIsolationVerification()
         #endif
 
-        // Menu-bar (accessory) app — no Dock icon or app-switcher entry, ambient like
-        // HeyClicky. Mira's UI is the menu-bar item + the notch island + global
-        // hotkeys; panels are .nonactivatingPanel so we never steal the user's focus.
-        // (LSUIElement=true sets this at launch; we assert it here belt-and-suspenders.)
-        NSApp.setActivationPolicy(.accessory)
+        // Regular app — shows a Dock icon, an app-switcher entry, and (the reason
+        // for this) an entry in the Force Quit Applications window. macOS only lists
+        // apps with the .regular activation policy there; accessory/agent apps are
+        // hidden from Force Quit and the Dock. The menu-bar item + notch island + global
+        // hotkeys still drive the UX; panels remain .nonactivatingPanel so we don't
+        // steal focus. (LSUIElement=false in Info.plist sets this at launch; we assert
+        // it here belt-and-suspenders.)
+        NSApp.setActivationPolicy(.regular)
 
         ScreenCaptureService.requestAccessIfNeeded()
 

@@ -354,11 +354,17 @@ private struct TypewriterReplyCard: View {
                         .padding(.top, 5)
                 }
 
-                // Typewriter text + blinking cursor
-                (Text(displayed) + (done ? Text("") : Text(cursor ? "▋" : " ")
-                    .foregroundColor(accent.opacity(0.8))))
+                // Typewriter text + blinking cursor.
+                // The cursor blinks via OPACITY on a constant-width block glyph — it is
+                // ALWAYS laid out, just faded to 0 on the "off" beat. Swapping the glyph
+                // for a narrow space (the old approach) changed the trailing width every
+                // 0.5s, so at line-wrap boundaries the last word would wrap/unwrap on each
+                // blink — which read as "weird spaces" jumping between the letters.
+                (Text(displayed) + (done ? Text("")
+                    : Text("▋").foregroundColor(accent.opacity(cursor ? 0.8 : 0.0))))
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.white.opacity(0.92))
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 

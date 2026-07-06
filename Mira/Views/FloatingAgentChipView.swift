@@ -437,28 +437,72 @@ struct FloatingAgentChipView: View {
                 .padding(.vertical, 10)
             }
 
-            // Action buttons (terminal jobs only)
-            if job.status.isTerminal {
-                Divider().background(Color.white.opacity(0.07))
+            // Quick-action row — contextual to the job's state.
+            Divider().background(Color.white.opacity(0.07))
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(job.actions.prefix(3)) { action in
-                            followUpButton(title: action.title, icon: action.icon) {
-                                handleAction(action.identifier)
-                            }
-                        }
-                        followUpButton(title: "Dismiss", icon: "xmark") {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                AgentJobStore.shared.hideFromHUD(id: job.id)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    quickActions
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    // MARK: - Contextual quick actions
+
+    @ViewBuilder
+    private var quickActions: some View {
+        if job.status.isActive {
+            // Working — offer live control of the run.
+            if store.pausedJobs.contains(job.id) {
+                followUpButton(title: "Resume", icon: "play.fill") { store.resumeJob(id: job.id) }
+            } else {
+                followUpButton(title: "Pause", icon: "pause.fill") { store.pauseJob(id: job.id) }
+            }
+            followUpButton(title: "Stop", icon: "stop.fill") {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { store.stopJob(id: job.id) }
+            }
+        } else if job.status == .completed {
+            // Finished — open, keep, or remove the deliverable.
+            followUpButton(title: "Open in Browser", icon: "safari") { handleAction("open_browser") }
+            followUpButton(title: "Save", icon: "square.and.arrow.down") { saveOutput() }
+            followUpButton(title: "Delete", icon: "trash") { deleteJob() }
+        } else {
+            // Failed / cancelled — nothing to keep.
+            followUpButton(title: "Delete", icon: "trash") { deleteJob() }
+            followUpButton(title: "Dismiss", icon: "xmark") {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    store.hideFromHUD(id: job.id)
                 }
             }
         }
+    }
+
+    /// Export the finished site as a ZIP into ~/Downloads and reveal it in Finder.
+    private func saveOutput() {
+        if let entry = OutputStore.shared.entries.first(where: { $0.sourceJobId == job.id }) {
+            Task {
+                if let zip = await OutputStore.shared.exportZIP(id: entry.id) {
+                    NSWorkspace.shared.activateFileViewerSelecting([zip])
+                }
+            }
+        } else if let path = job.result?.outputPath {
+            // No registered library entry yet — reveal the raw output file.
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        }
+    }
+
+    /// Delete the job (and its library entry + files) and drop it from the HUD.
+    private func deleteJob() {
+        if let entry = OutputStore.shared.entries.first(where: { $0.sourceJobId == job.id }) {
+            OutputStore.shared.delete(id: entry.id, removeFiles: true)
+        }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            store.hideFromHUD(id: job.id)
+        }
+        store.removeJob(id: job.id)
     }
 
     // MARK: - Sub-components
@@ -535,7 +579,12 @@ struct FloatingAgentChipView: View {
         switch identifier {
         case "open_browser", "open_live_site":
             if let url = job.result?.metadata["deployedUrl"] ?? job.result?.metadata["previewUrl"],
-               let u = URL(string: url) { NSWorkspace.shared.open(u) }
+               let u = URL(string: url) {
+                NSWorkspace.shared.open(u)
+            } else if let path = job.result?.outputPath {
+                // Locally-built site (not deployed) — open the HTML file directly.
+                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            }
         case "copy_url":
             if let url = job.result?.metadata["deployedUrl"] {
                 NSPasteboard.general.clearContents()

@@ -1200,7 +1200,38 @@ Output ONLY the JSON line. No preamble, no markdown fences.
     /// then returns the agent's closing summary as the chat reply.
     // Internal (not private): also the entry point for voice/MCP via
     // MiraToolService.controlComputer — same quota, engine routing, announce.
+    /// True when the prompt asks to BUILD / CREATE a web deliverable (website,
+    /// landing page, web app, …). These MUST run 100% headless via AgentJobStore —
+    /// never by driving the mouse/keyboard or opening visible apps. Deterministic and
+    /// instant, so a model's tool choice (control_computer, etc.) can't defeat it.
+    nonisolated static func isBackgroundBuildTask(_ prompt: String) -> Bool {
+        let p = prompt.lowercased()
+        let verbs = ["build", "create", "make", "design", "generate", "develop",
+                     "code up", "put together", "whip up", "spin up", "throw together"]
+        let deliverables = ["website", "web site", "web page", "webpage", "landing page",
+                            "web app", "webapp", "web application", "homepage", "home page",
+                            "portfolio site", "one-pager", "one pager", "splash page",
+                            "microsite", "site for"]
+        return verbs.contains { p.contains($0) } && deliverables.contains { p.contains($0) }
+    }
+
     func computerUseResult(prompt: String, apiKey: String, transcript: String? = nil) async -> RouteResult {
+        // GUARDRAIL: a request to BUILD a website / landing page / web app must run
+        // 100% in the background via the Agents workflow — Mira never drives the
+        // screen, touches the keyboard/mouse, or opens visible apps to build one.
+        // This intercepts BEFORE any desktop-control engine runs, so it holds even
+        // when the voice model routes the task through control_computer.
+        if Self.isBackgroundBuildTask(prompt) {
+            let jobId = await MainActor.run { () -> String in
+                let key = apiKey.isEmpty ? (MiraState.shared?.effectiveAPIKey ?? AppSecrets.anthropicAPIKey) : apiKey
+                let job = AgentJobStore.shared.submitJob(prompt: prompt, apiKey: key, buildMode: .pro)
+                return job.id.uuidString
+            }
+            MiraDebugLog.log("[ComputerUse] rerouted build task to BACKGROUND agent job=\(jobId.prefix(8)) task=\(prompt.prefix(80))")
+            return .reply("On it — I'm building that in the background now. You'll see live progress in the Agents tab and I'll let you know when it's ready.",
+                          route: .websiteBuilder)
+        }
+
         // Engine selection is INVISIBLE to the user: by default Mira picks Codex
         // computer-use vs the Claude vision loop itself (EngineRouter) and fails
         // over transparently, so they just see the task get done. "codex"/"claude"
