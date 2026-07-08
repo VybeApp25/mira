@@ -151,6 +151,31 @@ Once the test loop is green:
 | Plan updates only after restart | Expected fallback isn't firing — the app refreshes on app re-activation + polls 2 min after checkout. Bring the app to the foreground. |
 | Post-payment redirect 404s | `success_url` is `https://miraapp.ai?upgrade=success` — cosmetic only; payment still completes and the webhook still fires. Stand up a simple success page or change `success_url` in `stripe-checkout/index.ts` if you care. |
 
+## Live-state snapshot (verified 2026-07-08)
+
+Read-only check of the live project `rdbljrbjsmbfqwwpwwvn` (no test purchase run):
+
+- **Edge functions deployed & ACTIVE:** `stripe-checkout` v13, `stripe-webhook`
+  v10 (`verify_jwt=false` ✓), `stripe-portal` v7 — last updated ~2026-06-28.
+- **DB schema in place:** `profiles.stripe_customer_id`, `.stripe_subscription_id`,
+  `.plan` all exist.
+- **Config verified on 2026-06-28** (per release notes): the 4 secrets were
+  confirmed set (price-ID SHA-256 digests matched the live prices; `STRIPE_SECRET_KEY`
+  is the live key), the live webhook was registered with the 3 events, and the
+  Billing Portal was activated (`bpc_1TnRSxLNyIPuI3kM…`). Account `acct_1TmIoILNyIPuI3kM`.
+- **⚠️ Open item — no active subscriber in the DB:** `select count(*),
+  count(stripe_customer_id), count(stripe_subscription_id) from profiles` returns
+  **2 rows, 0 customer_ids, 0 subscription_ids** (plan: 1 `ultra` set *manually*,
+  1 `free`). So while the config was verified, **no webhook-written subscription
+  currently exists** — either the earlier test-purchase profile was removed, or no
+  live purchase has completed since.
+
+**Definition of done / to re-confirm live:** run one real card end-to-end (step 8)
+and confirm a `profiles` row shows non-null `stripe_customer_id` **and**
+`stripe_subscription_id` written by the webhook. Secret *values* can't be read via
+MCP; the fastest no-purchase re-check is authenticating the Stripe MCP and reading
+the registered webhook endpoints + price IDs directly.
+
 ## Notes / gotchas baked into the code
 
 - **Plan mapping lives in the webhook:** `customer.subscription.updated` maps the
