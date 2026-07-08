@@ -13,17 +13,17 @@
 //
 // Rendering runs through the maintainer-only `render-onboarding-marin` edge
 // function so OPENAI_API_KEY stays inside Supabase. You authenticate to it with
-// the Supabase service-role key.
+// the RENDER_TOOL_SECRET (a dedicated secret set via `supabase secrets set`).
 //
 // Usage:
-//   SUPABASE_SERVICE_ROLE_KEY=... node tools/onboarding-narration/render.mjs --check
+//   RENDER_TOOL_SECRET=... node tools/onboarding-narration/render.mjs --check
 //       Parse lines, compute hashes, and report which clips exist / are missing.
-//       No network, no service-role key required.
+//       No network, no secret required.
 //
-//   SUPABASE_SERVICE_ROLE_KEY=... node tools/onboarding-narration/render.mjs --all
+//   RENDER_TOOL_SECRET=... node tools/onboarding-narration/render.mjs --all
 //       Render every line (fresh Marin takes) and overwrite the bundled mp3s.
 //
-//   SUPABASE_SERVICE_ROLE_KEY=... node tools/onboarding-narration/render.mjs --only 3,7
+//   RENDER_TOOL_SECRET=... node tools/onboarding-narration/render.mjs --only 3,7
 //       Render just the given lines (1-based indices from --check) or hashes.
 //
 //   ... --missing        Render only the lines whose mp3 is not yet bundled.
@@ -133,9 +133,9 @@ if (mode === "check") {
   process.exit(missing ? 1 : 0);
 }
 
-// Rendering modes need the endpoint + service-role key.
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!KEY) { console.error("SUPABASE_SERVICE_ROLE_KEY is required to render. (Use --check for a dry run.)"); process.exit(1); }
+// Rendering modes need the endpoint + render secret.
+const KEY = process.env.RENDER_TOOL_SECRET;
+if (!KEY) { console.error("RENDER_TOOL_SECRET is required to render. (Use --check for a dry run.)"); process.exit(1); }
 if (!existsSync(REF_FILE)) { console.error(`Missing ${REF_FILE} — run \`supabase link\` first.`); process.exit(1); }
 const REF = readFileSync(REF_FILE, "utf8").trim();
 const ENDPOINT = `https://${REF}.supabase.co/functions/v1/render-onboarding-marin`;

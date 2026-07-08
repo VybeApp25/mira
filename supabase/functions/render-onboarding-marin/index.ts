@@ -7,16 +7,19 @@
 // bundle them (see tools/onboarding-narration/render.mjs and
 // Mira/Services/OnboardingNarrator.swift).
 //
-// Auth: the caller must present the Supabase SERVICE_ROLE key as a bearer token.
+// Auth: the caller must present the RENDER_TOOL_SECRET as a bearer token — a
+// dedicated maintainer secret set with `supabase secrets set RENDER_TOOL_SECRET=…`.
 // This keeps OPENAI_API_KEY inside Supabase (it never reaches a dev machine) and
-// makes the endpoint unusable by ordinary signed-in clients.
+// makes the endpoint unusable by ordinary signed-in clients. (We use a dedicated
+// secret rather than the service-role key because, under Supabase's new API-key
+// system, the injected SUPABASE_SERVICE_ROLE_KEY is the sb_secret key, not the
+// legacy JWT — so string-comparing against it is ambiguous.)
 //
 // Deploy: supabase functions deploy render-onboarding-marin --no-verify-jwt
-//   (--no-verify-jwt because we authenticate with the service-role key ourselves,
-//    not a user JWT.)
+//   (--no-verify-jwt because we authenticate with our own secret, not a user JWT.)
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY");
+const RENDER_TOOL_SECRET = Deno.env.get("RENDER_TOOL_SECRET");
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -43,11 +46,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST")    return json({ error: "method_not_allowed" }, 405);
   if (!OPENAI_API_KEY)          return json({ error: "OPENAI_API_KEY not set" }, 500);
-  if (!SERVICE_ROLE)            return json({ error: "SERVICE_ROLE not set" }, 500);
+  if (!RENDER_TOOL_SECRET)      return json({ error: "RENDER_TOOL_SECRET not set" }, 500);
 
-  // Maintainer gate: bearer must equal the service-role key.
+  // Maintainer gate: bearer must equal the dedicated render secret.
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!bearer || bearer !== SERVICE_ROLE) return json({ error: "forbidden" }, 403);
+  if (!bearer || bearer !== RENDER_TOOL_SECRET) return json({ error: "forbidden" }, 403);
 
   const body  = await req.json().catch(() => null);
   const text  = typeof body?.text === "string" ? body.text.trim() : "";
@@ -80,11 +83,12 @@ function renderRealtime(
   return new Promise((resolve, reject) => {
     const url = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
     // Deno's WebSocket can't set headers, so auth rides in the subprotocols —
-    // this is server-side, so the key is not exposed to any browser.
+    // this is server-side, so the key is not exposed to any browser. No
+    // "openai-beta.realtime-v1" subprotocol: that selects the retired beta shape;
+    // its absence gives us the GA API.
     const ws = new WebSocket(url, [
       "realtime",
       `openai-insecure-api-key.${OPENAI_API_KEY}`,
-      "openai-beta.realtime-v1",
     ]);
 
     const chunks: Uint8Array[] = [];
@@ -111,28 +115,42 @@ function renderRealtime(
     ws.onerror = () => fail(new Error("websocket_error"));
 
     ws.onopen = () => {
-      // Configure the session for verbatim audio in the target voice.
+      // GA Realtime session config: nested audio.output, output_modalities.
       ws.send(JSON.stringify({
         type: "session.update",
         session: {
-          modalities: ["audio", "text"],
-          voice,
-          output_audio_format: "pcm16",
+          type: "realtime",
+          output_modalities: ["audio"],
+          audio: {
+            output: {
+              voice,
+              format: { type: "audio/pcm", rate: OUTPUT_SAMPLE_RATE },
+            },
+          },
           instructions:
-            "You are a precise text-to-speech engine. You read the user's text " +
+            "You are a precise text-to-speech engine. You read the user's message " +
             "aloud exactly as written, word for word, in a warm, friendly, natural " +
             "tone. Never answer, comment, refuse, apologize, or add or omit any " +
             "word — you only voice the given text.",
         },
       }));
-      // Ask for one response that speaks the line verbatim.
+      // Put the exact line in as a user message, then ask for one audio response
+      // that reads it verbatim.
+      ws.send(JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      }));
       ws.send(JSON.stringify({
         type: "response.create",
         response: {
-          modalities: ["audio", "text"],
+          output_modalities: ["audio"],
           instructions:
-            "Read the following text aloud, verbatim and complete, exactly as " +
-            "written. Do not add or omit words.\n\n" + text,
+            "Read the user's message aloud, verbatim and complete, exactly as " +
+            "written. Do not add or omit words.",
         },
       }));
     };
