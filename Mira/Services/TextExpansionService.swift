@@ -11,7 +11,16 @@ final class TextExpansionService: ObservableObject {
     static let shared = TextExpansionService()
 
     private let udKey = "mira.textExpansions"
-    @Published private(set) var expansions: [TextExpansion] = []
+    @Published private(set) var expansions: [TextExpansion] = [] {
+        didSet {
+            // Keep a lock-guarded copy the event-tap thread can read without
+            // racing the @Published array (mutated on the main actor).
+            expansionsLock.lock(); expansionsSnapshot = expansions; expansionsLock.unlock()
+        }
+    }
+
+    private let expansionsLock = NSLock()
+    private var expansionsSnapshot: [TextExpansion] = []
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -31,9 +40,15 @@ final class TextExpansionService: ObservableObject {
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
-            callback: { _, _, event, refcon -> Unmanaged<CGEvent>? in
+            callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
                 guard let refcon else { return Unmanaged.passRetained(event) }
                 let svc = Unmanaged<TextExpansionService>.fromOpaque(refcon).takeUnretainedValue()
+                // Re-enable if macOS disabled the tap (timeout / user input) —
+                // else text expansion silently stops after any main-thread stall.
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let tap = svc.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                    return nil
+                }
                 return svc.handle(event: event)
             },
             userInfo: Unmanaged.passRetained(self).toOpaque()
@@ -41,13 +56,15 @@ final class TextExpansionService: ObservableObject {
 
         guard let tap = eventTap else { return }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        // Dedicated thread, not the main run loop — a busy main thread (agent
+        // build) can no longer make typing lag or kill the tap.
+        EventTapThread.shared.addSource(runLoopSource!)
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     func stop() {
         if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
+        if let src = runLoopSource { EventTapThread.shared.removeSource(src) }
         eventTap = nil
         runLoopSource = nil
     }
@@ -91,7 +108,8 @@ final class TextExpansionService: ObservableObject {
 
         // Space (49) / Return (36) / Tab (48) — check for expansion trigger
         if keyCode == 49 || keyCode == 36 || keyCode == 48 {
-            if let match = expansions.first(where: { buffer.hasSuffix($0.shortcut) }) {
+            expansionsLock.lock(); let current = expansionsSnapshot; expansionsLock.unlock()
+            if let match = current.first(where: { buffer.hasSuffix($0.shortcut) }) {
                 let deleteCount = match.shortcut.count
                 let expansion   = match.expansion
                 buffer = ""
