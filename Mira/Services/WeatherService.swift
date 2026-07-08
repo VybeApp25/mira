@@ -208,9 +208,13 @@ final class WeatherService: ObservableObject {
         let day   = (json["weather"] as? [[String: Any]])?.first
         let maxF  = day?["maxtempF"] as? String ?? "--"
         let minF  = day?["mintempF"] as? String ?? "--"
-        let area  = (json["nearest_area"] as? [[String: Any]])?.first
-        let place = (area?["areaName"] as? [[String: Any]])?.first?["value"] as? String
-            ?? (city ?? "your area")
+        let area    = (json["nearest_area"] as? [[String: Any]])?.first
+        let apiArea = (area?["areaName"] as? [[String: Any]])?.first?["value"] as? String
+        // Prefer the city the user actually asked for, so the spoken summary says
+        // "Atlanta" — not wttr.in's nearest-area guess ("Bellwood"). Fall back to
+        // the API's area only for the current-location (nil city) case, where the
+        // nearest locality IS the correct label.
+        let place   = city ?? apiArea ?? "your area"
 
         return "It's \(tempF)°F and \(desc.lowercased()) in \(place), feels like \(feels)°. "
              + "Today's high \(maxF)°, low \(minF)°."
