@@ -464,6 +464,23 @@ struct FloatingAgentChipView: View {
             followUpButton(title: "Stop", icon: "stop.fill") {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { store.stopJob(id: job.id) }
             }
+        } else if job.status == .waitingForConfirmation {
+            // The agent paused for the user's approval — resolve the gate right
+            // here rather than forcing a trip to the Agents tab. (Falling through
+            // to the else branch would have offered a destructive "Delete" on a
+            // job that's only waiting for a yes/no.)
+            followUpButton(title: "Approve", icon: "checkmark") { store.approveConfirmation(id: job.id) }
+            followUpButton(title: "Deny", icon: "xmark") { store.denyConfirmation(id: job.id) }
+        } else if job.status == .waitingForVariantSelection
+                    || job.status == .waitingForInput
+                    || job.status.isBlocked {
+            // Needs richer input than a chip button can host — a variant picker, a
+            // typed reply, or a permission grant. Open Mira on the Agents tab, and
+            // keep Stop available so a blocked run is never a dead end.
+            followUpButton(title: "Respond", icon: "arrow.up.forward.app") { openAgentsTab() }
+            followUpButton(title: "Stop", icon: "stop.fill") {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { store.stopJob(id: job.id) }
+            }
         } else if job.status == .completed {
             // Finished — open, keep, or remove the deliverable.
             followUpButton(title: "Open in Browser", icon: "safari") { handleAction("open_browser") }
@@ -492,6 +509,15 @@ struct FloatingAgentChipView: View {
             // No registered library entry yet — reveal the raw output file.
             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
         }
+    }
+
+    /// Expand the island and focus the Agents tab so the user can satisfy a gate
+    /// that needs more than a chip button (a variant pick, a typed reply, or a
+    /// permission grant). Mirrors how the notch drag-zone opens straight to a tab.
+    private func openAgentsTab() {
+        NotificationCenter.default.post(name: .miraActivateText, object: nil)   // expand the island
+        NotificationCenter.default.post(name: .miraTabSelected, object: IslandTab.agents)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { expanded = false }
     }
 
     /// Delete the job (and its library entry + files) and drop it from the HUD.
