@@ -118,8 +118,18 @@ final class AgentHUDWindowManager {
                 passThrough?.interactiveRect = local
             }
 
+        // The chip column is bottom-anchored and short, but a full-screen-height
+        // hosting view makes SwiftUI install hover/pointer tracking across the
+        // ENTIRE right-edge column — so every mouse-move over that column is
+        // dispatched to the main thread, stuttering the cursor whenever the main
+        // thread is busy (e.g. during an agent build). Constrain the hosting view
+        // to a bottom-anchored band tall enough for a realistic chip stack, so
+        // only that small region tracks the mouse. The pass-through container
+        // stays full-size (it has no tracking area; clicks hit-test on demand).
+        let hostHeight = min(panelFrame.height, 760)
         let host = NSHostingView(rootView: columnView)
-        host.frame = CGRect(origin: .zero, size: panelFrame.size)
+        host.frame = CGRect(x: 0, y: 0, width: panelFrame.width, height: hostHeight)
+        host.autoresizingMask = [.width]   // stay pinned to the bottom edge (y = 0)
         passThrough.addSubview(host)
         panel.contentView = passThrough
 
