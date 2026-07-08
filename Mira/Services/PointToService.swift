@@ -18,6 +18,16 @@ final class PointToService: ObservableObject {
     // True while the cursor triangle is in flight or landing.
     @Published private(set) var isActive: Bool = false
 
+    // User toggle (Settings › Screen & Guidance › Mira points). Default on.
+    static let enabledKey = "mira_pointing_enabled"
+    // Whether Mira may draw on-screen pointing markers (triangle + confidence ring).
+    // Defaults to true when the key was never set.
+    static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: enabledKey)
+    }
+
     private var window:   NSWindow?
     private var hosting:  NSHostingView<_PointToRoot>?
     private var vm        = _PointToVM()
@@ -26,6 +36,7 @@ final class PointToService: ObservableObject {
     // pt: normalized (0-1), origin top-left
     func point(toNormalized pt: CGPoint) {
         guard pt != .zero else { return }
+        guard Self.isEnabled else { return }
         setupWindowIfNeeded()
         window?.orderFrontRegardless()
         vm.fire(pt)

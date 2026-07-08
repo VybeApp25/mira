@@ -32,7 +32,7 @@
 	<key>CFBundleVersion</key>
 	<string>5</string>
 	<key>LSUIElement</key>
-	<true/>
+	<false/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Mira reads your active browser tab to provide context-aware assistance.</string>
 	<key>NSCalendarsUsageDescription</key>

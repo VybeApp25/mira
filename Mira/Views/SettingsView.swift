@@ -36,6 +36,7 @@ struct SettingsView: View {
     @State private var showHoverHistory = false
     @ObservedObject private var accentSvc  = AccentColorService.shared
     @ObservedObject private var voicePreview = VoicePreviewService.shared
+    @AppStorage(PointToService.enabledKey) private var pointingEnabled = true
     @AppStorage("mira_point_follow_up_enabled") private var pointFollowUpEnabled = false
     @AppStorage("mira_guide_cursor")       private var guideCursorEnabled = false
     @AppStorage("mira_autonomous_enabled") private var autonomousEnabled = false
@@ -108,6 +109,7 @@ struct SettingsView: View {
                         }
                         settingsGroup("Screen & Guidance", icon: "rectangle.dashed") {
                             screenCompanionSection
+                            pointingSection
                             pointFollowUpSection
                             guideCursorSection
                             autonomousSection
@@ -1139,6 +1141,38 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    // MARK: - Mira Pointing section
+
+    @ViewBuilder
+    private var pointingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Pointing", systemImage: "cursorarrow.rays")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Let Mira point at things")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("When answering, Mira glides a pointer from the notch to the spot on screen she's talking about. Turn off to keep answers text-only.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: $pointingEnabled)
+                    .toggleStyle(.switch)
+                    .tint(accent)
+                    .labelsHidden()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

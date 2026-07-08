@@ -34,7 +34,10 @@ final class AnimationController: ObservableObject {
     // zone so a taller panel doesn't collapse when the cursor moves down into it.
     var currentExpandedH: CGFloat = AnimationController.expandedH
 
-    // Corner radius targets — top stays 0 so the panel reads as growing from the hardware notch.
+    // Corner radius targets — top stays 0 in both states so the panel reads as
+    // growing FROM the hardware notch (Dynamic Island illusion). The expanded panel
+    // keeps its top edge fused to the cutout; interactive content is seated below a
+    // black notch-height band so the notch can't occlude a tab (see MiraIslandView).
     static let collapsedTopR:  CGFloat = 0
     static let collapsedBotR:  CGFloat = 10
     static let expandedTopR:   CGFloat = 0

@@ -759,9 +759,13 @@ final class RealtimeVoiceService: NSObject, ObservableObject {
                         id: guidanceId, detection: .located(appKit), normalized: normalized, display: display)
                     switch gateDecision(for: outcome) {
                     case .annotate:
-                        PointToService.shared.point(toNormalized: normalized)
-                        AnnotationCanvasService.shared.show(
-                            [.ring(around: normalized, radiusPt: 26)], autoClearAfter: 4)
+                        // Both the pointer and its confidence ring obey the
+                        // "Let Mira point at things" toggle — off means no markers.
+                        if PointToService.isEnabled {
+                            PointToService.shared.point(toNormalized: normalized)
+                            AnnotationCanvasService.shared.show(
+                                [.ring(around: normalized, radiusPt: 26)], autoClearAfter: 4)
+                        }
                     case .ask, .nothingToShow:
                         // Below the confidence gate — don't draw on a spot we're unsure of.
                         break
