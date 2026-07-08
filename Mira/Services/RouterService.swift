@@ -1338,8 +1338,15 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         }
 
         guard let city, !city.isEmpty else { return }
-        // Let the window come forward before sending keystrokes to it.
-        try? await Task.sleep(nanoseconds: 900_000_000)
+        // Wait until Weather is genuinely frontmost before sending any keystrokes,
+        // so a slow launch can't leak the typed city into whatever app was in
+        // front (the old fixed 900ms sleep was a race). If it never reaches the
+        // front, skip the search-drive entirely — the spoken answer already names
+        // the right city, so there's no reason to risk typing into another app.
+        guard await Self.waitUntilFrontmost(bundleID: bundleID, timeout: 2.5) else {
+            NSLog("[Weather] app didn't reach frontmost in time; skipping search-drive")
+            return
+        }
 
         // Focus + clear the search field via AX (no app activation of its own).
         do {
@@ -1352,6 +1359,23 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         ComputerUseService.shared.type(text: city)
         try? await Task.sleep(nanoseconds: 700_000_000)   // let the results list populate
         ComputerUseService.shared.key(combination: "return")
+    }
+
+    /// Polls until the app with `bundleID` is the frontmost application, or
+    /// `timeout` seconds elapse. Returns true once it's frontmost, false on
+    /// timeout. Used to gate synthetic keystrokes so they can't land in the
+    /// wrong app while a slow app is still coming forward.
+    private static func waitUntilFrontmost(bundleID: String, timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID {
+                // Brief settle so the window's search field is ready for focus.
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID
     }
 
     /// Pulls a city/location out of a weather prompt ("weather in Atlanta" →
