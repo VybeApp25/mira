@@ -201,6 +201,7 @@
 		98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */; };
 		999F596800BE317B7DD15FB4 /* CorrelationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D5BB4ABB1EFCD6F34122C /* CorrelationEngine.swift */; };
 		99C4AE57D626422B87B1FAD3 /* TelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA51C6434233B46081A0496 /* TelemetryService.swift */; };
+		9B6E32161890CF6E42E3B2A1 /* EventTapThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F23C4512D86ECC6F0FFA52 /* EventTapThread.swift */; };
 		9C5365E19F360C429D3EEAD1 /* MemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */; };
 		9D95DC35830EBC1989F2837C /* ResponseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21822F4B90B50BBAF783859 /* ResponseCardView.swift */; };
 		9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F49814EE23560DC880AF05 /* SupabaseService.swift */; };
@@ -446,6 +447,7 @@
 		4F73902D6E3F8EE8514F79EA /* LearnerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnerModel.swift; sourceTree = "<group>"; };
 		518104F61E166A1846E07781 /* claude-design.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "claude-design.md"; sourceTree = "<group>"; };
 		525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceStore.swift; sourceTree = "<group>"; };
+		52F23C4512D86ECC6F0FFA52 /* EventTapThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTapThread.swift; sourceTree = "<group>"; };
 		52FA32F20FF203E1260D29E0 /* clicky-text-receive.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-text-receive.wav"; sourceTree = "<group>"; };
 		54D4739EA771EF0C39908A69 /* MiraIslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandView.swift; sourceTree = "<group>"; };
 		54EE6C76840A879706154B2F /* CoordinationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinationModels.swift; sourceTree = "<group>"; };
@@ -940,6 +942,7 @@
 				08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */,
 				724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */,
 				AAC4FD2846DA1EEBA136C9D7 /* ErrorService.swift */,
+				52F23C4512D86ECC6F0FFA52 /* EventTapThread.swift */,
 				2898F0CED0E0D77476860AC0 /* EvidenceEvaluator.swift */,
 				93C538A7CDB7D083498C2377 /* ExternalTriggerRunner.swift */,
 				7C46953D1361F747CFB25E28 /* FailureMemory.swift */,
@@ -1397,6 +1400,7 @@
 				57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,
 				9F6476CCB1151DDCBE55BCC1 /* ErrorService.swift in Sources */,
+				9B6E32161890CF6E42E3B2A1 /* EventTapThread.swift in Sources */,
 				EC74F404278D05BF53DE5BB0 /* EventToastView.swift in Sources */,
 				57A3C2DE8BEF627CB6B8AC54 /* EvidenceEvaluator.swift in Sources */,
 				94682DCB56A8A83B033DB022 /* ExternalTriggerRunner.swift in Sources */,

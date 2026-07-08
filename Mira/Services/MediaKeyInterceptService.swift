@@ -77,9 +77,16 @@ final class MediaKeyInterceptService {
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
-            callback: { _, _, event, refcon -> Unmanaged<CGEvent>? in
+            callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
                 guard let refcon else { return Unmanaged.passRetained(event) }
                 let svc = Unmanaged<MediaKeyInterceptService>.fromOpaque(refcon).takeUnretainedValue()
+                // macOS disables a tap that was slow to service (timeout) or on
+                // certain user input — re-enable it, else media keys silently die
+                // after any main-thread stall.
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let tap = svc.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                    return nil
+                }
                 return svc.handle(event: event)
             },
             userInfo: Unmanaged.passRetained(self).toOpaque()
@@ -87,13 +94,15 @@ final class MediaKeyInterceptService {
 
         guard let tap = eventTap else { return }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        // Serviced on a dedicated thread, NOT the main run loop, so a busy main
+        // thread (e.g. an agent build) can't stall or kill media-key handling.
+        EventTapThread.shared.addSource(runLoopSource!)
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     private func removeTap() {
         if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
+        if let src = runLoopSource { EventTapThread.shared.removeSource(src) }
         eventTap = nil
         runLoopSource = nil
     }
@@ -109,23 +118,28 @@ final class MediaKeyInterceptService {
         let keyState = (data1 & 0xFF00) >> 8
         guard keyState == nxKeyStateDown else { return Unmanaged.passRetained(event) }
 
+        // The tap callback runs on the dedicated event-tap thread; hop the
+        // actual volume/brightness changes (and their HUD notifications) to the
+        // main actor. The consume decision (return nil) stays synchronous here.
         switch keyCode {
         case NXKeyType.soundUp:
-            adjustVolume(by: step)
+            DispatchQueue.main.async { self.adjustVolume(by: self.step) }
             return nil
         case NXKeyType.soundDown:
-            adjustVolume(by: -step)
+            DispatchQueue.main.async { self.adjustVolume(by: -self.step) }
             return nil
         case NXKeyType.mute:
-            let muted = !SystemVolumeControl.isMuted()
-            SystemVolumeControl.setMuted(muted)
-            postVolumeChanged(muted ? 0 : volumeStep)
+            DispatchQueue.main.async {
+                let muted = !SystemVolumeControl.isMuted()
+                SystemVolumeControl.setMuted(muted)
+                self.postVolumeChanged(muted ? 0 : self.volumeStep)
+            }
             return nil
         case NXKeyType.brightnessUp:
-            adjustBrightness(by: step)
+            DispatchQueue.main.async { self.adjustBrightness(by: self.step) }
             return nil
         case NXKeyType.brightnessDown:
-            adjustBrightness(by: -step)
+            DispatchQueue.main.async { self.adjustBrightness(by: -self.step) }
             return nil
         default:
             return Unmanaged.passRetained(event)
