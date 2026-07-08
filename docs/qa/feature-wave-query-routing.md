@@ -71,3 +71,42 @@ city-accurate), so it's a hardening candidate, not a wave blocker.
 Every route in the wave produces both its visible side-effect and a guaranteed
 reply, every failure path degrades gracefully, and the one continuation lifecycle
 is correctly single-resume. Wave passes the audit.
+
+---
+
+# Runtime verification (live app)
+
+**Date:** 2026-07-08
+**Build:** fresh Debug build of `main` @ `7626d63`, signed with the `Mira Dev`
+cert (`ENABLE_HARDENED_RUNTIME=NO`), driven through Mira's own notch chat input.
+
+The static audit above was confirmed end-to-end by exercising each route in the
+running app and observing the actual side-effects — not just re-reading the code.
+**All routes and the browser picker pass.**
+
+| Route | Result | Observed behavior |
+|---|---|---|
+| Weather (`weather_lookup`) | ✅ PASS | "what's the weather in Atlanta" → Weather app opened **and** its search field was AX-driven to "Atlanta, GA" (map + 91° shown); Mira spoke a wttr.in summary ("90°F and partly cloudy… high 93°, low 73°"). Both the visible and cheap-text paths fired, no vision. |
+| Web-search (`web_search`) | ✅ PASS | "search the web for the latest James Webb telescope discovery" → active browser opened `google.com` with the **cleaned** query, **and** Mira returned a proxy `web_search` text answer (WASP-121 b) ending in `_Opened the full results in ChatGPT Atlas._` — matching the audited format string exactly. |
+| Video playback (`video_playback`) | ✅ PASS | "pull up a YouTube video of the 2026 World Cup final highlights" → active browser opened `youtube.com` results for the cleaned query "2026 world cup final highlights" instantly; no vision loop, no quota. |
+| Browser picker (`BrowserService`) | ✅ CONFIRMED | Both routes opened the user's *actual active browser* (ChatGPT Atlas, not the frontmost Chrome window) — `activeBrowser()` resolution verified live. |
+
+### Resolutions to open items
+
+- **AX search-drive (previously "unverified end-to-end")** — now confirmed: the
+  Weather app's SwiftUI search field was successfully focused via AX and received
+  the typed city, opening the correct location. The 900 ms keystroke-timing
+  watch-item worked correctly in this run (Weather came forward in time).
+
+### New cosmetic notes (non-blocking)
+
+1. **Weather location label** — the spoken summary reports wttr.in's
+   `nearest_area` ("Bellwood") rather than echoing the requested city ("Atlanta").
+   Cosmetic; a polish candidate alongside the keystroke-timing watch-item.
+
+### Verification harness note (not an app defect)
+
+The notch panel auto-collapses after each sent message, so any external UI driver
+must re-expand it (click the notch pill) before typing the next prompt. Skipping
+that step sends keystrokes to whatever app is frontmost instead of Mira — worth
+knowing for future automated runtime checks.
