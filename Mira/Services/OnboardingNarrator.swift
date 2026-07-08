@@ -37,13 +37,32 @@ final class OnboardingNarrator: ObservableObject {
         guard !text.isEmpty else { return }
         NSLog("[OnboardingNarrator] speakAndWait | signedIn=\(AccountService.shared.isSignedIn) | text=\(text.prefix(60))")
         isSpeaking = true
-        if AccountService.shared.isSignedIn {
+        // Prefer the pre-baked Realtime "Marin" clip when one is bundled for this
+        // exact line. This is the true GA-Realtime Marin voice (the gpt-4o-mini-tts
+        // speech endpoint has no marin voice, so the live path below would 400 and
+        // fall back to the flat system voice). Bundled playback also works BEFORE
+        // sign-in and fully offline.
+        if let url = Self.bundledNarrationURL(for: text),
+           let data = try? Data(contentsOf: url), !data.isEmpty {
+            NSLog("[OnboardingNarrator] using bundled Marin clip \(url.lastPathComponent)")
+            await playAudioData(data)
+        } else if AccountService.shared.isSignedIn {
             await speakOpenAIAsync(text)
         } else {
             NSLog("[OnboardingNarrator] NOT signed in — using system TTS")
             await speakSystemAsync(text)
         }
         isSpeaking = false
+    }
+
+    /// URL of the pre-recorded Marin narration clip for `text`, if bundled.
+    /// The filename hash MUST match the render pipeline: djb2(text + voice.rawValue),
+    /// base-36. Keep in sync with `cacheURL(text:voice:)`.
+    static func bundledNarrationURL(for text: String) -> URL? {
+        var h: UInt64 = 5381
+        for byte in (text + onboardingVoice.rawValue).utf8 { h = (h &* 33) &+ UInt64(byte) }
+        return Bundle.main.url(forResource: "narration-\(String(h, radix: 36))",
+                               withExtension: "mp3")
     }
 
     func stop() {
@@ -88,10 +107,17 @@ final class OnboardingNarrator: ObservableObject {
             }
         }
 
+        await playAudioData(data, fallbackText: text)
+    }
+
+    /// Plays mp3 `data` through AVAudioPlayer and suspends until it finishes.
+    /// Shared by the bundled-clip path and the live OpenAI-TTS path. If the data
+    /// can't be decoded, falls back to system TTS speaking `fallbackText`.
+    private func playAudioData(_ data: Data, fallbackText: String? = nil) async {
         guard let player = try? AVAudioPlayer(data: data,
                                               fileTypeHint: AVFileType.mp3.rawValue)
         else {
-            await speakSystemAsync(text)
+            if let fallbackText { await speakSystemAsync(fallbackText) }
             return
         }
 
