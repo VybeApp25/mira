@@ -15,6 +15,7 @@
 		0866470A4671B4643894226B /* obsidian_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 16D6B874FC0EE313F66CD9E6 /* obsidian_rw.py */; };
 		08EA69FF4B019157EB41B6F1 /* linear.md in Resources */ = {isa = PBXBuildFile; fileRef = E8F844AF7574D2B2A262D065 /* linear.md */; };
 		098B421200BD04B8A0FE21AB /* claude-design.md in Resources */ = {isa = PBXBuildFile; fileRef = 518104F61E166A1846E07781 /* claude-design.md */; };
+		0A78352870E74D4CA1A985FB /* CommunityBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */; };
 		0AF830434EA77952F5C4D82C /* AnnotationCanvasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */; };
 		0C020C4633AE33FE211A9DC6 /* MicLevelMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */; };
 		0D551657558811383B804B93 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE4187651AAE648F8751542 /* StatusBarController.swift */; };
@@ -300,6 +301,7 @@
 		DEB927FF2923FA768D56E060 /* ProjectEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */; };
 		DF7ED74A4C011F0D6D8FAB46 /* FileWatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01313512AA5C428B31B4E8C /* FileWatchService.swift */; };
 		DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */; };
+		E035CC20673493579EDBEEF7 /* CommunitySkillService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074634B000DC858CA2C2FBC2 /* CommunitySkillService.swift */; };
 		E14FBAF9DC017FE43C87FCA7 /* IslandChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */; };
 		E1A23111FB0BBE1CC4A86CB1 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B324BC14AED4E3627AA2C7 /* Carbon.framework */; };
 		E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */; };
@@ -356,6 +358,7 @@
 		05BDE04BBEFFAAC2DD980C78 /* narration-2kd3zsj75eqvr.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-2kd3zsj75eqvr.mp3"; sourceTree = "<group>"; };
 		065D4FF184832F7FE6C46673 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
 		07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionManager.swift; sourceTree = "<group>"; };
+		074634B000DC858CA2C2FBC2 /* CommunitySkillService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunitySkillService.swift; sourceTree = "<group>"; };
 		077436ECE19C7096BAC241EC /* BriefingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingView.swift; sourceTree = "<group>"; };
 		0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroService.swift; sourceTree = "<group>"; };
 		08509CD2EF20373C6E2B3DE4 /* CodexLiveOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexLiveOverlay.swift; sourceTree = "<group>"; };
@@ -419,6 +422,7 @@
 		3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandWindowManager.swift; sourceTree = "<group>"; };
 		376F1CDCA756B5368F057786 /* AgentTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskStore.swift; sourceTree = "<group>"; };
 		380708383A28192B655CE505 /* CallTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriptView.swift; sourceTree = "<group>"; };
+		3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityBrowseView.swift; sourceTree = "<group>"; };
 		39B2C1A5B3D357A621F2541F /* RouterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterService.swift; sourceTree = "<group>"; };
 		3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCoordinator.swift; sourceTree = "<group>"; };
 		3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportPrompts.swift; sourceTree = "<group>"; };
@@ -934,6 +938,7 @@
 				C85EC34D3CB4719C239110D9 /* CodexComputerUseService.swift */,
 				80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */,
 				BEF6665B0465EE94AD47A55B /* CodexService.swift */,
+				074634B000DC858CA2C2FBC2 /* CommunitySkillService.swift */,
 				F3AE9C3419A694A4B7C648D1 /* ComputerUseOrchestrator.swift */,
 				01ACF9118D36B54D9E00146F /* ComputerUseService.swift */,
 				47BAF16D6CB27982CEA34F14 /* ContextService.swift */,
@@ -1108,6 +1113,7 @@
 				4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */,
 				C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */,
 				CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */,
+				3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */,
 				1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */,
 				E8E353B5F50827A17EDA25AB /* CronsTabView.swift */,
 				803FFD5EEBDE9BDFAF14C988 /* CursorCompanionView.swift */,
@@ -1387,6 +1393,8 @@
 				62946323C65311FC235B93CA /* CodexLiveOverlay.swift in Sources */,
 				C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */,
 				713DA3CACD91572D8939C588 /* CodexService.swift in Sources */,
+				0A78352870E74D4CA1A985FB /* CommunityBrowseView.swift in Sources */,
+				E035CC20673493579EDBEEF7 /* CommunitySkillService.swift in Sources */,
 				FC7080473DD8A3EDC9CC3E31 /* ComputerUseOrchestrator.swift in Sources */,
 				452762C067D50B0C991CF939 /* ComputerUseService.swift in Sources */,
 				BB26C7ACD6AAE5F3CCD3B3B8 /* ComputerUseTabView.swift in Sources */,

@@ -160,6 +160,17 @@ final class MiraSkillLoader: ObservableObject {
         return name
     }
 
+    /// The user's own authored skills (origin .user) — publish candidates.
+    var userSkills: [MiraSkill] {
+        loaded.filter { $0.origin == .user }.map(\.skill)
+    }
+
+    /// Raw SKILL.md text for a local user skill, for publishing to the community.
+    func markdownForUserSkill(id: String) -> String? {
+        try? String(contentsOf: userDir.appendingPathComponent(id).appendingPathComponent("SKILL.md"),
+                    encoding: .utf8)
+    }
+
     // MARK: - Loading
 
     private func load(dir: URL, origin: Origin, reserved: Bool,
