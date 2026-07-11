@@ -2,6 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SkillsTabView: View {
+    @ObservedObject var miraState: MiraState
+
     @ObservedObject private var store        = SkillStore.shared
     @ObservedObject private var loader       = MiraSkillLoader.shared
     @ObservedObject private var entitlements = EntitlementService.shared
@@ -9,6 +11,12 @@ struct SkillsTabView: View {
     @State private var importing   = false   // file picker open
     @State private var importError: String?  // non-nil → error alert
     @State private var showPaywall = false
+
+    // Create-a-skill flow (Gap B)
+    @State private var creating    = false   // create sheet open
+    @State private var createDesc  = ""
+    @State private var generating  = false
+    @State private var createError: String?
 
     /// User-authored bundles that failed to load — shown so authors get feedback.
     private var userIssues: [MiraSkillLoader.InvalidSkill] {
@@ -40,6 +48,72 @@ struct SkillsTabView: View {
             Text(importError ?? "")
         }
         .sheet(isPresented: $showPaywall) { PaywallView() }
+        .sheet(isPresented: $creating) { createSkillSheet }
+    }
+
+    // MARK: - Create a skill (Gap B)
+
+    private var createSkillSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Create a skill")
+                .font(.system(size: 15, weight: .semibold))
+            Text("Describe what you want this skill to do. Mira writes it, and it's ready to activate.")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+
+            TextEditor(text: $createDesc)
+                .font(.system(size: 12))
+                .scrollContentBackground(.hidden)
+                .frame(height: 92)
+                .padding(6)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            if let e = createError {
+                Text(e)
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.red.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Button("Cancel") { creating = false }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    Task { await generateSkill() }
+                } label: {
+                    HStack(spacing: 5) {
+                        if generating { ProgressView().controlSize(.small) }
+                        Text(generating ? "Creating…" : "Create skill")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(generating || createDesc.trimmingCharacters(in: .whitespaces).count < 8)
+            }
+        }
+        .padding(18)
+        .frame(width: 420)
+    }
+
+    private func generateSkill() async {
+        let desc = createDesc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard desc.count >= 8 else { return }
+        generating = true
+        createError = nil
+        defer { generating = false }
+        do {
+            let markdown = try await ClaudeService(apiKey: miraState.effectiveAPIKey)
+                .generateSkillMarkdown(description: desc)
+            let name = try loader.createUserSkill(markdown: markdown)
+            if !store.isActive(name) { store.toggle(name) }   // auto-activate the new skill
+            createDesc = ""
+            creating = false
+        } catch {
+            createError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     // MARK: - Content (plan-gated)
@@ -114,6 +188,13 @@ struct SkillsTabView: View {
             }
             // Add your own — Ultra only.
             if loader.canAddUserSkills {
+                Button { createError = nil; creating = true } label: {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(miraTeale)
+                }
+                .buttonStyle(.plain)
+                .help("Create a skill by describing it")
                 Button { importing = true } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 13, weight: .semibold))

@@ -131,6 +131,35 @@ final class MiraSkillLoader: ObservableObject {
         return nil
     }
 
+    // MARK: - Create (Gap B — "Create a Skill")
+
+    struct SkillCreateError: Error, LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Validates a generated SKILL.md, writes it into `userDir/<name>/SKILL.md`,
+    /// and rescans so it's immediately activatable. Returns the skill's id (name).
+    @discardableResult
+    func createUserSkill(markdown: String) throws -> String {
+        guard canAddUserSkills else {
+            throw SkillCreateError(message: "Creating skills requires the Ultra plan.")
+        }
+        guard let parsed = Self.parse(markdown),
+              let name = parsed.fields["name"], !name.isEmpty else {
+            throw SkillCreateError(message: "The generated skill was malformed. Try rephrasing your request.")
+        }
+        if let blocker = importBlocker(forFolderNamed: name, skillMarkdown: markdown) {
+            throw SkillCreateError(message: blocker)
+        }
+        let folder = userDir.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try markdown.write(to: folder.appendingPathComponent("SKILL.md"),
+                           atomically: true, encoding: .utf8)
+        refresh()
+        return name
+    }
+
     // MARK: - Loading
 
     private func load(dir: URL, origin: Origin, reserved: Bool,

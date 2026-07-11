@@ -733,7 +733,7 @@ struct MiraIslandView: View {
             LabsTabView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .skills:
-            SkillsTabView()
+            SkillsTabView(miraState: miraState)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .learn:
             LessonsTabView()
