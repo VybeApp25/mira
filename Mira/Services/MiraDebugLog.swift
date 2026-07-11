@@ -8,18 +8,19 @@ import Foundation
 // behavior we can't observe interactively (drag-and-drop, menu-bar clipping, …).
 // Cheap and synchronous — intended for low-frequency debug events, not hot paths.
 //
-// TEMPORARY DIAGNOSTIC: the #if DEBUG gate is lifted so Release local-install
-// builds also log (to /tmp/mira_diag.log) while we chase the build-routing bug.
-// REVERT to the #if DEBUG version + /tmp/mira_debug.log path before shipping.
+// The /tmp file sink is DEBUG-only: Release builds keep the NSLog mirror (so
+// unified logging still works) but never write a plaintext file to /tmp. This
+// prevents shipping a world-readable diagnostic log on end-user machines.
 
 enum MiraDebugLog {
-    static let path = "/tmp/mira_diag.log"
+    static let path = "/tmp/mira_debug.log"
     private static let queue = DispatchQueue(label: "com.trevonbarbour.mira.debuglog")
 
     static func log(_ message: String) {
-        let line = "\(Self.stamp()) \(message)\n"
         // Mirror to the normal console too so it's visible either way.
         NSLog("%@", message)
+        #if DEBUG
+        let line = "\(Self.stamp()) \(message)\n"
         queue.async {
             guard let data = line.data(using: .utf8) else { return }
             if let handle = FileHandle(forWritingAtPath: path) {
@@ -30,6 +31,7 @@ enum MiraDebugLog {
                 try? data.write(to: URL(fileURLWithPath: path))
             }
         }
+        #endif
     }
 
     private static func stamp() -> String {
