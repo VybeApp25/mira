@@ -14,6 +14,7 @@ struct SkillsTabView: View {
 
     // Create-a-skill flow (Gap B)
     @State private var creating    = false   // create sheet open
+    @State private var browsing    = false   // community browse sheet
     @State private var createDesc  = ""
     @State private var generating  = false
     @State private var createError: String?
@@ -49,6 +50,7 @@ struct SkillsTabView: View {
         }
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $creating) { createSkillSheet }
+        .sheet(isPresented: $browsing) { CommunityBrowseView() }
     }
 
     // MARK: - Create a skill (Gap B)
@@ -188,6 +190,13 @@ struct SkillsTabView: View {
             }
             // Add your own — Ultra only.
             if loader.canAddUserSkills {
+                Button { browsing = true } label: {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(miraTeale)
+                }
+                .buttonStyle(.plain)
+                .help("Browse & publish community skills")
                 Button { createError = nil; creating = true } label: {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 12, weight: .semibold))
