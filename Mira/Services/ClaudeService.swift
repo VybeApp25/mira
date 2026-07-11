@@ -397,6 +397,64 @@ class ClaudeService {
         }
     }
 
+    /// "Create a Skill" (Gap B). Given a plain-language description, generates a
+    /// well-formed SKILL.md (frontmatter + directive body) that MiraSkillLoader can
+    /// validate and install as a user skill. Returns the raw file text.
+    func generateSkillMarkdown(description: String) async throws -> String {
+        let prompt = """
+        Create a Mira "skill" for this request:
+
+        "\(description)"
+
+        A skill is a reusable capability: when the user activates it, its body is \
+        injected into Mira's system prompt so the voice model and agents behave that way.
+
+        Output ONLY the contents of a SKILL.md, starting with the frontmatter `---` and \
+        NOTHING before it — no code fences, no commentary:
+        ---
+        name: kebab-case-unique-id
+        title: Human Readable Name
+        tagline: one short line for the card
+        category: Productivity | Engineering | Communication | Creative
+        icon: a-valid-sf-symbol-name
+        ---
+        Skill active: <Name>.
+        <2-8 concrete, directive sentences telling Mira exactly how to behave when this \
+        skill is active — which tools/APIs to prefer, what to do, what to avoid. No \
+        markdown headers, no fluff.>
+
+        Pick the single best category. Use a real SF Symbol for icon (e.g. "envelope.fill").
+        """
+        let body = APIRequest(
+            model:      model,
+            max_tokens: 700,
+            system:     MiraPrompts.skillAuthor,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
+        req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json",  forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        let text = try JSONDecoder().decode(APIResponse.self, from: data).text
+        return Self.stripCodeFences(text)
+    }
+
+    /// Strips a leading/trailing ``` fence if the model wrapped the file in one.
+    private static func stripCodeFences(_ text: String) -> String {
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("```") else { return t }
+        if let firstNL = t.firstIndex(of: "\n") { t = String(t[t.index(after: firstNL)...]) }
+        if let lastFence = t.range(of: "```", options: .backwards) { t = String(t[..<lastFence.lowerBound]) }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Phase 13A — background analysis session.
     /// Read-only: returns a structured checkpoint describing what the agent found.
     /// No file writes, no external tools. Caller enforces the 10-minute timeout policy.
@@ -848,6 +906,13 @@ enum MiraPrompts {
     propose at most two SPECIFIC, personalized tasks Mira could run for them — the kind of thing they'd want but might not think to ask for. \
     Ground every suggestion in the provided context; never fabricate facts about the user. \
     Prefer high-signal, low-effort wins. Return an empty array rather than a generic filler suggestion.
+    """
+
+    static let skillAuthor = """
+    You are Mira, authoring a reusable "skill" for your user. A skill's body is injected verbatim into \
+    Mira's system prompt when the user activates it, so write clear, directive behavior — how Mira should act, \
+    which tools or APIs to prefer, what to avoid. Output a single well-formed SKILL.md with valid frontmatter \
+    and a concrete instruction body. No preamble, no code fences, no commentary — just the file.
     """
 
     // MARK: - Agent mode (full behavior contract, used for complex agent tasks)
