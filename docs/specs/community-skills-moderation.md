@@ -74,10 +74,9 @@ Minimal — text lives in the table, so **no storage bucket** needed:
 Effort ~**M** once Decisions 1–2 are fixed (text-only + AI-gated removes the bucket, the
 Python sandbox work, and most of the human-moderation tooling).
 
-## What I need from you (drives everything)
-1. **Python in community v1?** → recommend **No, text-only**.
-2. **Moderation model?** → recommend **C (AI-gated auto-publish)**.
-3. **Who owns the human review** of the queued/flagged middle (you, or a trusted reviewer)?
+## Decisions — LOCKED 2026-07-10 (Tre)
+1. **Python in community v1? → NO, text-only.** Community = prompt skills only; Python stays Mira-authored/local.
+2. **Moderation model? → C (AI-gated auto-publish), text-only.** Claude moderation pass gates each submission; clean auto-lists, obvious-bad auto-rejects, ambiguous → `pending` queue.
+3. **Human review owner:** default to Tre reviewing the small `pending` queue (Supabase dashboard / a lightweight admin view) — revisit if volume grows.
 
-Once 1–2 are set I can build the text-only, AI-gated catalog end-to-end (table + `skills-publish`
-with the moderation pass + Browse/Install/Publish UI + seed).
+**→ Build path is fixed:** table `community_skills` (RLS public-read approved, insert-as-pending) + edge fn `skills-publish` (validate via `MiraSkillLoader` rules → `MiraPrompts.skillModeration` verdict → set status) + public read (PostgREST or `skills-catalog` fn) + `SkillsTabView` Browse/Install/Publish + ~10–20 seed skills. Guardrails from Decision 3 above are non-negotiable.
