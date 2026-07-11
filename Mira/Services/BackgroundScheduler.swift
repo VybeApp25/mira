@@ -40,6 +40,7 @@ final class BackgroundScheduler {
         s.qualityOfService = .background
         s.schedule { completion in
             Task { @MainActor [weak self] in
+                await self?.maybeGenerateRecommendations()
                 await self?.run()
                 completion(.finished)
             }
@@ -249,6 +250,41 @@ final class BackgroundScheduler {
         guard bgCheckpointCount >= 5 else { return false }
         let score = ProjectEngine.shared.backgroundCheckpointSpecificity(for: project)
         return score >= 0.5
+    }
+
+    // MARK: - Proactive recommendations (Gap A Phase 2)
+
+    /// Twice-daily proactive agent recommendations. The 30-min continuation tick
+    /// calls this; a per-day-per-slot guard fires it at most once each in a
+    /// morning (08–11) and afternoon (13–16) window. Results land in
+    /// RecommendationStore (shown as Approve/Dismiss cards in the Agents tab) and
+    /// a notification nudges the user. Manual "Suggest agents for me" is unchanged.
+    private func maybeGenerateRecommendations() async {
+        let cal  = Calendar.current
+        let now  = Date()
+        let hour = cal.component(.hour, from: now)
+        let slot: String
+        if      (8...11).contains(hour)  { slot = "am" }
+        else if (13...16).contains(hour) { slot = "pm" }
+        else { return }
+
+        // At most one generation per slot per day.
+        let key = "mira_recs_last_\(slot)"
+        if let last = UserDefaults.standard.object(forKey: key) as? Date,
+           cal.isDate(last, inSameDayAs: now) { return }
+        UserDefaults.standard.set(now, forKey: key)
+
+        // Empty key routes through the backend proxy session when signed in;
+        // if unauthenticated the call fails and is swallowed (no recs, no nag).
+        await RecommendationEngine.shared.generateNow(apiKey: AppSecrets.anthropicAPIKey)
+
+        let recs = RecommendationStore.shared.pending
+        guard !recs.isEmpty else { return }
+        postNotification(
+            title: recs.count == 1 ? "Mira has a suggestion for you"
+                                   : "Mira has \(recs.count) suggestions for you",
+            body:  recs.count == 1 ? recs[0].title
+                                   : "Open the Agents tab to review and approve.")
     }
 
     // MARK: - Weekly Review
