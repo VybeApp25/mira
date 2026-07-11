@@ -28,11 +28,15 @@ struct AgentsTabView: View {
     @State private var referenceImagePaths: [String] = []
     @State private var knownCompletedIds: Set<UUID> = []
     @State private var showPaywall = false
+    @StateObject private var recStore = RecommendationStore.shared
+    @StateObject private var recEngine = RecommendationEngine.shared
+    @AppStorage(UsageLogService.enabledKey) private var usageLogEnabled = false
 
     var body: some View {
         VStack(spacing: 0) {
             if entitlements.can(.runAgents) {
                 inputBar
+                recommendationsStrip
                 Divider().background(Color.white.opacity(0.07))
                 jobList
             } else {
@@ -105,6 +109,109 @@ struct AgentsTabView: View {
                 websiteBuilderControls
             }
         }
+    }
+
+    // MARK: - Proactive recommendations (Gap A)
+
+    @ViewBuilder
+    private var recommendationsStrip: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                Button {
+                    Task { await recEngine.generateNow(apiKey: miraState.effectiveAPIKey) }
+                } label: {
+                    HStack(spacing: 5) {
+                        if recEngine.isGenerating {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "sparkles").font(.system(size: 10))
+                        }
+                        Text(recEngine.isGenerating ? "Thinking…" : "Suggest agents for me")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(accent.opacity(0.10))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(recEngine.isGenerating || !miraState.isSignedIn)
+                .accessibilityLabel("Suggest agents for me")
+
+                Spacer()
+
+                Toggle(isOn: $usageLogEnabled) {
+                    Text("Use app history")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .onChange(of: usageLogEnabled) { _, on in
+                    if on { UsageLogService.shared.startIfEnabled() }
+                    else  { UsageLogService.shared.stop(); UsageLogService.shared.clear() }
+                }
+                .help("Locally log which apps you use to personalize suggestions. Stored on-device; only an aggregated summary is sent when generating.")
+            }
+
+            if let err = recEngine.lastError, recStore.pending.isEmpty {
+                Text(err)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            ForEach(recStore.pending) { rec in
+                recommendationCard(rec)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, recStore.pending.isEmpty ? 4 : 8)
+    }
+
+    private func recommendationCard(_ rec: AgentRecommendation) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(rec.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+            Text(rec.rationale)
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.55))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button {
+                    jobStore.submitJob(prompt: rec.taskPrompt,
+                                       apiKey: miraState.effectiveAPIKey,
+                                       buildMode: rec.isWebsiteBuild ? .pro : nil)
+                    recStore.markApproved(rec.id)
+                } label: {
+                    Text("Approve").font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(accent).clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(!miraState.isSignedIn)
+                .accessibilityLabel("Approve: \(rec.title)")
+
+                Button {
+                    recStore.markDismissed(rec.id)
+                } label: {
+                    Text("Dismiss").font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.white.opacity(0.06)).clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss: \(rec.title)")
+            }
+            .padding(.top, 2)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var canSubmit: Bool {

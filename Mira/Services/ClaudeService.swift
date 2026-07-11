@@ -325,6 +325,78 @@ class ClaudeService {
         )
     }
 
+    /// Proactive agent recommendations (Gap A). Given a local context digest,
+    /// returns at most two personalized agent tasks the user might want but hasn't
+    /// asked for. Empty array = nothing worth suggesting. See RecommendationEngine
+    /// + docs/specs/heyclicky-parity-proactive-and-skills.md.
+    func recommendAgents(context: String) async throws -> [AgentRecommendation] {
+        let prompt = """
+        Here is what you currently know about this user:
+
+        \(context.isEmpty ? "(very little signal available yet)" : context)
+
+        Suggest AT MOST TWO agent tasks Mira could run FOR this user that would be \
+        genuinely useful right now — things they'd plausibly want but might not think \
+        to ask for. Prefer specific, personalized ideas grounded in the context above.
+
+        Respond ONLY with a JSON array — no markdown, no prose:
+        [
+          {
+            "title": "Short imperative label (max 50 chars)",
+            "rationale": "1 sentence: why this is relevant to THIS user right now",
+            "task_prompt": "The exact, self-contained instruction to hand the agent",
+            "is_website_build": false,
+            "confidence": 0.6
+          }
+        ]
+        Return [] if you have nothing specific and useful to suggest. Never invent \
+        facts about the user that the context does not support.
+        """
+        let body = APIRequest(
+            model:      model,
+            max_tokens: 800,
+            system:     MiraPrompts.agentRecommendations,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
+        req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json",  forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        let text = try JSONDecoder().decode(APIResponse.self, from: data).text
+        return Self.parseRecommendations(from: text)
+    }
+
+    private static func parseRecommendations(from text: String) -> [AgentRecommendation] {
+        struct Raw: Decodable {
+            let title: String
+            let rationale: String
+            let task_prompt: String
+            let is_website_build: Bool?
+            let confidence: Double?
+        }
+        guard let range = text.range(of: #"\[[\s\S]*\]"#, options: .regularExpression),
+              let jsonData = String(text[range]).data(using: .utf8),
+              let raws = try? JSONDecoder().decode([Raw].self, from: jsonData) else {
+            return []
+        }
+        return raws.prefix(2).map {
+            AgentRecommendation(
+                title:          $0.title,
+                rationale:      $0.rationale,
+                taskPrompt:     $0.task_prompt,
+                isWebsiteBuild: $0.is_website_build ?? false,
+                confidence:     $0.confidence ?? 0.5
+            )
+        }
+    }
+
     /// Phase 13A — background analysis session.
     /// Read-only: returns a structured checkpoint describing what the agent found.
     /// No file writes, no external tools. Caller enforces the 10-minute timeout policy.
@@ -768,6 +840,14 @@ enum MiraPrompts {
     Proposals must be specific: name real files, functions, patterns, or test cases from the provided context. \
     A generic proposal is worthless — write something a developer could act on directly. \
     Set should_block=true if the context is too thin to produce a useful proposal.
+    """
+
+    static let agentRecommendations = """
+    You are Mira, proactively suggesting agent tasks for your user. \
+    Given a snapshot of what they've been doing (apps they use, connected tools, active skills, known preferences), \
+    propose at most two SPECIFIC, personalized tasks Mira could run for them — the kind of thing they'd want but might not think to ask for. \
+    Ground every suggestion in the provided context; never fabricate facts about the user. \
+    Prefer high-signal, low-effort wins. Return an empty array rather than a generic filler suggestion.
     """
 
     // MARK: - Agent mode (full behavior contract, used for complex agent tasks)

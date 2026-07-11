@@ -84,6 +84,7 @@ final class NotchManager {
         wakeWord.start()
         shortcutManager.start()
         BackgroundScheduler.shared.start()
+        UsageLogService.shared.startIfEnabled()   // proactive-recs signal (opt-in, local-only)
         // Pre-warm the Realtime WebSocket so the first PTT is instant.
         // Mirrors HeyClicky's keep-warm behavior — session is healthy before the user speaks.
         RealtimeVoiceService.shared.prewarm()
