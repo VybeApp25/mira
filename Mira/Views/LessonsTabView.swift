@@ -346,7 +346,10 @@ private struct ScaffoldSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var scaffolder = LessonScaffolder.shared
     @State private var query = ""
+    @State private var goal = ""
     @State private var note: String?
+    @State private var errorNote: String?
+    @State private var authoringApp: String?   // bundleId currently being authored
 
     private var apps: [LessonRegistry.AppEntry] {
         let all = scaffolder.registry?.apps ?? []
@@ -366,14 +369,20 @@ private struct ScaffoldSheet: View {
             }
             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
 
-            Text("Generates a starter lesson — it opens as **Unverified** until a real run proves the ring lands. Refine its steps, then run to verify.")
+            Text("Describe what you want to learn, then pick the app — Mira authors a lesson with vision-checked steps. Leave the goal blank to get a plain starter. Either opens as **Unverified** until a real run proves it.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 16).padding(.bottom, 8)
 
+            TextField("What do you want to learn? (e.g. “add a reverb send”)", text: $goal)
+                .textFieldStyle(.roundedBorder)
+                .disabled(authoringApp != nil)
+                .padding(.horizontal, 16).padding(.bottom, 6)
+
             TextField("Search \(scaffolder.registry?.apps.count ?? 0) installed apps…", text: $query)
                 .textFieldStyle(.roundedBorder)
+                .disabled(authoringApp != nil)
                 .padding(.horizontal, 16).padding(.bottom, 8)
 
             if let note {
@@ -381,11 +390,17 @@ private struct ScaffoldSheet: View {
                     .foregroundColor(DS.Colors.success)
                     .padding(.horizontal, 16).padding(.bottom, 6)
             }
+            if let errorNote {
+                Text(errorNote).font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DS.Colors.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16).padding(.bottom, 6)
+            }
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 6) {
                     ForEach(apps) { app in
-                        Button { generate(app) } label: {
+                        Button { pick(app) } label: {
                             HStack(spacing: 10) {
                                 if let img = LessonCard.icon(for: app.bundleId) {
                                     Image(nsImage: img).resizable().frame(width: 26, height: 26)
@@ -398,14 +413,20 @@ private struct ScaffoldSheet: View {
                                         .font(.system(size: 9)).foregroundColor(DS.Colors.textTertiary)
                                 }
                                 Spacer()
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 13)).foregroundColor(miraTeale)
+                                if authoringApp == app.bundleId {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: goal.trimmingCharacters(in: .whitespaces).isEmpty
+                                          ? "plus.circle" : "sparkles")
+                                        .font(.system(size: 13)).foregroundColor(miraTeale)
+                                }
                             }
                             .padding(8)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(DS.Colors.surface2))
                         }
                         .buttonStyle(.plain)
+                        .disabled(authoringApp != nil)
                     }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 16)
@@ -415,13 +436,39 @@ private struct ScaffoldSheet: View {
         .onAppear { scaffolder.loadRegistry() }
     }
 
-    private func generate(_ app: LessonRegistry.AppEntry) {
-        if let result = scaffolder.scaffold(for: app) {
+    /// A goal → author a real lesson via the LLM; no goal → the fixed template starter.
+    private func pick(_ app: LessonRegistry.AppEntry) {
+        note = nil; errorNote = nil
+        if goal.trimmingCharacters(in: .whitespaces).isEmpty {
+            templateScaffold(app)
+        } else {
+            authorLesson(app)
+        }
+    }
+
+    private func templateScaffold(_ app: LessonRegistry.AppEntry) {
+        if scaffolder.scaffold(for: app) != nil {
             note = "Created “Get started in \(app.name)” — find it in Lessons (Unverified)."
-            _ = result
         } else {
             note = "A lesson for \(app.name) already exists."
         }
         onDone()
+    }
+
+    private func authorLesson(_ app: LessonRegistry.AppEntry) {
+        authoringApp = app.bundleId
+        let goalText = goal
+        Task {
+            defer { authoringApp = nil }
+            do {
+                let result = try await scaffolder.author(goal: goalText, app: app)
+                note = "Authored “\(result.skillId)” for \(app.name) — find it in Lessons (Unverified)."
+                onDone()   // refresh the catalog so the new lesson appears
+            } catch let e as LessonScaffolder.AuthorError {
+                errorNote = e.message
+            } catch {
+                errorNote = "Couldn't author the lesson. Please try again."
+            }
+        }
     }
 }
