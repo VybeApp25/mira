@@ -19,6 +19,11 @@ enum SuccessObserver {
             return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleId
         case .darkModeEnabled:
             return isDarkMode()
+        case .visualState:
+            // Vision verification is async + costly → not pollable here. The engine
+            // drives it on a throttled cadence via VisionStateVerifier and treats a
+            // confident "yes" as a `.visionObserved` completion. See learn_along.md.
+            return nil
         case .userConfirmation:
             return nil
         }

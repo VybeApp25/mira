@@ -259,6 +259,7 @@
 		C1670E21C86DE21B68A77C5B /* AgentHUDColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA12B26A9743FAB1D118372 /* AgentHUDColumnView.swift */; };
 		C210BB6ACEAA7C8C58BBF99B /* connection-question.wav in Resources */ = {isa = PBXBuildFile; fileRef = D21BA97FA57DFB6C3315A4D3 /* connection-question.wav */; };
 		C325801C8A507F417362A245 /* github-pr-workflow.md in Resources */ = {isa = PBXBuildFile; fileRef = B39AB07565BD483C4C55CD53 /* github-pr-workflow.md */; };
+		C35EC43AC73ACA71607F8539 /* VisionStateVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3BE420BD2D4BCA710F3EE4 /* VisionStateVerifier.swift */; };
 		C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */; };
 		C3F5CA4D3E6727EBBB54E5DF /* CalendarTodayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93490CFC9E751F8742BD6C34 /* CalendarTodayService.swift */; };
 		C5BF65EFC345902777F0F8CD /* computer-use.md in Resources */ = {isa = PBXBuildFile; fileRef = CECF49A88AB42C914BD34504 /* computer-use.md */; };
@@ -577,6 +578,7 @@
 		AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalMetricsView.swift; sourceTree = "<group>"; };
 		AAC4FD2846DA1EEBA136C9D7 /* ErrorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorService.swift; sourceTree = "<group>"; };
 		ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishingAgent.swift; sourceTree = "<group>"; };
+		AC3BE420BD2D4BCA710F3EE4 /* VisionStateVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionStateVerifier.swift; sourceTree = "<group>"; };
 		AE6854B359F14D11ED97A532 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsTabView.swift; sourceTree = "<group>"; };
 		AE9E1DFF7D815C5E623E1EDD /* clicky-text-open.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-text-open.wav"; sourceTree = "<group>"; };
@@ -1030,6 +1032,7 @@
 				9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */,
 				98F02790237BC05D9DA6AF4B /* UsageLogService.swift */,
 				B29A4049793E083EAA037BB4 /* UserKnowledgeStore.swift */,
+				AC3BE420BD2D4BCA710F3EE4 /* VisionStateVerifier.swift */,
 				D113AC6430C7DCCF0D20698D /* VoicePreviewService.swift */,
 				16778FFCF54471FB1ABBB110 /* VoiceService.swift */,
 				803E550071C015B2092E04A1 /* WakeWordService.swift */,
@@ -1569,6 +1572,7 @@
 				D6BE575778D49F37EFB6324B /* UsageLogService.swift in Sources */,
 				D21590CBAA9253D716FA335E /* UserKnowledge.swift in Sources */,
 				7C99EFBDAFDA988D7D688D23 /* UserKnowledgeStore.swift in Sources */,
+				C35EC43AC73ACA71607F8539 /* VisionStateVerifier.swift in Sources */,
 				A86BC74E8A27B141F9C8924D /* VoicePreviewService.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
 				A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */,

@@ -20,6 +20,15 @@ enum SuccessCheck: Equatable {
     case appFrontmost(bundleId: String)
     /// Observed: macOS is now in Dark Mode (read directly from the system).
     case darkModeEnabled
+    /// Observed by VISION: a described visible outcome is now true on screen
+    /// ("the Channel rack shows a new FLEX Bass channel"). Unlike the deterministic
+    /// checks above, this is a model verdict, so it is second-class evidence:
+    /// it advances a step only at/above a confidence threshold, is recorded with a
+    /// distinct provenance (`.visionObserved`), and always keeps a userConfirmation
+    /// fallback after the observe window. This is what lets Mira coach inside an
+    /// arbitrary app (a DAW, an editor) instead of falling back to "tap Done".
+    /// See docs/architecture/learn_along.md (LA-0).
+    case visualState(prompt: String)
     /// Not observable by Mira → ask the user ("Done" / "Skip"). Recorded honestly.
     case userConfirmation
 }
@@ -89,6 +98,11 @@ struct TeachingSkill: Equatable, Identifiable {
 enum CompletionProvenance: String {
     case observation
     case userConfirmation
+    /// A VISION verdict satisfied the step (`.visualState`). Recorded distinctly
+    /// from `observation` (a deterministic system read) because a model saying "it
+    /// looks done" is weaker evidence than reading the system state directly — M4
+    /// mastery must never treat the two as equal.
+    case visionObserved
     /// Mira performed the step itself in autonomous mode — recorded distinctly so
     /// it never masquerades as a human confirmation or an observed outcome.
     case autonomous

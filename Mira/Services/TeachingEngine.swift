@@ -142,8 +142,12 @@ final class TeachingEngine: ObservableObject {
             stepGeneration += 1
             confirmedGeneration = nil; skippedGeneration = nil
             automatedInputDetected = false   // fresh step — a prior synthetic-tap warning is cleared
-            // Only user-confirmation steps may be self-certified.
+            // Only user-confirmation steps may be self-certified up front. A
+            // vision-observed step starts as "Mira is watching" (canConfirm false)
+            // and only gains a Done fallback once its observe window lapses; but if
+            // the feature is OFF it degrades to a plain user-confirmation step.
             canConfirm = (step.successCheck == .userConfirmation)
+                || (isVisualStateCase(step) && !learnAlongEnabled)
             canSkip = false
             TelemetryService.shared.track(.stepInstructed(skillId: skill.id, stepId: step.id))
 
@@ -194,6 +198,10 @@ final class TeachingEngine: ObservableObject {
                 TelemetryService.shared.track(.stepCompleted(
                     skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.observation.rawValue))
                 completed += 1
+            case .visionObserved:
+                TelemetryService.shared.track(.stepCompleted(
+                    skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.visionObserved.rawValue))
+                completed += 1
             case .confirmed:
                 TelemetryService.shared.track(.stepCompleted(
                     skillId: skill.id, stepId: step.id, groundedBy: CompletionProvenance.userConfirmation.rawValue))
@@ -218,7 +226,7 @@ final class TeachingEngine: ObservableObject {
         if !Task.isCancelled { stop() }
     }
 
-    private enum StepResult { case observed, confirmed, skipped, cancelled }
+    private enum StepResult { case observed, visionObserved, confirmed, skipped, cancelled }
 
     private func observe(_ step: TeachingStep, generation: Int) async -> StepResult {
         // If the goal is already true when the step begins, it's honestly complete.
@@ -226,26 +234,62 @@ final class TeachingEngine: ObservableObject {
 
         let deadline = Date().addingTimeInterval(step.observeWindow)
         var remediated = false
+        // Space vision checks out (they cost a model call). First check fires one
+        // cadence in, giving the learner a beat to act before Mira looks.
+        var lastVisionAt = Date()
+        let visionStep = isVisionObserved(step)
+        if visionStep { statusLine = "Watching your screen…" }
 
         while !Task.isCancelled {
+            // Deterministic checks (appFrontmost / darkMode) — cheap, every tick.
             if SuccessObserver.isSatisfied(step.successCheck) == true { return .observed }
 
-            // A confirm counts only if it was issued for THIS step's generation, and
-            // only on a user-confirmation step — so an observable step can never be
-            // falsely certified, and a stale tap can never carry forward.
-            if step.successCheck == .userConfirmation, confirmedGeneration == generation {
-                return .confirmed
-            }
+            // A confirm counts only if it was issued for THIS step's generation. The
+            // `confirmStep()` guard (`canConfirm`) is the real gate — so an observable
+            // step, whose canConfirm is never set, can never be falsely certified,
+            // and a stale tap can never carry forward.
+            if confirmedGeneration == generation { return .confirmed }
             if skippedGeneration == generation { return .skipped }
+
+            // Vision-observed step: verify on a throttled cadence. A confident-enough
+            // "yes" advances as `.visionObserved` (recorded distinctly). A "no", a
+            // low-confidence "yes", or a failed call all keep watching — never a
+            // false pass. The user's Done fallback (below) always remains.
+            if visionStep, Date().timeIntervalSince(lastVisionAt) >= visionCadence,
+               let prompt = visualStatePrompt(step) {
+                lastVisionAt = Date()
+                if let verdict = await runVisionCheck(prompt: prompt),
+                   verdict.satisfied, verdict.confidence >= visionAdvanceThreshold {
+                    TelemetryService.shared.track(.stepOutcome(
+                        skillId: skill?.id ?? "", stepId: step.id, result: "vision_verified"))
+                    return .visionObserved
+                }
+                if Task.isCancelled { break }
+            }
 
             if !remediated, Date() > deadline {
                 remediated = true
                 statusLine = step.remediation
                 canSkip = true           // let the user move on after the window
+                // A vision-observed step now also gains a Done fallback: if Mira's
+                // eyes keep missing it, the learner can assert completion themselves
+                // (recorded honestly as userConfirmation, not as an observation).
+                if visionStep { canConfirm = true }
             }
             try? await Task.sleep(nanoseconds: 400_000_000)
         }
         return .cancelled
+    }
+
+    /// One throttled vision verification for a `.visualState` step. Captures the
+    /// cursor display and asks whether the described outcome is now visibly true.
+    private func runVisionCheck(prompt: String) async -> VisionStateVerifier.Verdict? {
+        guard let screens = try? await ScreenCaptureService.captureAllDisplaysAsJPEG(),
+              let primary = screens.first(where: { $0.isCursorScreen }) ?? screens.first else {
+            return nil
+        }
+        return await VisionStateVerifier.shared.verify(
+            description: prompt, screenshotData: primary.imageData)
     }
 
     // MARK: - Grounding + annotation (reuses M1)
@@ -336,6 +380,40 @@ final class TeachingEngine: ObservableObject {
     }
 
     // MARK: - Autonomous mode (opt-in: Settings → Autonomy)
+
+    // MARK: - Learn-Along (LA-0) — vision-verified steps
+    //
+    // When enabled, a `.visualState` step is OBSERVED by vision on a throttled
+    // cadence; a confident-enough verdict advances it (recorded distinctly as
+    // `.visionObserved`). When disabled, a `.visualState` step degrades safely to a
+    // user-confirmed step. Either way the user always has a Done fallback once the
+    // observe window lapses — a model that keeps saying "not yet" can never trap the
+    // learner. See docs/architecture/learn_along.md.
+    /// Defaults to TRUE when unset; only affects lessons that actually declare a
+    /// `.visualState` step (none ship yet), so enabling it is inert until used.
+    private var learnAlongEnabled: Bool {
+        UserDefaults.standard.object(forKey: "mira_learn_along_enabled") as? Bool ?? true
+    }
+    /// Advance only when the model is at least this confident. Higher than the
+    /// grounding gate (0.5): advancing a step is a stronger claim than pointing.
+    private let visionAdvanceThreshold = 0.70
+    /// Minimum seconds between vision checks while observing — bounds cost.
+    private let visionCadence: TimeInterval = 2.5
+
+    /// Whether this step is vision-observed AND the feature is on. When the feature
+    /// is off, a `.visualState` step is treated as `.userConfirmation`.
+    private func isVisionObserved(_ step: TeachingStep) -> Bool {
+        isVisualStateCase(step) && learnAlongEnabled
+    }
+    private func isVisualStateCase(_ step: TeachingStep) -> Bool {
+        if case .visualState = step.successCheck { return true }
+        return false
+    }
+    /// The description a `.visualState` step wants verified, else nil.
+    private func visualStatePrompt(_ step: TeachingStep) -> String? {
+        if case .visualState(let p) = step.successCheck { return p }
+        return nil
+    }
 
     private var autonomousEnabled: Bool { UserDefaults.standard.bool(forKey: "mira_autonomous_enabled") }
     /// Defaults to TRUE when unset so a fresh enable of autonomous mode is cautious.

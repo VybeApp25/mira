@@ -97,11 +97,16 @@ struct StepActionDTO: Codable {
 struct SuccessCheckDTO: Codable {
     let type:     String
     let bundleId: String?
+    /// For `visualState`: the described visible outcome to verify by vision
+    /// ("the export progress bar reached 100%"). Missing → the skill won't load,
+    /// rather than silently degrading to a check that can never pass.
+    let prompt:   String?
 
     func toDomain() -> SuccessCheck? {
         switch type {
         case "appFrontmost":     return bundleId.map { .appFrontmost(bundleId: $0) }
         case "darkModeEnabled":  return .darkModeEnabled
+        case "visualState":      return prompt.map { .visualState(prompt: $0) }
         case "userConfirmation": return .userConfirmation
         default:                 return nil   // unsupported — honest failure, not a fake pass
         }
