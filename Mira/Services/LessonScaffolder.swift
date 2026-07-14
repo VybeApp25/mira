@@ -130,6 +130,113 @@ final class LessonScaffolder: ObservableObject {
         }
     }
 
+    // MARK: - Author from a goal (LA-1)
+
+    struct AuthorError: Error { let message: String; init(_ m: String) { message = m } }
+
+    /// The model's authored lesson: the curriculum plus a title/description we lift
+    /// into the SKILL.md. `steps` reuses the on-disk StepDTO so it's validated by the
+    /// exact same path SkillCatalog uses to load a bundle.
+    private struct AuthoredLesson: Decodable {
+        let title: String
+        let description: String
+        let steps: [StepDTO]
+    }
+
+    /// Authors a REAL lesson for `app` from a plain-language `goal` via the LLM,
+    /// validates it against the honest-load check (every step must decode to a
+    /// success check Mira can actually perform), and writes it as a `scaffolded`
+    /// bundle. Unlike `scaffold(for:)` (a fixed template), this produces goal-specific
+    /// steps that prefer vision-verified outcomes (LA-0). Throws with a human message
+    /// on an empty goal, a malformed model response, or an unsupported check — never
+    /// writes a half-valid bundle. See docs/architecture/learn_along.md (LA-1).
+    @discardableResult
+    func author(goal: String, app: LessonRegistry.AppEntry) async throws -> ScaffoldResult {
+        let goal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard goal.count >= 3 else { throw AuthorError("Tell me what you want to learn first.") }
+
+        let raw: String
+        do {
+            raw = try await ClaudeService(apiKey: AppSecrets.anthropicAPIKey).authorLessonSteps(
+                goal: goal, appName: app.name, bundleId: app.bundleId)
+        } catch {
+            // Surface the real cause (HTTP body / network) instead of a generic
+            // "try again" — trimmed so a huge error body doesn't fill the sheet.
+            let msg = String("\(error)".prefix(180))
+            throw AuthorError("Couldn't reach the lesson author: \(msg)")
+        }
+
+        guard let data = raw.data(using: .utf8),
+              let lesson = try? JSONDecoder().decode(AuthoredLesson.self, from: data) else {
+            throw AuthorError("The generated lesson was malformed. Try rephrasing the goal.")
+        }
+        guard !lesson.steps.isEmpty else { throw AuthorError("The generated lesson had no steps.") }
+        // Validate through the SAME gate SkillCatalog uses — a step that declares a
+        // check Mira can't perform must fail authoring, not slip onto disk.
+        for s in lesson.steps where s.toDomain() == nil {
+            throw AuthorError("The lesson used an unsupported success check on step “\(s.id)”.")
+        }
+
+        // Unique slug so a second lesson for the same app/goal doesn't clobber the first.
+        let base = Self.slug(for: "\(app.name)-\(goal)")
+        let slug = uniqueSlug(base)
+        let dir  = skillsDir.appendingPathComponent(slug, isDirectory: true)
+        let fm   = FileManager.default
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let manifest = Self.authoredManifest(
+                slug: slug, title: lesson.title, description: lesson.description, app: app)
+            try manifest.write(to: dir.appendingPathComponent("SKILL.md"),
+                               atomically: true, encoding: .utf8)
+            // Re-serialize through SkillStepsDTO so the on-disk file is canonical and
+            // carries our slug as the id (the model doesn't author the id).
+            let stepsDTO = SkillStepsDTO(id: slug, title: lesson.title, steps: lesson.steps)
+            let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+            try enc.encode(stepsDTO).write(to: dir.appendingPathComponent("steps.json"))
+            return ScaffoldResult(skillId: slug, bundleURL: dir)
+        } catch let e as AuthorError {
+            try? fm.removeItem(at: dir); throw e
+        } catch {
+            try? fm.removeItem(at: dir)
+            throw AuthorError("Couldn't save the lesson. Please try again.")
+        }
+    }
+
+    /// Appends -2, -3, … until the slug's folder doesn't already exist.
+    private func uniqueSlug(_ base: String) -> String {
+        let fm = FileManager.default
+        var slug = base, n = 2
+        while fm.fileExists(atPath: skillsDir.appendingPathComponent(slug).path) {
+            slug = "\(base)-\(n)"; n += 1
+        }
+        return slug
+    }
+
+    private static func authoredManifest(slug: String, title: String,
+                                         description: String, app: LessonRegistry.AppEntry) -> String {
+        // Single-line the title/description so the simple frontmatter parser is happy.
+        let t = title.replacingOccurrences(of: "\n", with: " ")
+        let d = description.replacingOccurrences(of: "\n", with: " ")
+        return """
+        ---
+        name: \(slug)
+        title: \(t)
+        description: \(d)
+        domainApp: \(app.bundleId)
+        grounding: \(app.grounding)
+        version: 0.1.0
+        scaffolded: true
+        ---
+
+        # \(t)
+
+        Authored from a goal by Mira's Lesson author, so it's marked `scaffolded: true`
+        and shows as **Unverified** until a real run proves each ring lands and the
+        vision checks fire on the real app. Run it to verify, and refine any step whose
+        target description or success check doesn't quite match what you see.
+        """
+    }
+
     static func slug(for name: String) -> String {
         let lowered = name.lowercased()
         let kebab = lowered.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? Character($0) : "-" }

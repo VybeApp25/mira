@@ -446,6 +446,76 @@ class ClaudeService {
         return Self.stripCodeFences(text)
     }
 
+    /// Learn-Along (LA-1). Given a plain-language goal and the target app, authors a
+    /// teaching LESSON — the `steps.json` curriculum SkillCatalog runs, NOT a
+    /// prompt-skill. Returns the raw JSON text (a {title, description, steps:[…]}
+    /// object). The caller validates it (every step must decode to a supported
+    /// success check) and writes it as a `scaffolded` bundle. Prefers vision-verified
+    /// steps (LA-0) so the lesson can observe real progress in the app.
+    func authorLessonSteps(goal: String, appName: String, bundleId: String) async throws -> String {
+        let system = """
+        You author Mira teaching lessons: short, ordered, on-screen guided steps that \
+        coach a person through doing something in a specific macOS app. You are honest \
+        about what can be verified — you never invent a completion signal Mira can't \
+        actually observe, and you never bake the user's private data into a step.
+        """
+        let prompt = """
+        Author a lesson that teaches this, in \(appName):
+
+        "\(goal)"
+
+        Output ONLY a JSON object (no code fences, no commentary) of this exact shape:
+        {
+          "title": "short human title",
+          "description": "one line describing what the learner will accomplish",
+          "steps": [
+            {
+              "id": "kebab-step-id",
+              "instruction": "what the learner should do, in one or two friendly sentences",
+              "target": { "description": "the on-screen control to point at, described the way you'd point it out to a person" } | null,
+              "successCheck": { … see below … },
+              "remediation": "one line shown if it's taking a while",
+              "observeWindow": 30
+            }
+          ]
+        }
+
+        successCheck MUST be exactly one of:
+          { "type": "appFrontmost", "bundleId": "\(bundleId)" }   — the target app came to the front
+          { "type": "visualState", "prompt": "a concrete, visibly-checkable outcome, e.g. 'the mixer shows a new Reverb send on the master channel'" }
+          { "type": "userConfirmation" }                          — only when nothing visible can be checked
+
+        Rules:
+        - The FIRST step must be `appFrontmost` for \(bundleId) (open the app).
+        - PREFER `visualState`: after each meaningful action, describe the visible result Mira can confirm by looking at the screen. Reserve `userConfirmation` for steps with no observable outcome.
+        - `target` is the control to point at for click-style steps; use null when there's nothing specific to point at (e.g. "type your title").
+        - Never put the user's own private content in an instruction — for steps needing their data, tell them to enter it themselves (target the field, don't fabricate the value).
+        - 3–7 steps. Keep it real and specific to \(appName).
+        """
+        // Use the same model + route as the proven Create-a-Skill authoring path
+        // (`model` = this service's default). The chat proxy allowlists this model;
+        // the vision-only models used by VisionStateVerifier are a different route.
+        let body = APIRequest(
+            model:      model,
+            max_tokens: 1400,
+            system:     system,
+            messages:   [APIMessage(role: "user", content: [.text(prompt)])]
+        )
+        var req = URLRequest(url: baseURL)
+        req.httpMethod = "POST"
+        MiraBackend.authorizeAnthropic(&req, directKey: apiKey)
+        req.setValue("2023-06-01",        forHTTPHeaderField: "anthropic-version")
+        req.setValue("application/json",  forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, resp) = try await MiraBackend.proxyData(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw MiraError.api(String(data: data, encoding: .utf8) ?? "Unknown error")
+        }
+        let text = try JSONDecoder().decode(APIResponse.self, from: data).text
+        return Self.stripCodeFences(text)
+    }
+
     /// Strips a leading/trailing ``` fence if the model wrapped the file in one.
     private static func stripCodeFences(_ text: String) -> String {
         var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
