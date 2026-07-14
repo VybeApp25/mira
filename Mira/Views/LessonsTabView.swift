@@ -369,13 +369,13 @@ private struct ScaffoldSheet: View {
             }
             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
 
-            Text("Describe what you want to learn, then pick the app — Mira authors a lesson with vision-checked steps. Leave the goal blank to get a plain starter. Either opens as **Unverified** until a real run proves it.")
+            Text("Describe what you want to learn — or paste a YouTube tutorial link — then pick the app. Mira authors a lesson with vision-checked steps (a tutorial link also opens alongside when you run it). Leave it blank for a plain starter. Either opens as **Unverified** until a real run proves it.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 16).padding(.bottom, 8)
 
-            TextField("What do you want to learn? (e.g. “add a reverb send”)", text: $goal)
+            TextField("A goal (“add a reverb send”) or a YouTube tutorial link", text: $goal)
                 .textFieldStyle(.roundedBorder)
                 .disabled(authoringApp != nil)
                 .padding(.horizontal, 16).padding(.bottom, 6)
@@ -436,13 +436,40 @@ private struct ScaffoldSheet: View {
         .onAppear { scaffolder.loadRegistry() }
     }
 
-    /// A goal → author a real lesson via the LLM; no goal → the fixed template starter.
+    /// A YouTube URL → author from that tutorial; a goal → author via the LLM; nothing
+    /// → the fixed template starter.
     private func pick(_ app: LessonRegistry.AppEntry) {
         note = nil; errorNote = nil
-        if goal.trimmingCharacters(in: .whitespaces).isEmpty {
+        let text = goal.trimmingCharacters(in: .whitespaces)
+        if text.isEmpty {
             templateScaffold(app)
+        } else if Self.isYouTubeURL(text) {
+            authorTutorial(app)
         } else {
             authorLesson(app)
+        }
+    }
+
+    private static func isYouTubeURL(_ s: String) -> Bool {
+        let l = s.lowercased()
+        return (l.contains("youtube.com/") || l.contains("youtu.be/"))
+            && (l.hasPrefix("http://") || l.hasPrefix("https://"))
+    }
+
+    private func authorTutorial(_ app: LessonRegistry.AppEntry) {
+        authoringApp = app.bundleId
+        let url = goal
+        Task {
+            defer { authoringApp = nil }
+            do {
+                let result = try await scaffolder.authorFromTutorial(url: url, app: app)
+                note = "Authored “\(result.skillId)” from the tutorial for \(app.name) — find it in Lessons (Unverified)."
+                onDone()
+            } catch let e as LessonScaffolder.AuthorError {
+                errorNote = e.message
+            } catch {
+                errorNote = "Couldn't author from that tutorial. Please try again."
+            }
         }
     }
 

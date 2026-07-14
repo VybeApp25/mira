@@ -154,40 +154,61 @@ final class LessonScaffolder: ObservableObject {
     func author(goal: String, app: LessonRegistry.AppEntry) async throws -> ScaffoldResult {
         let goal = goal.trimmingCharacters(in: .whitespacesAndNewlines)
         guard goal.count >= 3 else { throw AuthorError("Tell me what you want to learn first.") }
+        let raw = try await callAuthor(goal: goal, app: app, transcript: nil)
+        return try writeAuthored(raw, app: app, slugSeed: "\(app.name)-\(goal)", tutorialURL: nil)
+    }
 
-        let raw: String
+    /// LA-2: authors a lesson FROM a YouTube tutorial. Fetches the transcript via the
+    /// `youtube_transcript` skill, hands it to the author so the steps mirror the
+    /// tutorial, and records the video URL so the lesson can open it alongside.
+    @discardableResult
+    func authorFromTutorial(url: String, app: LessonRegistry.AppEntry) async throws -> ScaffoldResult {
+        let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = await PythonSkillRunner.shared.run(skill: "youtube_transcript", args: ["url": url])
+        guard (result["success"] as? Bool) == true,
+              let transcript = result["text"] as? String, transcript.count > 40 else {
+            let why = (result["error"] as? String) ?? "no transcript found"
+            throw AuthorError("Couldn't read that tutorial's transcript: \(why)")
+        }
+        let raw = try await callAuthor(goal: "", app: app, transcript: transcript)
+        return try writeAuthored(raw, app: app, slugSeed: "\(app.name)-tutorial", tutorialURL: url)
+    }
+
+    // MARK: - Shared author plumbing
+
+    private func callAuthor(goal: String, app: LessonRegistry.AppEntry, transcript: String?) async throws -> String {
         do {
-            raw = try await ClaudeService(apiKey: AppSecrets.anthropicAPIKey).authorLessonSteps(
-                goal: goal, appName: app.name, bundleId: app.bundleId)
+            return try await ClaudeService(apiKey: AppSecrets.anthropicAPIKey).authorLessonSteps(
+                goal: goal, appName: app.name, bundleId: app.bundleId, transcript: transcript)
         } catch {
             // Surface the real cause (HTTP body / network) instead of a generic
             // "try again" — trimmed so a huge error body doesn't fill the sheet.
-            let msg = String("\(error)".prefix(180))
-            throw AuthorError("Couldn't reach the lesson author: \(msg)")
+            throw AuthorError("Couldn't reach the lesson author: \(String("\(error)".prefix(180)))")
         }
+    }
 
+    /// Validates the model's JSON through the SAME gate SkillCatalog uses to load a
+    /// bundle (an unsupported check fails authoring, never writes a half-valid lesson),
+    /// then writes a `scaffolded` (Unverified) bundle, optionally recording a tutorial URL.
+    private func writeAuthored(_ raw: String, app: LessonRegistry.AppEntry,
+                               slugSeed: String, tutorialURL: String?) throws -> ScaffoldResult {
         guard let data = raw.data(using: .utf8),
               let lesson = try? JSONDecoder().decode(AuthoredLesson.self, from: data) else {
-            throw AuthorError("The generated lesson was malformed. Try rephrasing the goal.")
+            throw AuthorError("The generated lesson was malformed. Try again.")
         }
         guard !lesson.steps.isEmpty else { throw AuthorError("The generated lesson had no steps.") }
-        // Validate through the SAME gate SkillCatalog uses — a step that declares a
-        // check Mira can't perform must fail authoring, not slip onto disk.
         for s in lesson.steps where s.toDomain() == nil {
             throw AuthorError("The lesson used an unsupported success check on step “\(s.id)”.")
         }
 
-        // Unique slug so a second lesson for the same app/goal doesn't clobber the first.
-        let base = Self.slug(for: "\(app.name)-\(goal)")
-        let slug = uniqueSlug(base)
+        let slug = uniqueSlug(Self.slug(for: slugSeed))
         let dir  = skillsDir.appendingPathComponent(slug, isDirectory: true)
         let fm   = FileManager.default
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            let manifest = Self.authoredManifest(
-                slug: slug, title: lesson.title, description: lesson.description, app: app)
-            try manifest.write(to: dir.appendingPathComponent("SKILL.md"),
-                               atomically: true, encoding: .utf8)
+            try Self.authoredManifest(slug: slug, title: lesson.title,
+                                      description: lesson.description, app: app, tutorialURL: tutorialURL)
+                .write(to: dir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
             // Re-serialize through SkillStepsDTO so the on-disk file is canonical and
             // carries our slug as the id (the model doesn't author the id).
             let stepsDTO = SkillStepsDTO(id: slug, title: lesson.title, steps: lesson.steps)
@@ -212,11 +233,14 @@ final class LessonScaffolder: ObservableObject {
         return slug
     }
 
-    private static func authoredManifest(slug: String, title: String,
-                                         description: String, app: LessonRegistry.AppEntry) -> String {
+    private static func authoredManifest(slug: String, title: String, description: String,
+                                         app: LessonRegistry.AppEntry, tutorialURL: String?) -> String {
         // Single-line the title/description so the simple frontmatter parser is happy.
         let t = title.replacingOccurrences(of: "\n", with: " ")
         let d = description.replacingOccurrences(of: "\n", with: " ")
+        // Only emit tutorialURL when present, on its own frontmatter line.
+        let tutorialLine = tutorialURL.map { "tutorialURL: \($0)\n" } ?? ""
+        let source = tutorialURL == nil ? "a goal" : "a video tutorial"
         return """
         ---
         name: \(slug)
@@ -224,13 +248,13 @@ final class LessonScaffolder: ObservableObject {
         description: \(d)
         domainApp: \(app.bundleId)
         grounding: \(app.grounding)
-        version: 0.1.0
+        \(tutorialLine)version: 0.1.0
         scaffolded: true
         ---
 
         # \(t)
 
-        Authored from a goal by Mira's Lesson author, so it's marked `scaffolded: true`
+        Authored from \(source) by Mira's Lesson author, so it's marked `scaffolded: true`
         and shows as **Unverified** until a real run proves each ring lands and the
         vision checks fire on the real app. Run it to verify, and refine any step whose
         target description or success check doesn't quite match what you see.

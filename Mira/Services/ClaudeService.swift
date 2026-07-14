@@ -452,17 +452,34 @@ class ClaudeService {
     /// object). The caller validates it (every step must decode to a supported
     /// success check) and writes it as a `scaffolded` bundle. Prefers vision-verified
     /// steps (LA-0) so the lesson can observe real progress in the app.
-    func authorLessonSteps(goal: String, appName: String, bundleId: String) async throws -> String {
+    func authorLessonSteps(goal: String, appName: String, bundleId: String,
+                           transcript: String? = nil) async throws -> String {
         let system = """
         You author Mira teaching lessons: short, ordered, on-screen guided steps that \
         coach a person through doing something in a specific macOS app. You are honest \
         about what can be verified — you never invent a completion signal Mira can't \
         actually observe, and you never bake the user's private data into a step.
         """
-        let prompt = """
-        Author a lesson that teaches this, in \(appName):
+        // When a tutorial transcript is supplied (LA-2), base the lesson on it —
+        // translate what the narrator does into concrete on-screen steps in the app.
+        let task: String
+        if let transcript, !transcript.isEmpty {
+            task = """
+            Author a lesson, in \(appName), that walks the learner through what this video \
+            tutorial teaches. Base the steps on the transcript — translate what the \
+            narrator does into concrete, in-order actions in \(appName). Ignore intros, \
+            sponsorships, and asides.
 
-        "\(goal)"
+            GOAL (optional extra focus): \(goal.isEmpty ? "(just follow the tutorial)" : goal)
+
+            TUTORIAL TRANSCRIPT (may be partial):
+            \(String(transcript.prefix(6000)))
+            """
+        } else {
+            task = "Author a lesson that teaches this, in \(appName):\n\n\"\(goal)\""
+        }
+        let prompt = """
+        \(task)
 
         Output ONLY a JSON object (no code fences, no commentary) of this exact shape:
         {

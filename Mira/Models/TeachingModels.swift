@@ -92,6 +92,9 @@ struct TeachingSkill: Equatable, Identifiable {
     /// skills require an actionable AX element under the ring (so an empty-space
     /// mis-ground routes to ASK); vision skills trust the vision point as-is.
     var grounding: String? = nil
+    /// LA-2: a source tutorial (e.g. a YouTube URL) opened alongside when the lesson
+    /// runs, so the learner can watch and do at once.
+    var tutorialURL: String? = nil
 }
 
 /// How a step's completion was established — drives honest mastery later (M4).

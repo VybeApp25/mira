@@ -45,9 +45,14 @@ final class PythonSkillRunner {
 
     /// Run a named bundled skill with JSON-serializable args. Returns the script's JSON output.
     func run(skill: String, args: [String: Any]) async -> [String: Any] {
-        let subdir = "PythonSkills"
+        // The scripts live under Resources/PythonSkills in the source tree, but
+        // Copy-Bundle-Resources flattens non-folder-reference resources to the
+        // Resources root — so look in the subdirectory first, then fall back to the
+        // flat location. (Without the fallback, every skill fails to resolve in a
+        // build where the folder isn't a preserved folder reference.)
         guard let scriptURL = Bundle.main.url(forResource: skill, withExtension: "py",
-                                               subdirectory: subdir) else {
+                                              subdirectory: "PythonSkills")
+                ?? Bundle.main.url(forResource: skill, withExtension: "py") else {
             return ["success": false, "error": "Bundled skill '\(skill)' not found"]
         }
 
@@ -63,7 +68,7 @@ final class PythonSkillRunner {
         }
         defer { try? FileManager.default.removeItem(at: tmpFile) }
 
-        let cmd = "\(pythonBin) \(scriptURL.path.shellEscaped) < \(tmpFile.path.shellEscaped)"
+        let cmd = "\(pythonBin.shellEscaped) \(scriptURL.path.shellEscaped) < \(tmpFile.path.shellEscaped)"
         let raw = await shellRun(cmd, timeout: 60)
 
         // Try to parse JSON from first complete JSON object in output
