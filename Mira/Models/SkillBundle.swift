@@ -26,6 +26,7 @@ struct SkillManifest: Identifiable, Equatable {
     let bundleURL:   URL           // the skill folder
     var title:       String? = nil // optional human title; falls back to humanized name
     var scaffolded:  Bool = false  // machine-generated starter; "Unverified" until a real grounded run
+    var tutorialURL: String? = nil // LA-2: a source tutorial to open alongside the lesson
 
     /// Human-facing lesson name. Uses the manifest `title` if present, otherwise
     /// humanizes the kebab id ("xcode-run-and-read" → "Xcode Run And Read").

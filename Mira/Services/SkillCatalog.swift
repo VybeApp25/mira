@@ -64,7 +64,8 @@ final class SkillCatalog: ObservableObject {
         guard !steps.isEmpty else { return .failure(.init("\(manifest.name) has no steps")) }
         return .success(TeachingSkill(id: dto.id, title: dto.title, steps: steps,
                                       domainApp: manifest.domainApp,
-                                      grounding: manifest.grounding))
+                                      grounding: manifest.grounding,
+                                      tutorialURL: manifest.tutorialURL))
     }
 
     // MARK: - Scan
@@ -131,7 +132,8 @@ final class SkillCatalog: ObservableObject {
             version: fields["version"],
             bundleURL: bundleURL,
             title: fields["title"],
-            scaffolded: (fields["scaffolded"]?.lowercased() == "true"))
+            scaffolded: (fields["scaffolded"]?.lowercased() == "true"),
+            tutorialURL: fields["tutorialURL"])
     }
 
     // MARK: - Seed built-ins

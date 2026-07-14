@@ -62,6 +62,11 @@ final class TeachingEngine: ObservableObject {
         // target app and overlap the on-screen ring. The bottom HUD guides the
         // lesson from here; the screen-top stays clear for the real app.
         NotificationCenter.default.post(name: .miraRequestCollapse, object: nil)
+        // LA-2: a lesson authored from a tutorial opens it alongside, so the learner
+        // can watch and do at once. Best-effort — never blocks the lesson.
+        if let t = skill.tutorialURL, let url = URL(string: t) {
+            BrowserService.shared.open(url)
+        }
         TelemetryService.shared.track(.lessonStarted(skillId: skill.id, totalSteps: skill.steps.count))
         let startAt = max(0, min(fromStepIndex, skill.steps.count - 1))
         runTask = Task { await run(skill, from: startAt) }
