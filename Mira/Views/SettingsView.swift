@@ -70,12 +70,13 @@ struct SettingsView: View {
     @ObservedObject private var menuBar = MenuBarIconManager.shared
 
     enum RecordingTarget {
-        case voice, text, draw
+        case voice, text, draw, dictate
         var defaultConfig: ShortcutConfig {
             switch self {
-            case .voice: return .defaultVoice
-            case .text:  return .defaultText
-            case .draw:  return .defaultDraw
+            case .voice:   return .defaultVoice
+            case .text:    return .defaultText
+            case .draw:    return .defaultDraw
+            case .dictate: return .defaultDictate
             }
         }
     }
@@ -546,9 +547,10 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.5))
 
-            shortcutRow(label: "Talk to Mira",   config: $shortcuts.voice, target: .voice)
-            shortcutRow(label: "Text Mira",      config: $shortcuts.text,  target: .text)
-            shortcutRow(label: "Draw on screen", config: $shortcuts.draw,  target: .draw)
+            shortcutRow(label: "Talk to Mira",     config: $shortcuts.voice,   target: .voice)
+            shortcutRow(label: "Text Mira",        config: $shortcuts.text,    target: .text)
+            shortcutRow(label: "Draw on screen",   config: $shortcuts.draw,    target: .draw)
+            shortcutRow(label: "Dictate anywhere", config: $shortcuts.dictate, target: .dictate)
 
             HStack {
                 VStack(alignment: .leading, spacing: 3) {

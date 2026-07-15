@@ -112,6 +112,34 @@ final class AXActuationService {
         return readValue(of: el) ?? ""
     }
 
+    /// Insert `text` at the caret of the SYSTEM-WIDE focused UI element — i.e.
+    /// whatever text field the user is typing in right now, in ANY frontmost app.
+    /// Unlike `setTextValue` (which replaces a whole field found by role under a
+    /// specific app), this targets the live keyboard-focus element and inserts at
+    /// the caret via kAXSelectedText, so existing content and cursor position are
+    /// preserved. This is the primary path for dictate-anywhere. Returns false when
+    /// the focused element doesn't expose a settable selection (AX-poor apps like
+    /// Electron/Chromium canvases) — the caller then falls back to a paste.
+    @discardableResult
+    func insertTextAtSystemFocus(_ text: String) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        let sysWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(sysWide, messagingTimeoutSeconds)
+
+        var focusedRef: AnyObject?
+        guard AXUIElementCopyAttributeValue(sysWide, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+              let focused = focusedRef, CFGetTypeID(focused) == AXUIElementGetTypeID() else {
+            return false
+        }
+        let el = focused as! AXUIElement
+
+        // Setting kAXSelectedText replaces the current selection (or inserts at the
+        // caret when the selection is empty) — the exact semantics dictation wants.
+        guard isSettable(kAXSelectedTextAttribute as CFString, on: el) else { return false }
+        let err = AXUIElementSetAttributeValue(el, kAXSelectedTextAttribute as CFString, text as CFTypeRef)
+        return err == .success
+    }
+
     /// Read back a text element's current value — used to verify a write landed.
     func readTextValue(titled: String? = nil, inBundleID bundleID: String) throws -> String {
         let root = try actuationRoot(forBundleID: bundleID)

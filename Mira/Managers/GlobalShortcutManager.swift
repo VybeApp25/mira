@@ -17,6 +17,10 @@ extension Notification.Name {
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
     static let miraPushToTalkEnded        = Notification.Name("miraPushToTalkEnded")
+    // Dictate-anywhere (⌃⌥S) — hold to speak; the transcript is inserted into the
+    // focused text field of whatever app is frontmost (not Mira's own chat).
+    static let miraDictateBegan           = Notification.Name("miraDictateBegan")
+    static let miraDictateEnded           = Notification.Name("miraDictateEnded")
     // Draw-on-screen spatial context (⌃⌥D) — toggles the freehand draw overlay
     static let miraDrawModeToggled        = Notification.Name("miraDrawModeToggled")
     // Notch-based onboarding flow
@@ -87,6 +91,13 @@ private func miraHotKeyHandler(
             if !isRelease {
                 NotificationCenter.default.post(name: .miraShowClipboard, object: nil)
             }
+        case 5:
+            // Dictate-anywhere is hold-to-talk: press begins capture, release commits.
+            if isRelease {
+                NotificationCenter.default.post(name: .miraDictateEnded, object: nil)
+            } else {
+                NotificationCenter.default.post(name: .miraDictateBegan, object: nil)
+            }
         default: break
         }
     }
@@ -102,6 +113,7 @@ final class GlobalShortcutManager {
     private var voiceRef:     EventHotKeyRef?
     private var textRef:      EventHotKeyRef?
     private var drawRef:      EventHotKeyRef?
+    private var dictateRef:   EventHotKeyRef?
     private var clipboardRef: EventHotKeyRef?
     private var handlerRef:   EventHandlerRef?
 
@@ -134,9 +146,10 @@ final class GlobalShortcutManager {
     }
 
     private func register() {
-        apply(ShortcutStore.shared.voice, id: 1, into: &voiceRef)
-        apply(ShortcutStore.shared.text,  id: 2, into: &textRef)
-        apply(ShortcutStore.shared.draw,  id: 3, into: &drawRef)
+        apply(ShortcutStore.shared.voice,   id: 1, into: &voiceRef)
+        apply(ShortcutStore.shared.text,    id: 2, into: &textRef)
+        apply(ShortcutStore.shared.draw,    id: 3, into: &drawRef)
+        apply(ShortcutStore.shared.dictate, id: 5, into: &dictateRef)
         // ⌃⌘V — clipboard history panel (hardcoded, not user-configurable yet)
         var clipHKID = EventHotKeyID(signature: Self.sig, id: 4)
         // keyCode 9 = V, carbonMods = cmdKey | controlKey
@@ -154,10 +167,12 @@ final class GlobalShortcutManager {
         if let r = voiceRef     { UnregisterEventHotKey(r) }
         if let r = textRef      { UnregisterEventHotKey(r) }
         if let r = drawRef      { UnregisterEventHotKey(r) }
+        if let r = dictateRef   { UnregisterEventHotKey(r) }
         if let r = clipboardRef { UnregisterEventHotKey(r) }
         voiceRef     = nil
         textRef      = nil
         drawRef      = nil
+        dictateRef   = nil
         clipboardRef = nil
     }
 }

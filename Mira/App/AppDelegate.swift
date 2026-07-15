@@ -80,6 +80,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         MiraCursorManager.shared.activate()
         AgentHUDWindowManager.shared.start()
 
+        // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused
+        // field, plus its "Dictating…" pill. Wiring only — hotkey is registered by
+        // GlobalShortcutManager; these observe the began/ended notifications.
+        DictationAnywhereService.shared.start()
+        DictationHUDWindowManager.shared.start()
+
         // Start Point Follow-Up monitor if previously enabled
         if UserDefaults.standard.bool(forKey: "mira_point_follow_up_enabled") {
             PointFollowUpService.shared.start()

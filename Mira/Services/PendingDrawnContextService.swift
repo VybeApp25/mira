@@ -91,6 +91,24 @@ struct DrawnContext {
         return img.miraDownscaledJPEG(maxWidth: maxWidth, quality: quality)?.base64EncodedString()
     }
 
+    /// A tight NSImage crop around just the marked region (with the ink visible) —
+    /// the vision input for the Website Editor's spatial edit, so the model sees
+    /// exactly which element was circled. Falls back to the full annotated capture.
+    func markedCropImage(padding: CGFloat = 0.10) -> NSImage {
+        guard let cg = annotatedImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return annotatedImage
+        }
+        let W = CGFloat(cg.width), H = CGFloat(cg.height)
+        let b = normalizedBoundingRect
+        let minX = max(0, b.minX - padding), minY = max(0, b.minY - padding)
+        let maxX = min(1, b.maxX + padding), maxY = min(1, b.maxY + padding)
+        let crop = CGRect(x: minX * W, y: minY * H, width: (maxX - minX) * W, height: (maxY - minY) * H)
+        guard crop.width >= 8, crop.height >= 8, let cropped = cg.cropping(to: crop) else {
+            return annotatedImage
+        }
+        return NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height))
+    }
+
     /// Write the annotated capture to a temp PNG for the Codex CLI lane (which can
     /// only take string args, not image bytes). Returns the file path, or nil.
     func writeTempPNG() -> String? {
