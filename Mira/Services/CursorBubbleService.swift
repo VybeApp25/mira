@@ -75,7 +75,7 @@ struct CursorMessageBubbleView: View {
     // Word-by-word flow layout with spring reveal
     // (CursorMessageBubbleWordRevealModifier + CursorMessageBubbleWordToken)
     private var wordFlow: some View {
-        BubbleFlowLayout(spacing: 3) {
+        BubbleFlowLayout(spacing: 4) {
             ForEach(Array(words.enumerated()), id: \.element.id) { idx, token in
                 Text(token.text)
                     .font(.system(size: 12.5, weight: .medium))

@@ -88,6 +88,11 @@ final class OverlayWindowManager {
     private var lastMouseGlobal: CGPoint = .zero
 
     private var bubbleHideTask: Task<Void, Never>?
+    // Raw streamed text not yet committed as a word. Realtime deltas arrive as
+    // subword fragments ("S","OM","EB","ODY") and standalone punctuation, so we
+    // accumulate here and only emit a bubble word once a whitespace boundary
+    // proves it complete — otherwise every fragment renders as its own gapped token.
+    private var bubblePending = ""
     private var voiceStateCancellable: AnyCancellable?
 
     private init() {
@@ -281,16 +286,41 @@ final class OverlayWindowManager {
     func showBubble() {
         bubbleHideTask?.cancel()
         model.bubbleWords = []
+        bubblePending = ""
         model.cursorPosition = NSEvent.mouseLocation
         model.showBubble = true
     }
 
     func appendBubbleToken(_ token: String) {
-        let words = token.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        for w in words { model.bubbleWords.append(BubbleWordToken(text: w + " ")) }
+        bubblePending += token
+        // Split on whitespace only — punctuation stays glued to its word ("up,").
+        // The trailing fragment is only a complete word once whitespace follows
+        // it; until then we hold it back so subword pieces don't render gapped.
+        let endsOnBoundary = bubblePending.last?.isWhitespace ?? false
+        var words = bubblePending.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard !words.isEmpty else { return }   // buffer was all whitespace
+        if endsOnBoundary {
+            bubblePending = ""
+        } else if words[words.count - 1].count >= Self.bubbleMaxWordLen {
+            // Spaceless script (CJK/Thai) or a very long token: no whitespace
+            // boundary will ever arrive, so committing on whitespace alone would
+            // buffer the ENTIRE reply into one giant Text and hang the main
+            // thread. Flush the long tail in chunks so it renders progressively.
+            bubblePending = ""
+        } else {
+            bubblePending = words.removeLast()   // hold the in-progress word
+        }
+        for w in words { model.bubbleWords.append(BubbleWordToken(text: w)) }
     }
+    // Longer than any real spoken English word; caps spaceless-script runs so the
+    // bubble always commits progressively instead of collapsing into one token.
+    private static let bubbleMaxWordLen = 24
 
     func finishBubble() {
+        // Flush the final in-progress word (no trailing whitespace ever arrives).
+        let tail = bubblePending.trimmingCharacters(in: .whitespaces)
+        if !tail.isEmpty { model.bubbleWords.append(BubbleWordToken(text: tail)) }
+        bubblePending = ""
         bubbleHideTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 4_500_000_000)   // HeyClicky-style ~4.5s fade
             guard !Task.isCancelled else { return }
