@@ -2,41 +2,6 @@ import AppKit
 import SwiftUI
 import Combine
 
-// MARK: - Background cursor hiding (private CoreGraphics SPI)
-// CGDisplayHideCursor only suppresses the system cursor while the calling app
-// is frontmost. Mira is an .accessory app and is never frontmost, so the hide
-// is a no-op by default. The private "SetsCursorInBackground" connection
-// property lifts that restriction, letting CGDisplayHideCursor work from the
-// background. Symbols are resolved via dlsym so a future macOS that drops them
-// degrades gracefully (the system cursor simply stays visible) instead of
-// failing to launch. The hide is reference-counted on this process's
-// WindowServer connection, so if Mira crashes the cursor reappears
-// automatically — there is no "stuck invisible cursor" failure mode.
-enum BackgroundCursorHider {
-    private typealias MainConnFn = @convention(c) () -> Int32
-    private typealias SetPropFn  = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
-
-    /// Idempotent — evaluated once. Returns true if the property was set.
-    @discardableResult
-    static func enable() -> Bool { enabled }
-
-    private static let enabled: Bool = {
-        guard let handle = dlopen(nil, RTLD_NOW) else { return false }
-        defer { dlclose(handle) }
-        guard let connSym = dlsym(handle, "CGSMainConnectionID"),
-              let propSym = dlsym(handle, "CGSSetConnectionProperty") else {
-            NSLog("[Mira] background cursor hide unavailable (CGS symbols missing)")
-            return false
-        }
-        let mainConn = unsafeBitCast(connSym, to: MainConnFn.self)
-        let setProp  = unsafeBitCast(propSym, to: SetPropFn.self)
-        let cid = mainConn()
-        let err = setProp(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
-        NSLog("[Mira] SetsCursorInBackground => err=%d", err)
-        return err == 0
-    }()
-}
-
 // MARK: - Cursor states (matches HeyClicky's BlueCursorView states)
 
 enum MiraCursorState: Equatable {
@@ -51,10 +16,13 @@ enum MiraCursorState: Equatable {
 
 @MainActor
 final class OverlayModel: ObservableObject {
+    // Only used to anchor the streaming bubble to the real pointer while it is shown.
+    // The companion cursor itself is positioned imperatively (see below), never through
+    // this — so idle motion never triggers a SwiftUI re-eval.
     @Published var cursorPosition: CGPoint = .zero
     @Published var cursorState: MiraCursorState = .arrow
-    @Published var bubbleWords: [BubbleWordToken] = []
     @Published var showBubble: Bool = false
+    @Published var bubbleWords: [BubbleWordToken] = []
 }
 
 struct BubbleWordToken: Identifiable {
@@ -63,9 +31,31 @@ struct BubbleWordToken: Identifiable {
 }
 
 // MARK: - OverlayWindowManager
-// HeyClicky's OverlayWindowManager equivalent: one full-screen transparent
-// NSWindow per display. Both cursor and bubble live inside the same window,
-// so they are always in sync and never suffer the separate-panel drift issue.
+//
+// HeyClicky-exact cursor implementation — verified against HeyClicky's live behavior
+// and its binary (which links NSCursor + cursor-rect selectors and links NEITHER
+// CGDisplayHideCursor nor any cursor-tracking event tap; its dedicated-thread tap is
+// the Escape-interrupt tap, not a cursor tracker).
+//
+// The key insight, confirmed on screen: HeyClicky NEVER hides the real system cursor.
+// Its blue cursor is a DETACHED COMPANION — a drawn element that trails the real pointer
+// at a fixed offset (~+30, +26 pt, down-right), living in a click-through overlay. That
+// is exactly why it feels native: you still aim and click with the real, hardware-drawn
+// system cursor (which cannot lag), and the blue companion sits off to the side where any
+// tracking latency reads as natural "following", never as a laggy pointer. (This is the
+// meaning of HeyClicky's `DetachedCursorClickCatcherView`.)
+//
+// Mira's old design did the opposite — it HID the real cursor and pinned a fake one to
+// the pointer tip, so every stutter landed on the exact thing you were aiming with. This
+// rewrite drops that entirely:
+//   • The system cursor is never hidden or replaced — no CGDisplayHideCursor, no
+//     SetsCursorInBackground SPI, no NSCursor override, no failure mode where the pointer
+//     goes invisible.
+//   • The overlay is fully click-through (ignoresMouseEvents = true), so every click is
+//     handled by the real cursor natively — nothing is caught or re-posted.
+//   • The blue companion is positioned imperatively (setFrameOrigin) from a passive
+//     global mouse monitor — a single layer move per event, no SwiftUI body re-eval. Its
+//     detached offset masks the monitor's slight latency.
 
 @MainActor
 final class OverlayWindowManager {
@@ -73,36 +63,40 @@ final class OverlayWindowManager {
 
     let model = OverlayModel()
 
+    // The companion sits down-right of the real cursor, matching HeyClicky's offset.
+    // AppKit global coords are bottom-left origin, so "down" is negative y.
+    private static let companionOffset = CGVector(dx: 30, dy: -26)
+    // Where the drawn arrow's tip sits inside its 44×44 host (top-left origin).
+    private static let tipInHost = CGPoint(x: 3, y: 3)
+    private static let hostSize: CGFloat = 44
+
     private var overlayWindows: [CGDirectDisplayID: NSWindow] = [:]
-    private var trackingTimer: Timer?
+    // The blue companion, one layer-backed host per display, positioned imperatively so a
+    // fast flick costs a single setFrameOrigin — never a SwiftUI diff.
+    private var cursorHosts: [CGDirectDisplayID: NSHostingView<CompanionCursorView>] = [:]
+    private var currentDisplay: CGDirectDisplayID?
+
+    // Passive monitors that feed the companion its position. Global sees events headed to
+    // other apps (the common case, since our overlay is click-through and Mira is an
+    // accessory app); local covers the pointer moving over Mira's own windows. Neither
+    // catches anything — events are observed and pass through untouched.
+    private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
     private var displayObserver: Any?
     private var active = false
-    // While paused, the custom cursor is hidden and the real system cursor is
-    // restored — used when a system modal (Sparkle's update dialog) is on screen
-    // so the user can see the pointer to click it.
     private var paused = false
-    // CGDisplayHideCursor/ShowCursor is reference counted: the cursor is only
-    // visible once Show has balanced every Hide. The tracking timer issues a Hide
-    // every frame, so this count climbs steadily — track it so pauseForModal can
-    // fully drain it at once and the real cursor reappears immediately.
-    private var hideCount = 0
+    private var lastMouseGlobal: CGPoint = .zero
+
     private var bubbleHideTask: Task<Void, Never>?
     private var voiceStateCancellable: AnyCancellable?
 
     private init() {
-        // Restore the real cursor whenever a system modal asks the overlays to
-        // step aside (see UpdateService / MiraIslandWindowManager). Guarded on
-        // `active`, so these are no-ops when the companion isn't running.
         NotificationCenter.default.addObserver(
             forName: .miraSuspendForModal, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pauseForModal() }
-        }
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.pauseForModal() } }
         NotificationCenter.default.addObserver(
             forName: .miraResumeFromModal, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.resumeFromModal() }
-        }
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.resumeFromModal() } }
     }
 
     // MARK: - Lifecycle
@@ -110,73 +104,176 @@ final class OverlayWindowManager {
     func activate() {
         guard !active else { return }
         active = true
-        // Lift the frontmost-only restriction so the hide below works from this
-        // background (.accessory) app — otherwise the system cursor stays visible
-        // alongside the custom blue cursor.
-        BackgroundCursorHider.enable()
-        CGDisplayHideCursor(kCGNullDirectDisplay)
-        hideCount += 1
         buildOverlaysForAllScreens()
-        startTracking()
+        startMouseMonitors()
+        positionCompanion(at: NSEvent.mouseLocation)   // place it immediately
         watchDisplayChanges()
         observeVoiceState()
-    }
-
-    // Turn the cursor into an animated accent-colored waveform while Mira speaks,
-    // back to the arrow otherwise. setCursorState had no driver before this.
-    private func observeVoiceState() {
-        voiceStateCancellable = RealtimeVoiceService.shared.$state
-            .sink { [weak self] state in
-                guard let self else { return }
-                let next: MiraCursorState = (state == .speaking) ? .speaking : .arrow
-                guard self.model.cursorState != next else { return }
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    self.model.cursorState = next
-                }
-            }
     }
 
     func deactivate() {
         guard active else { return }
         active = false
-        trackingTimer?.invalidate()
-        trackingTimer = nil
+        stopMouseMonitors()
         bubbleHideTask?.cancel()
         voiceStateCancellable?.cancel()
         voiceStateCancellable = nil
-        model.cursorState = .arrow
-        if let obs = displayObserver {
-            NotificationCenter.default.removeObserver(obs)
-            displayObserver = nil
-        }
+        if let obs = displayObserver { NotificationCenter.default.removeObserver(obs); displayObserver = nil }
         overlayWindows.values.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll()
-        CGDisplayShowCursor(kCGNullDirectDisplay)
+        cursorHosts.removeAll()
+        currentDisplay = nil
+        model.cursorState = .arrow
+        // Nothing to restore: we never hid or replaced the system cursor.
     }
 
     // MARK: - Modal pause / resume
+    // A system modal (Sparkle) is up — just drop the companion out of the way. There is
+    // no cursor to "give back" since the real one was never taken.
 
-    /// Hide the custom cursor overlay and bring the real system cursor back so
-    /// the user can see the pointer to click a system modal.
     func pauseForModal() {
         guard active, !paused else { return }
         paused = true
         overlayWindows.values.forEach { $0.orderOut(nil) }
-        // Balance every Hide we've issued in one shot so the real cursor appears
-        // instantly. Other apps may have re-shown the cursor (pushing the real
-        // count below ours); the extra Show calls below zero are harmless no-ops.
-        while hideCount > 0 {
-            CGDisplayShowCursor(kCGNullDirectDisplay)
-            hideCount -= 1
-        }
     }
 
-    /// Restore the custom cursor after the modal is dismissed. The tracking timer
-    /// re-asserts the system-cursor hide on its next tick.
     func resumeFromModal() {
         guard active, paused else { return }
         paused = false
         overlayWindows.values.forEach { $0.orderFrontRegardless() }
+        positionCompanion(at: NSEvent.mouseLocation)
+    }
+
+    // MARK: - Cursor state (cold path)
+
+    func setCursorState(_ state: MiraCursorState) {
+        guard model.cursorState != state else { return }
+        withAnimation(.easeInOut(duration: 0.18)) { model.cursorState = state }
+    }
+
+    // Speaking → animated accent waveform; otherwise arrow. (Only driver of state today.)
+    private func observeVoiceState() {
+        voiceStateCancellable = RealtimeVoiceService.shared.$state
+            .sink { [weak self] state in
+                self?.setCursorState(state == .speaking ? .speaking : .arrow)
+            }
+    }
+
+    // MARK: - Mouse tracking (hot path)
+
+    private func startMouseMonitors() {
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged,
+                                           .rightMouseDragged, .otherMouseDragged]
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            MainActor.assumeIsolated { self?.positionCompanion(at: NSEvent.mouseLocation) }
+        }
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            MainActor.assumeIsolated { self?.positionCompanion(at: NSEvent.mouseLocation) }
+            return event
+        }
+    }
+
+    private func stopMouseMonitors() {
+        if let m = globalMouseMonitor { NSEvent.removeMonitor(m); globalMouseMonitor = nil }
+        if let m = localMouseMonitor  { NSEvent.removeMonitor(m); localMouseMonitor  = nil }
+    }
+
+    /// Place the blue companion offset from the real pointer. `mouse` is AppKit global
+    /// (bottom-left origin). No SwiftUI involved — a single layer move.
+    private func positionCompanion(at mouse: CGPoint) {
+        guard active, !paused else { return }
+        lastMouseGlobal = mouse
+
+        let target = CGPoint(x: mouse.x + Self.companionOffset.dx,
+                             y: mouse.y + Self.companionOffset.dy)
+
+        // Keep the companion on the display the REAL pointer is on.
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
+        else { return }
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+            as? CGDirectDisplayID ?? CGMainDisplayID()
+        guard let host = cursorHosts[displayID] ?? cursorHosts.first?.value else { return }
+
+        // Hide any companion left showing on another display.
+        for (id, other) in cursorHosts where id != displayID && !other.isHidden { other.isHidden = true }
+        currentDisplay = displayID
+
+        // Window-local, bottom-left. Align the arrow tip (tipInHost, from the host's
+        // top-left) onto `target`: the frame's bottom-left origin therefore sits tipX to
+        // the left and (hostSize - tipY) below the tip.
+        let wx = target.x - screen.frame.minX
+        let wy = target.y - screen.frame.minY
+        let origin = CGPoint(x: wx - Self.tipInHost.x,
+                             y: wy - (Self.hostSize - Self.tipInHost.y))
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        host.setFrameOrigin(origin)
+        CATransaction.commit()
+        if host.isHidden { host.isHidden = false }
+
+        // Bubble (cold path) anchors to the real cursor — only sync while shown.
+        if model.showBubble { model.cursorPosition = mouse }
+    }
+
+    // MARK: - Window construction
+
+    private func buildOverlaysForAllScreens() {
+        for screen in NSScreen.screens { buildOverlay(for: screen) }
+    }
+
+    private func buildOverlay(for screen: NSScreen) {
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+            as? CGDirectDisplayID ?? CGMainDisplayID()
+
+        let win = NSWindow(contentRect: screen.frame, styleMask: [.borderless],
+                           backing: .buffered, defer: false)
+        // cursorWindow level keeps the companion visible over fullscreen apps/Spaces; the
+        // real hardware cursor still draws above it, so the two never fight.
+        win.level                = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.cursorWindow)))
+        win.backgroundColor      = .clear
+        win.isOpaque             = false
+        win.hasShadow            = false
+        win.ignoresMouseEvents   = true          // fully click-through — real cursor clicks
+        win.isReleasedWhenClosed = false
+        win.collectionBehavior   = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+
+        // Container hosts the bubble (SwiftUI, full-screen) plus the imperatively-moved
+        // companion cursor above it.
+        let container = NSView(frame: CGRect(origin: .zero, size: screen.frame.size))
+        container.wantsLayer = true
+
+        let bubble = NSHostingView(rootView: OverlayContentView(model: model, screenFrame: screen.frame))
+        bubble.frame = container.bounds
+        bubble.autoresizingMask = [.width, .height]
+        container.addSubview(bubble)
+
+        let companion = NSHostingView(rootView: CompanionCursorView(model: model))
+        companion.wantsLayer = true
+        companion.frame = CGRect(x: 0, y: 0, width: Self.hostSize, height: Self.hostSize)
+        companion.isHidden = true   // shown once positioned on this display
+        container.addSubview(companion)
+        cursorHosts[displayID] = companion
+
+        win.contentView = container
+        win.setFrame(screen.frame, display: false)
+        win.orderFrontRegardless()
+        overlayWindows[displayID] = win
+    }
+
+    private func rebuildOverlays() {
+        overlayWindows.values.forEach { $0.orderOut(nil) }
+        overlayWindows.removeAll()
+        cursorHosts.removeAll()
+        currentDisplay = nil
+        buildOverlaysForAllScreens()
+        positionCompanion(at: NSEvent.mouseLocation)
+    }
+
+    private func watchDisplayChanges() {
+        displayObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.rebuildOverlays() } }
     }
 
     // MARK: - Bubble API (called by CursorBubbleService facade)
@@ -184,20 +281,18 @@ final class OverlayWindowManager {
     func showBubble() {
         bubbleHideTask?.cancel()
         model.bubbleWords = []
+        model.cursorPosition = NSEvent.mouseLocation
         model.showBubble = true
     }
 
     func appendBubbleToken(_ token: String) {
         let words = token.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        for w in words {
-            model.bubbleWords.append(BubbleWordToken(text: w + " "))
-        }
+        for w in words { model.bubbleWords.append(BubbleWordToken(text: w + " ")) }
     }
 
     func finishBubble() {
         bubbleHideTask = Task { [weak self] in
-            // HeyClicky fades the cursor bubble ~4–5s after the reply finishes
-            try? await Task.sleep(nanoseconds: 4_500_000_000)
+            try? await Task.sleep(nanoseconds: 4_500_000_000)   // HeyClicky-style ~4.5s fade
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
@@ -209,95 +304,7 @@ final class OverlayWindowManager {
 
     func hideBubble() {
         bubbleHideTask?.cancel()
-        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
-            model.showBubble = false
-        }
-    }
-
-    func setCursorState(_ state: MiraCursorState) {
-        model.cursorState = state
-    }
-
-    // MARK: - Window construction
-
-    private func buildOverlaysForAllScreens() {
-        for screen in NSScreen.screens {
-            buildOverlay(for: screen)
-        }
-    }
-
-    private func buildOverlay(for screen: NSScreen) {
-        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
-            as? CGDirectDisplayID ?? CGMainDisplayID()
-
-        let win = NSWindow(
-            contentRect: screen.frame,
-            styleMask:   [.borderless],
-            backing:     .buffered,
-            defer:       false
-        )
-        win.level                = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
-        win.backgroundColor      = .clear
-        win.isOpaque             = false
-        win.hasShadow            = false
-        win.ignoresMouseEvents   = true
-        win.isReleasedWhenClosed = false
-        win.collectionBehavior   = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-
-        let content = OverlayContentView(model: model, screenFrame: screen.frame)
-        let host    = NSHostingView(rootView: content)
-        host.frame  = CGRect(origin: .zero, size: screen.frame.size)
-        win.contentView = host
-        win.setFrame(screen.frame, display: false)
-        win.orderFrontRegardless()
-
-        overlayWindows[displayID] = win
-    }
-
-    private func rebuildOverlays() {
-        overlayWindows.values.forEach { $0.orderOut(nil) }
-        overlayWindows.removeAll()
-        buildOverlaysForAllScreens()
-    }
-
-    // MARK: - 60fps cursor tracking
-
-    private func startTracking() {
-        let t = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.model.cursorPosition = NSEvent.mouseLocation
-                // Other apps re-show the system cursor whenever the pointer
-                // crosses their tracking areas (each sets its own NSCursor), so a
-                // one-time hide isn't enough — re-assert it every frame so only
-                // the custom cursor remains. The WindowServer drops this process's
-                // accumulated hide-count when Mira's connection ends (quit/crash),
-                // so there is no stuck-hidden cursor; deactivate() only runs at
-                // terminate. (CGCursorIsVisible, which would let us skip redundant
-                // calls, is unavailable on modern macOS.)
-                // While paused for a system modal, leave the real cursor alone
-                // (pauseForModal already drained the hide-count). Otherwise keep
-                // re-asserting the hide so only the custom cursor remains.
-                if self.active, !self.paused {
-                    CGDisplayHideCursor(kCGNullDirectDisplay)
-                    self.hideCount += 1
-                }
-            }
-        }
-        RunLoop.main.add(t, forMode: .common)
-        trackingTimer = t
-    }
-
-    // MARK: - Display change handling
-
-    private func watchDisplayChanges() {
-        displayObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object:  nil,
-            queue:   .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.rebuildOverlays() }
-        }
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) { model.showBubble = false }
     }
 }
 
@@ -311,10 +318,22 @@ final class MiraCursorManager {
     func deactivate() { OverlayWindowManager.shared.deactivate() }
 }
 
-// MARK: - OverlayContentView
-// Full-screen SwiftUI root. Both BlueCursorView and CursorMessageBubbleView
-// live here so they share the same coordinate space — no window sync drift.
+// MARK: - CompanionCursorView
+// The detached blue companion. Positioned imperatively (setFrameOrigin), so its only
+// reactive dependency is the cursor STATE (arrow/thinking/speaking/…), which changes
+// rarely — it never re-renders on movement.
+struct CompanionCursorView: View {
+    @ObservedObject var model: OverlayModel
+    var body: some View {
+        BlueCursorView(state: model.cursorState)
+            .frame(width: 44, height: 44, alignment: .topLeading)
+    }
+}
 
+// MARK: - OverlayContentView (bubble only)
+// The custom cursor is drawn by the imperatively-positioned CompanionCursorView, so this
+// full-screen SwiftUI root renders only the streaming reply bubble, anchored to the real
+// pointer while shown.
 struct OverlayContentView: View {
     @ObservedObject var model: OverlayModel
     let screenFrame: CGRect
@@ -322,17 +341,7 @@ struct OverlayContentView: View {
     var body: some View {
         ZStack {
             Color.clear
-
             let localPos = toLocal(model.cursorPosition)
-
-            // ── Blue cursor ──────────────────────────────────────────────
-            // .position() centers the view on localPos, but the arrow tip sits at
-            // ~(3, 3) within the 32×32 frame, so offset center by (13, 13) to
-            // put the tip exactly at the cursor hot-spot.
-            BlueCursorView(state: model.cursorState)
-                .position(x: localPos.x + 13, y: localPos.y + 13)
-
-            // ── Streaming bubble ─────────────────────────────────────────
             if model.showBubble && !model.bubbleWords.isEmpty {
                 CursorMessageBubbleView(
                     words: model.bubbleWords,
@@ -352,15 +361,11 @@ struct OverlayContentView: View {
         .animation(.spring(response: 0.22, dampingFraction: 0.80), value: model.showBubble)
     }
 
-    // AppKit y=0 bottom → SwiftUI y=0 top, relative to this screen's origin
     private func toLocal(_ pt: CGPoint) -> CGPoint {
-        CGPoint(
-            x: pt.x - screenFrame.minX,
-            y: screenFrame.height - (pt.y - screenFrame.minY)
-        )
+        CGPoint(x: pt.x - screenFrame.minX,
+                y: screenFrame.height - (pt.y - screenFrame.minY))
     }
 
-    // Bubble anchors to the right of cursor; flips left near the right edge
     private func bubbleTailOnLeft(cursor: CGPoint) -> Bool {
         let rightEdge = cursor.x + 22 + 260
         return rightEdge < screenFrame.width - 16
@@ -379,23 +384,16 @@ struct OverlayContentView: View {
 
 // MARK: - BlueCursorView
 // Matches HeyClicky's BlueCursorView: a custom blue arrow cursor with state sub-views.
-
 struct BlueCursorView: View {
     let state: MiraCursorState
 
-    // Follows the user's accent choice — changing the accent in Settings
-    // recolors the cursor live.
     @ObservedObject private var accentService = AccentColorService.shared
     private var accent: Color { accentService.color }
 
-    // True for states where the indicator REPLACES the arrow at the pointer
-    // hot-spot (a smooth morph), vs. sitting beside it as a small status badge.
     private var replacesArrow: Bool { state == .speaking }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Arrow — 32×32, tip at (3, 3). Cross-fades out while Mira speaks so
-            // the waveform takes its place rather than appearing next to it.
             BlueArrowShape()
                 .fill(accent)
                 .frame(width: 32, height: 32)
@@ -408,39 +406,29 @@ struct BlueCursorView: View {
                 .opacity(replacesArrow ? 0 : 1)
                 .scaleEffect(replacesArrow ? 0.6 : 1, anchor: .topLeading)
 
-            // Speaking: the cursor itself becomes an animated accent waveform,
-            // centered on the pointer hot-spot (~frame 9,9) — not a side badge.
             if replacesArrow {
                 BlueCursorWaveformView(color: accent)
                     .offset(x: 1, y: 2)
                     .transition(.scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity))
             }
 
-            // Non-replacing status badges keep their spot at the arrow shaft base.
-            badgeIndicator
-                .offset(x: 20, y: 20)
+            badgeIndicator.offset(x: 20, y: 20)
         }
         .frame(width: 44, height: 44, alignment: .topLeading)
         .animation(.easeInOut(duration: 0.22), value: state)
     }
 
-    @ViewBuilder
-    private var badgeIndicator: some View {
+    @ViewBuilder private var badgeIndicator: some View {
         switch state {
-        case .thinking:
-            BlueCursorSpinnerView(color: accent)
-        case .stop:
-            BlueCursorStopView(color: accent)
-        case .listening:
-            BlueCursorWaveformView(color: accent)
-        case .arrow, .speaking:
-            EmptyView()
+        case .thinking:  BlueCursorSpinnerView(color: accent)
+        case .stop:      BlueCursorStopView(color: accent)
+        case .listening: BlueCursorWaveformView(color: accent)
+        case .arrow, .speaking: EmptyView()
         }
     }
 }
 
 // Arrow path: cursor pointing up-left, tip at (3, 3) within the 32×32 frame.
-// The offsetting in OverlayContentView puts this tip at the actual mouse position.
 private struct BlueArrowShape: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32.0
@@ -458,11 +446,9 @@ private struct BlueArrowShape: Shape {
     }
 }
 
-// Spinner ring (HeyClicky's BlueCursorSpinnerView)
 private struct BlueCursorSpinnerView: View {
     let color: Color
     @State private var rotation: Double = 0
-
     var body: some View {
         Circle()
             .trim(from: 0.15, to: 0.85)
@@ -470,17 +456,13 @@ private struct BlueCursorSpinnerView: View {
             .frame(width: 14, height: 14)
             .rotationEffect(.degrees(rotation))
             .onAppear {
-                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
+                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { rotation = 360 }
             }
     }
 }
 
-// Stop square (HeyClicky's BlueCursorStopIconView)
 private struct BlueCursorStopView: View {
     let color: Color
-
     var body: some View {
         RoundedRectangle(cornerRadius: 2, style: .continuous)
             .fill(color)
@@ -488,13 +470,10 @@ private struct BlueCursorStopView: View {
     }
 }
 
-// Waveform bars (HeyClicky's BlueCursorWaveformView)
 private struct BlueCursorWaveformView: View {
     let color: Color
     @State private var phase: Bool = false
-
     private let heights: [CGFloat] = [4, 8, 12, 8, 4]
-
     var body: some View {
         HStack(spacing: 1.5) {
             ForEach(0..<5) { i in
@@ -502,8 +481,7 @@ private struct BlueCursorWaveformView: View {
                     .fill(color)
                     .frame(width: 2, height: phase ? heights[i] : heights[(i + 2) % 5])
                     .animation(
-                        .easeInOut(duration: 0.4).repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.07),
+                        .easeInOut(duration: 0.4).repeatForever(autoreverses: true).delay(Double(i) * 0.07),
                         value: phase
                     )
             }

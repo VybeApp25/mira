@@ -30,3 +30,6 @@ rw.*.dmg
 .netlify/
 skills-lock.json
 supabase/.temp/
+
+# SourceKit-LSP generated
+buildServer.json
