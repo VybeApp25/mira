@@ -1945,7 +1945,8 @@ enum GenericAgent {
 
 enum WebsiteEditorAgent {
 
-    static func run(jobId: UUID, outputEntryId: UUID, editRequest: String, apiKey: String, store: AgentJobStore) async {
+    static func run(jobId: UUID, outputEntryId: UUID, editRequest: String, apiKey: String,
+                    store: AgentJobStore, drawn: DrawnContext? = nil) async {
         let claude = ClaudeService(apiKey: apiKey)
         var stepIdx = 0
 
@@ -1966,12 +1967,27 @@ enum WebsiteEditorAgent {
 
         let projectContext = buildProjectContext(entry: entry)
 
+        // Spatial edit: when the user circled an element on the rendered page, hand
+        // the model a crop of exactly what was marked + its normalized coordinates,
+        // so "make THIS bigger" / "add a button HERE" resolves to the right element.
+        let spatialBlock = drawn.map { d in
+            """
+
+            SPATIAL TARGET (the user drew on the rendered page to mark WHICH element to change):
+            \(d.coordinateHint)
+            An image of the circled region is attached. The edit refers to the element inside/nearest that mark — identify it in the HTML below and change ONLY that element.
+            """
+        } ?? ""
+        if drawn != nil {
+            await store.appendLog(id: jobId, stepIndex: stepIdx, message: "Using the element you circled as the target")
+        }
+
         let editPrompt = """
         You are editing an existing website. Apply ONLY the user's requested change.
         Preserve all other HTML, CSS, JavaScript, Google Fonts imports, CSS variables, and structure exactly.
 
         \(projectContext)
-
+        \(spatialBlock)
         CURRENT WEBSITE HTML:
         \(currentHTML.prefix(28000))
 
@@ -1979,6 +1995,7 @@ enum WebsiteEditorAgent {
 
         Rules:
         - Make ONLY the requested change — do NOT redesign, restructure, or regenerate the site from scratch
+        - If a SPATIAL TARGET is given, the change applies to the circled element — locate it in the HTML and edit only that element (and its styles)
         - If the request references prior edits (e.g. "make it like before", "undo the typography"), use VERSION HISTORY and RECENT CONVERSATION above to understand what changed
         - If the change is cosmetic (color, font, text), modify only the affected CSS or content
         - If the change adds content, insert it cleanly without breaking existing sections
@@ -1991,6 +2008,7 @@ enum WebsiteEditorAgent {
         do {
             let raw = try await claude.ask(
                 prompt: editPrompt,
+                screenshot: drawn?.markedCropImage(),
                 system: "You are a precise web developer making targeted edits. Output only the complete modified HTML. Never redesign — only modify what was requested.",
                 modelOverride: "claude-sonnet-4-6",
                 maxTokensOverride: 16000
@@ -2067,6 +2085,14 @@ enum WebsiteEditorAgent {
                 "outputDirectory": entry.outputDirectory,
             ]
         ))
+
+        // Spatial edits come from circling the LIVE rendered page — reopen the saved
+        // index.html so the preview refreshes with the change (addVersion already
+        // wrote it to primaryFilePath). Text-driven edits keep their Agents-tab flow.
+        if drawn != nil {
+            let path = entry.primaryFilePath
+            await MainActor.run { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
+        }
 
         // Background: refresh project summary every 3 versions once project has >= 5
         let updatedEntry = await OutputStore.shared.entries.first(where: { $0.id == outputEntryId })

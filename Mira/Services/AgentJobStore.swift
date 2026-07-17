@@ -99,7 +99,8 @@ final class AgentJobStore: ObservableObject {
     }
 
     @discardableResult
-    func submitEditJob(outputEntryId: UUID, editRequest: String, apiKey: String) -> AgentJob {
+    func submitEditJob(outputEntryId: UUID, editRequest: String, apiKey: String,
+                       drawn: DrawnContext? = nil) -> AgentJob {
         var job = AgentJob(type: .websiteEdit, prompt: editRequest)
         job.editSourceEntryId = outputEntryId
         job.steps = Self.buildSteps(for: .websiteEdit)
@@ -116,7 +117,8 @@ final class AgentJobStore: ObservableObject {
                 outputEntryId: outputEntryId,
                 editRequest: editRequest,
                 apiKey: apiKey,
-                store: store
+                store: store,
+                drawn: drawn
             )
         }
         return job

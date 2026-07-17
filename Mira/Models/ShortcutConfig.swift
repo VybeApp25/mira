@@ -23,6 +23,13 @@ struct ShortcutConfig: Codable, Equatable {
         carbonMods: UInt32(controlKey | optionKey),
         displayKey: "D"
     )
+    // Dictate-anywhere: hold to speak, text lands in the focused field of ANY app.
+    // ⌃⌥S ("speak") — V/T/D are the voice/text/draw hotkeys.
+    static let defaultDictate = ShortcutConfig(
+        keyCode:    UInt32(kVK_ANSI_S),
+        carbonMods: UInt32(controlKey | optionKey),
+        displayKey: "S"
+    )
 
     /// Human-readable display string, e.g. "⌃⌥V"
     var displayString: String {
@@ -65,22 +72,25 @@ struct ShortcutConfig: Codable, Equatable {
 final class ShortcutStore: ObservableObject {
     static let shared = ShortcutStore()
 
-    @Published var voice: ShortcutConfig { didSet { persist() } }
-    @Published var text:  ShortcutConfig { didSet { persist() } }
-    @Published var draw:  ShortcutConfig { didSet { persist() } }
+    @Published var voice:   ShortcutConfig { didSet { persist() } }
+    @Published var text:    ShortcutConfig { didSet { persist() } }
+    @Published var draw:    ShortcutConfig { didSet { persist() } }
+    @Published var dictate: ShortcutConfig { didSet { persist() } }
 
     private init() {
-        voice = Self.load("mira_shortcut_voice")?.validated(default: .defaultVoice) ?? .defaultVoice
-        text  = Self.load("mira_shortcut_text")?.validated(default: .defaultText)  ?? .defaultText
-        draw  = Self.load("mira_shortcut_draw")?.validated(default: .defaultDraw)  ?? .defaultDraw
+        voice   = Self.load("mira_shortcut_voice")?.validated(default: .defaultVoice)     ?? .defaultVoice
+        text    = Self.load("mira_shortcut_text")?.validated(default: .defaultText)       ?? .defaultText
+        draw    = Self.load("mira_shortcut_draw")?.validated(default: .defaultDraw)       ?? .defaultDraw
+        dictate = Self.load("mira_shortcut_dictate")?.validated(default: .defaultDictate) ?? .defaultDictate
     }
 
     // MARK: - Private
 
     private func persist() {
-        Self.save("mira_shortcut_voice", voice)
-        Self.save("mira_shortcut_text",  text)
-        Self.save("mira_shortcut_draw",  draw)
+        Self.save("mira_shortcut_voice",   voice)
+        Self.save("mira_shortcut_text",    text)
+        Self.save("mira_shortcut_draw",    draw)
+        Self.save("mira_shortcut_dictate", dictate)
         NotificationCenter.default.post(name: .miraShortcutsChanged, object: nil)
     }
 

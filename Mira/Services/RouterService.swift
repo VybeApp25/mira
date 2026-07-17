@@ -1215,6 +1215,42 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         return verbs.contains { p.contains($0) } && deliverables.contains { p.contains($0) }
     }
 
+    /// True when the prompt reads as a CHANGE to something already on screen — the
+    /// verb half of "circle an element on my site and tell Mira what to change".
+    /// Deliberately excludes build verbs (those go to isBackgroundBuildTask).
+    nonisolated static func isWebsiteEditInstruction(_ prompt: String) -> Bool {
+        let p = prompt.lowercased()
+        let editVerbs = ["change", "edit", "update", "make", "move", "add", "remove",
+                         "delete", "replace", "swap", "tweak", "fix", "shrink", "grow",
+                         "bigger", "smaller", "bold", "recolor", "color", "restyle",
+                         "rename", "rewrite", "align", "center", "rounder", "wider"]
+        return editVerbs.contains { p.contains($0) }
+    }
+
+    /// Bundle IDs treated as "the user is looking at a rendered web page."
+    nonisolated static let browserBundleIDs: Set<String> = [
+        "com.apple.Safari", "com.apple.SafariTechnologyPreview",
+        "com.google.Chrome", "com.google.Chrome.canary",
+        "org.mozilla.firefox", "com.microsoft.edgemac",
+        "company.thebrowser.Browser", "com.brave.Browser",
+        "com.operasoftware.Opera", "com.vivaldi.Vivaldi", "com.apple.WebKit.WebContent",
+    ]
+
+    /// The website the user is most plausibly looking at: the most-recently-OPENED
+    /// `.website` output, opened recently enough to still be on screen. Returns nil
+    /// when there's no such site — so a drawn "act here" over any other app falls
+    /// through to normal desktop control instead of being hijacked into an edit.
+    @MainActor
+    static func recentlyOpenedWebsite(within seconds: TimeInterval = 1800) -> OutputEntry? {
+        OutputStore.shared.entries
+            .filter { $0.type == .website }
+            .filter { entry in
+                guard let opened = entry.lastOpenedAt else { return false }
+                return Date().timeIntervalSince(opened) <= seconds
+            }
+            .max { ($0.lastOpenedAt ?? .distantPast) < ($1.lastOpenedAt ?? .distantPast) }
+    }
+
     func computerUseResult(prompt: String, apiKey: String, transcript: String? = nil) async -> RouteResult {
         // GUARDRAIL: a request to BUILD a website / landing page / web app must run
         // 100% in the background via the Agents workflow — Mira never drives the
@@ -1247,6 +1283,30 @@ Output ONLY the JSON line. No preamble, no markdown fences.
         // If the user drew on screen to mark WHERE to act, attach it to the task.
         // Survives a Codex→Claude failover (both engines get the same context).
         let drawn = PendingDrawnContextService.shared.pop()
+
+        // Circle-to-edit: if the user drew on a Mira-built website open in a browser
+        // and asked for a change, edit the SOURCE of the circled element in the
+        // background (Website Editor) and refresh the preview — instead of driving
+        // the screen. Mirrors the isBackgroundBuildTask reroute above. Requires all
+        // of: a drawn mark + a browser frontmost + a recently-opened Mira site + an
+        // edit-shaped instruction, so a drawn "act here" over any other app is never
+        // hijacked. Costs no autonomous-task quota (it's a background agent job).
+        if let drawn,
+           Self.isWebsiteEditInstruction(prompt),
+           let frontID = AppContextService.shared.frontmostBundleID,
+           Self.browserBundleIDs.contains(frontID),
+           let target = await RouterService.recentlyOpenedWebsite() {
+            let name = await MainActor.run { () -> String in
+                let key = apiKey.isEmpty ? (MiraState.shared?.effectiveAPIKey ?? AppSecrets.anthropicAPIKey) : apiKey
+                _ = AgentJobStore.shared.submitEditJob(
+                    outputEntryId: target.id, editRequest: prompt, apiKey: key, drawn: drawn
+                )
+                return target.name
+            }
+            MiraDebugLog.log("[ComputerUse] rerouted circle-to-edit → Website Editor site=\(name) task=\(prompt.prefix(80))")
+            return .reply("On it — editing the part of \(name) you circled. I'll refresh the preview when it's saved.",
+                          route: .websiteBuilder)
+        }
 
         // ONE quota consume for the whole task — a Codex→Claude failover must not
         // double-charge the user's monthly task budget.

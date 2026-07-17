@@ -15,6 +15,7 @@
 		0866470A4671B4643894226B /* obsidian_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = 16D6B874FC0EE313F66CD9E6 /* obsidian_rw.py */; };
 		08EA69FF4B019157EB41B6F1 /* linear.md in Resources */ = {isa = PBXBuildFile; fileRef = E8F844AF7574D2B2A262D065 /* linear.md */; };
 		098B421200BD04B8A0FE21AB /* claude-design.md in Resources */ = {isa = PBXBuildFile; fileRef = 518104F61E166A1846E07781 /* claude-design.md */; };
+		09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */; };
 		0A78352870E74D4CA1A985FB /* CommunityBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */; };
 		0AF830434EA77952F5C4D82C /* AnnotationCanvasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */; };
 		0C020C4633AE33FE211A9DC6 /* MicLevelMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */; };
@@ -284,6 +285,7 @@
 		D37336D1E54FF64164918D9A /* ProjectsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */; };
 		D39FB3D62ED7EB5B5C31CB1C /* KnowledgeImportPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */; };
 		D4992E88735ED08374C4577B /* ActuationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8970CEC5FCF54756B314E53 /* ActuationRouter.swift */; };
+		D50D8C25DEE71761C7043B7E /* DictationHUDWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EACB11D9B19158691913008 /* DictationHUDWindowManager.swift */; };
 		D53BE4353E6BF74135431739 /* AudioOutputRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */; };
 		D5BB80F248D7A934870197B9 /* TriggersTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C866D699E86AEDCD53A7217 /* TriggersTabView.swift */; };
 		D5F01A62A665F3EE780D4A88 /* narration-3v2mm75996oxl.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 1029B0CDF63D0403A7704795 /* narration-3v2mm75996oxl.mp3 */; };
@@ -415,6 +417,7 @@
 		30D7BBBE1AD86425D4A0E84B /* SkillBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillBundle.swift; sourceTree = "<group>"; };
 		30DBCAAD8D19FFE4F04F3375 /* FloatingButtonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButtonService.swift; sourceTree = "<group>"; };
 		3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessObserver.swift; sourceTree = "<group>"; };
+		326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnywhereService.swift; sourceTree = "<group>"; };
 		343088C0DAB912C0E3A3D9DA /* AccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountService.swift; sourceTree = "<group>"; };
 		3465E66B867774E10F24114C /* clicky-surprised.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-surprised.wav"; sourceTree = "<group>"; };
 		34C283A8B11CD4F1E6371C82 /* agent-launch.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "agent-launch.mp3"; sourceTree = "<group>"; };
@@ -472,6 +475,7 @@
 		5A3C803AA19621D1944B4FBA /* CallModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallModels.swift; sourceTree = "<group>"; };
 		5A7FDDF0CA6E6F4084A0B4D6 /* HUDService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDService.swift; sourceTree = "<group>"; };
 		5B22AFE60CB6F6E579CEDC91 /* excalidraw.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = excalidraw.md; sourceTree = "<group>"; };
+		5EACB11D9B19158691913008 /* DictationHUDWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationHUDWindowManager.swift; sourceTree = "<group>"; };
 		5F7A089D0333A61E16D3BBA4 /* OutcomeEvaluation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutcomeEvaluation.swift; sourceTree = "<group>"; };
 		5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRunLedger.swift; sourceTree = "<group>"; };
 		600F7145CE2FE8AF6E86A44C /* airtable.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = airtable.md; sourceTree = "<group>"; };
@@ -829,6 +833,7 @@
 				090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */,
 				8261E0EB0C3813433E9281F9 /* AnimationController.swift */,
 				5730D96274E04D43ABA9738A /* CallHUDManager.swift */,
+				5EACB11D9B19158691913008 /* DictationHUDWindowManager.swift */,
 				A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */,
 				3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */,
 				628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */,
@@ -951,6 +956,7 @@
 				B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */,
 				07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */,
 				BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */,
+				326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */,
 				C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */,
 				08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */,
 				724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */,
@@ -1417,6 +1423,8 @@
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
+				09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */,
+				D50D8C25DEE71761C7043B7E /* DictationHUDWindowManager.swift in Sources */,
 				4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */,
 				57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,

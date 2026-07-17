@@ -31,5 +31,7 @@ rw.*.dmg
 skills-lock.json
 supabase/.temp/
 
-# SourceKit-LSP generated
+# SourceKit-LSP build-server config (xcode-build-server). Machine-specific:
+# holds absolute DerivedData paths, so each dev regenerates it locally with
+#   xcode-build-server config -project Mira.xcodeproj -scheme Mira
 buildServer.json
