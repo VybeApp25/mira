@@ -23,15 +23,25 @@ public sealed class SupabaseService
 {
     private static readonly HttpClient Http = new();
 
-    public static SupabaseService Shared { get; } = new();
-
     /// <summary>
     /// Thread-safe mirror of the current JWT, exactly like Swift's
     /// <c>nonisolated(unsafe) static var cachedAccessToken</c> — lets call sites that
     /// aren't routed through this service's own methods (future provider-proxy
     /// clients) attach the current token without taking a lock.
+    ///
+    /// MUST be declared (and thus initialized) before <see cref="Shared"/> below:
+    /// static field/property initializers run in textual declaration order as
+    /// part of the type initializer. <see cref="Shared"/>'s own initializer runs
+    /// the constructor, which sets this field from the persisted session — if
+    /// this field's own `= ""` initializer were declared AFTER Shared's, it would
+    /// run second and silently stomp the loaded token back to empty (caught by
+    /// Mira.Windows.Core.Tests's live-backend chat pipeline check, which failed
+    /// with "Auth header is not 'Bearer {token}'" — an empty cached token produces
+    /// exactly that malformed header — before this field was reordered here).
     /// </summary>
     public static volatile string CachedAccessToken = "";
+
+    public static SupabaseService Shared { get; } = new();
 
     private readonly string _baseUrl = MiraConfig.SupabaseUrl;
     private readonly string _anonKey = MiraConfig.SupabaseAnonKey;

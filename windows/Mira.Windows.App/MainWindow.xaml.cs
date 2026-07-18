@@ -123,4 +123,9 @@ public partial class MainWindow : Window
     {
         AccountService.Shared.SignOut();
     }
+
+    private void OpenChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        new ChatWindow().Show();
+    }
 }
