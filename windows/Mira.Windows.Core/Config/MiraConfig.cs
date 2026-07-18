@@ -23,11 +23,10 @@ public static class MiraConfig
     public const string SupabaseUrl = "https://rdbljrbjsmbfqwwpwwvn.supabase.co";
 
     /// <summary>
-    /// Supabase anon (public) API key. TODO before any real build/distribution:
-    /// fill in the actual anon key value (safe to embed — see class doc). Left
-    /// blank here deliberately rather than guessed, since this audit's source
-    /// checkout never contained the gitignored Mira/Config/AppSecrets.swift that
-    /// holds it on the macOS side — see docs/windows/SECURITY_AND_PRIVACY.md §1.
+    /// Supabase anon (public) API key. Provided directly by the project owner
+    /// (2026-07-18) — safe to embed, see class doc. JWT payload confirms
+    /// <c>"role":"anon"</c> and <c>"ref":"rdbljrbjsmbfqwwpwwvn"</c>, matching
+    /// <see cref="SupabaseUrl"/>'s project ref.
     /// </summary>
-    public const string SupabaseAnonKey = "";
+    public const string SupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkYmxqcmJqc21iZnF3d3B3d3ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTUwOTYsImV4cCI6MjA5NjY3MTA5Nn0.M5Py5Chudgth-HxeQxMdwqOFxu9RaIrMhUdHa2xf-6o";
 }
