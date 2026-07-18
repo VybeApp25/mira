@@ -14,6 +14,27 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Without this, any unhandled exception anywhere (UI thread or
+        // background) silently kills the whole process with no dialog, no
+        // log, nothing to go on -- exactly what made the voice PTT crash
+        // (an STA/MTA COM apartment mismatch in WasapiCapture, fixed in
+        // RealtimeVoiceService.BeginRecordingAsync) invisible until the user
+        // reported it manually. Now it at least surfaces a message instead of
+        // vanishing.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            System.Windows.MessageBox.Show($"Mira hit an unexpected error:\n\n{args.Exception.Message}",
+                "Mira", MessageBoxButton.OK, MessageBoxImage.Error);
+            args.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex)
+                System.Windows.MessageBox.Show($"Mira hit an unexpected error and needs to close:\n\n{ex.Message}",
+                    "Mira", MessageBoxButton.OK, MessageBoxImage.Error);
+        };
+
         _tray = new TrayIconManager(ShowMainWindow);
         ShowMainWindow(); // first run: surface the sign-in UI immediately rather than
                           // leaving a brand-new user staring at nothing but a tray icon

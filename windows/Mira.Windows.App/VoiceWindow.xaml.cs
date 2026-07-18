@@ -69,8 +69,8 @@ public partial class VoiceWindow : Window
         }
     }
 
-    private void PttButton_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        => RealtimeVoiceService.Shared.BeginRecording();
+    private async void PttButton_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        => await RealtimeVoiceService.Shared.BeginRecordingAsync();
 
     private async void PttButton_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         => await RealtimeVoiceService.Shared.EndRecordingAndCommitAsync();

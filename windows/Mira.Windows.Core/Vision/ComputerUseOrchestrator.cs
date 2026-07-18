@@ -61,6 +61,8 @@ public sealed class ComputerUseOrchestrator
             Never claim an action succeeded unless the screenshot proves it. Only declare the task complete once the final screenshot visibly shows the goal state; if you cannot get there, say plainly what failed instead of claiming success.
             Common Windows shortcuts: ctrl+c (copy), ctrl+v (paste), ctrl+z (undo), ctrl+a (select all), alt+tab (app switcher).
             The "super"/"win" key is the Windows key.
+
+            Opening an application (Start menu search + Enter, taskbar icon, desktop shortcut) can take several seconds to actually appear on screen, especially on first launch — a blank, half-rendered, or still-loading window is normal, not a failure. If the app you just launched doesn't look right yet, use the wait action and take another screenshot before concluding anything went wrong. Do not close a window you just opened unless the screenshot gives clear evidence it's the wrong one entirely. And do not treat a slow-to-open app as "not installed" — never go looking for an app in the Microsoft Store or a browser download page unless you have first confirmed, after waiting, that it truly isn't already on this PC.
             """;
 
         var messages = new JArray
@@ -193,7 +195,17 @@ public sealed class ComputerUseOrchestrator
             {
                 var combo = (string?)input["text"] ?? "";
                 SyntheticInput.Key(combo);
-                var content = await ActionFeedbackAsync($"Pressed {combo}. The screenshot below shows the screen after the key press.", ct);
+
+                // Enter/Return most often confirms a Start-menu search to launch an
+                // app — the single biggest source of the "looks like nothing
+                // happened, let it try something else" misjudgment (e.g. closing
+                // the just-opened app and going to install it from the Store
+                // instead), because app cold-starts routinely take longer than the
+                // ~0.7s default settle delay used for ordinary UI actions.
+                var isLaunchLike = combo.Contains("enter", StringComparison.OrdinalIgnoreCase)
+                    || combo.Contains("return", StringComparison.OrdinalIgnoreCase);
+                var content = await ActionFeedbackAsync($"Pressed {combo}. The screenshot below shows the screen after the key press.",
+                    ct, settleSeconds: isLaunchLike ? 2.0 : 0.7);
                 return (content, new ComputerUseStep(action, $"Key: {combo}"));
             }
 

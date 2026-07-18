@@ -114,18 +114,37 @@ public sealed class RealtimeVoiceService : IDisposable
 
     // ---- Push-to-talk ----------------------------------------------------------
 
-    /// <summary>Call on push-to-talk key/button DOWN.</summary>
-    public void BeginRecording()
+    /// <summary>
+    /// Call on push-to-talk key/button DOWN. Builds and starts
+    /// <see cref="RealtimeMicCapture"/> on a ThreadPool thread rather than
+    /// whatever thread calls this — WPF's UI thread is STA, and WASAPI's
+    /// <c>IAudioClient</c> COM object gets apartment-bound to whichever thread
+    /// constructs it; NAudio then drives it from its own internal capture
+    /// thread, which throws <c>RPC_E_WRONG_THREAD</c> the moment real capture
+    /// starts if that object was created on an STA thread. This is invisible in
+    /// a console/test host (default MTA) — confirmed both an isolated capture
+    /// test and a full connect-record-reply test pass cleanly there — and only
+    /// bites when this is called directly from a WPF button handler, which is
+    /// exactly the reported crash ("connect then hold to talk and it
+    /// crashed"). <see cref="RealtimePlaybackSink"/> doesn't need the same
+    /// treatment: it's already constructed from the WebSocket receive loop's
+    /// background <c>Task.Run</c>, never the UI thread.
+    /// </summary>
+    public async Task BeginRecordingAsync()
     {
         if (!_sessionReady || State != VoiceSessionState.Idle || _mic is not null) return;
         SetState(VoiceSessionState.Listening);
-        _mic = new RealtimeMicCapture();
-        _mic.OnPcm16Chunk += (buf, count) =>
+        _mic = await Task.Run(() =>
         {
-            var b64 = Convert.ToBase64String(buf, 0, count);
-            _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 });
-        };
-        _mic.Start();
+            var mic = new RealtimeMicCapture();
+            mic.OnPcm16Chunk += (buf, count) =>
+            {
+                var b64 = Convert.ToBase64String(buf, 0, count);
+                _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 });
+            };
+            mic.Start();
+            return mic;
+        });
     }
 
     /// <summary>Call on push-to-talk key/button UP — commits the turn and requests a response.</summary>
