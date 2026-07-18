@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.ReportVoiceUsage;
 //
 //    var reportVoiceUsageRequest = ReportVoiceUsageRequest.FromJson(jsonString);
 //    var reportVoiceUsageResponse = ReportVoiceUsageResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.ReportVoiceUsage
 {
     using System;
     using System.Collections.Generic;
@@ -36,18 +36,18 @@ namespace QuickType
 
     public partial class ReportVoiceUsageRequest
     {
-        public static ReportVoiceUsageRequest FromJson(string json) => JsonConvert.DeserializeObject<ReportVoiceUsageRequest>(json, QuickType.Converter.Settings);
+        public static ReportVoiceUsageRequest FromJson(string json) => JsonConvert.DeserializeObject<ReportVoiceUsageRequest>(json, Mira.Contracts.ReportVoiceUsage.Converter.Settings);
     }
 
     public partial class ReportVoiceUsageResponse
     {
-        public static ReportVoiceUsageResponse FromJson(string json) => JsonConvert.DeserializeObject<ReportVoiceUsageResponse>(json, QuickType.Converter.Settings);
+        public static ReportVoiceUsageResponse FromJson(string json) => JsonConvert.DeserializeObject<ReportVoiceUsageResponse>(json, Mira.Contracts.ReportVoiceUsage.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this ReportVoiceUsageRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this ReportVoiceUsageResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this ReportVoiceUsageRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.ReportVoiceUsage.Converter.Settings);
+        public static string ToJson(this ReportVoiceUsageResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.ReportVoiceUsage.Converter.Settings);
     }
 
     internal static class Converter

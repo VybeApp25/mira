@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.MintAssemblyaiToken;
 //
 //    var mintAssemblyAiTokenResponse = MintAssemblyAiTokenResponse.FromJson(jsonString);
 //    var mintAssemblyAiTokenErrorResponse = MintAssemblyAiTokenErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.MintAssemblyaiToken
 {
     using System;
     using System.Collections.Generic;
@@ -55,18 +55,18 @@ namespace QuickType
 
     public partial class MintAssemblyAiTokenResponse
     {
-        public static MintAssemblyAiTokenResponse FromJson(string json) => JsonConvert.DeserializeObject<MintAssemblyAiTokenResponse>(json, QuickType.Converter.Settings);
+        public static MintAssemblyAiTokenResponse FromJson(string json) => JsonConvert.DeserializeObject<MintAssemblyAiTokenResponse>(json, Mira.Contracts.MintAssemblyaiToken.Converter.Settings);
     }
 
     public partial class MintAssemblyAiTokenErrorResponse
     {
-        public static MintAssemblyAiTokenErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<MintAssemblyAiTokenErrorResponse>(json, QuickType.Converter.Settings);
+        public static MintAssemblyAiTokenErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<MintAssemblyAiTokenErrorResponse>(json, Mira.Contracts.MintAssemblyaiToken.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this MintAssemblyAiTokenResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this MintAssemblyAiTokenErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this MintAssemblyAiTokenResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.MintAssemblyaiToken.Converter.Settings);
+        public static string ToJson(this MintAssemblyAiTokenErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.MintAssemblyaiToken.Converter.Settings);
     }
 
     internal static class Converter

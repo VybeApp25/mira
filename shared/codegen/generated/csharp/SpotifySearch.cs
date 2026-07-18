@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.SpotifySearch;
 //
 //    var spotifySearchRequest = SpotifySearchRequest.FromJson(jsonString);
 //    var spotifySearchResponse = SpotifySearchResponse.FromJson(jsonString);
 //    var spotifySearchErrorResponse = SpotifySearchErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.SpotifySearch
 {
     using System;
     using System.Collections.Generic;
@@ -94,24 +94,24 @@ namespace QuickType
 
     public partial class SpotifySearchRequest
     {
-        public static SpotifySearchRequest FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchRequest>(json, QuickType.Converter.Settings);
+        public static SpotifySearchRequest FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchRequest>(json, Mira.Contracts.SpotifySearch.Converter.Settings);
     }
 
     public partial class SpotifySearchResponse
     {
-        public static SpotifySearchResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchResponse>(json, QuickType.Converter.Settings);
+        public static SpotifySearchResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchResponse>(json, Mira.Contracts.SpotifySearch.Converter.Settings);
     }
 
     public partial class SpotifySearchErrorResponse
     {
-        public static SpotifySearchErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchErrorResponse>(json, QuickType.Converter.Settings);
+        public static SpotifySearchErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifySearchErrorResponse>(json, Mira.Contracts.SpotifySearch.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this SpotifySearchRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this SpotifySearchResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this SpotifySearchErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this SpotifySearchRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.SpotifySearch.Converter.Settings);
+        public static string ToJson(this SpotifySearchResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SpotifySearch.Converter.Settings);
+        public static string ToJson(this SpotifySearchErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SpotifySearch.Converter.Settings);
     }
 
     internal static class Converter

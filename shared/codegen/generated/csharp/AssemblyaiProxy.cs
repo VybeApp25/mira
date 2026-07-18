@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.AssemblyaiProxy;
 //
 //    var assemblyAiProxyErrorResponse = AssemblyAiProxyErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.AssemblyaiProxy
 {
     using System;
     using System.Collections.Generic;
@@ -49,12 +49,12 @@ namespace QuickType
 
     public partial class AssemblyAiProxyErrorResponse
     {
-        public static AssemblyAiProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<AssemblyAiProxyErrorResponse>(json, QuickType.Converter.Settings);
+        public static AssemblyAiProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<AssemblyAiProxyErrorResponse>(json, Mira.Contracts.AssemblyaiProxy.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this AssemblyAiProxyErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this AssemblyAiProxyErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.AssemblyaiProxy.Converter.Settings);
     }
 
     internal static class Converter

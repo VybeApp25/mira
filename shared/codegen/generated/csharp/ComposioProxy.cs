@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.ComposioProxy;
 //
 //    var composioProxyErrorResponse = ComposioProxyErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.ComposioProxy
 {
     using System;
     using System.Collections.Generic;
@@ -43,12 +43,12 @@ namespace QuickType
 
     public partial class ComposioProxyErrorResponse
     {
-        public static ComposioProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<ComposioProxyErrorResponse>(json, QuickType.Converter.Settings);
+        public static ComposioProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<ComposioProxyErrorResponse>(json, Mira.Contracts.ComposioProxy.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this ComposioProxyErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this ComposioProxyErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.ComposioProxy.Converter.Settings);
     }
 
     internal static class Converter

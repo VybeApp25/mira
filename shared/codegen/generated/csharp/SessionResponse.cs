@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.SessionResponse;
 //
 //    var supabaseAuthResponse = SupabaseAuthResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.SessionResponse
 {
     using System;
     using System.Collections.Generic;
@@ -86,12 +86,12 @@ namespace QuickType
 
     public partial class SupabaseAuthResponse
     {
-        public static SupabaseAuthResponse FromJson(string json) => JsonConvert.DeserializeObject<SupabaseAuthResponse>(json, QuickType.Converter.Settings);
+        public static SupabaseAuthResponse FromJson(string json) => JsonConvert.DeserializeObject<SupabaseAuthResponse>(json, Mira.Contracts.SessionResponse.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this SupabaseAuthResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this SupabaseAuthResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SessionResponse.Converter.Settings);
     }
 
     internal static class Converter

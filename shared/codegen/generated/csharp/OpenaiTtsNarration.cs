@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.OpenaiTtsNarration;
 //
 //    var openAittsNarrationRequest = OpenAittsNarrationRequest.FromJson(jsonString);
 //    var openAittsNarrationSuccessResponse = OpenAittsNarrationSuccessResponse.FromJson(jsonString);
 //    var openAittsNarrationErrorResponse = OpenAittsNarrationErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.OpenaiTtsNarration
 {
     using System;
     using System.Collections.Generic;
@@ -80,24 +80,24 @@ namespace QuickType
 
     public partial class OpenAittsNarrationRequest
     {
-        public static OpenAittsNarrationRequest FromJson(string json) => JsonConvert.DeserializeObject<OpenAittsNarrationRequest>(json, QuickType.Converter.Settings);
+        public static OpenAittsNarrationRequest FromJson(string json) => JsonConvert.DeserializeObject<OpenAittsNarrationRequest>(json, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
     }
 
     public class OpenAittsNarrationSuccessResponse
     {
-        public static string FromJson(string json) => JsonConvert.DeserializeObject<string>(json, QuickType.Converter.Settings);
+        public static string FromJson(string json) => JsonConvert.DeserializeObject<string>(json, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
     }
 
     public partial class OpenAittsNarrationErrorResponse
     {
-        public static OpenAittsNarrationErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<OpenAittsNarrationErrorResponse>(json, QuickType.Converter.Settings);
+        public static OpenAittsNarrationErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<OpenAittsNarrationErrorResponse>(json, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this OpenAittsNarrationRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this string self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this OpenAittsNarrationErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this OpenAittsNarrationRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
+        public static string ToJson(this string self) => JsonConvert.SerializeObject(self, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
+        public static string ToJson(this OpenAittsNarrationErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.OpenaiTtsNarration.Converter.Settings);
     }
 
     internal static class Converter

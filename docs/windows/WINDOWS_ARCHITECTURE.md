@@ -78,10 +78,11 @@ mira/
 ├── shared/                  # NEW — platform-agnostic contracts (see §5)
 │   ├── contracts/           # JSON Schema / OpenAPI definitions for every edge-function request/response
 │   └── codegen/             # scripts that generate Swift + C# types from shared/contracts
-└── windows/                 # NEW — the Windows app, once Phase 1+ begins
-    ├── Mira.Windows.sln
-    ├── Mira.Windows.App/     # WinUI3/WPF project
-    └── Mira.Windows.Core/    # platform-agnostic C# business logic (routing, memory model, entitlements)
+└── windows/                 # the Windows app (Phase 2 scaffolding done — see below)
+    ├── Mira.Windows.slnx
+    ├── Mira.Windows.App/          # WPF project — tray icon + sign-in/status window
+    ├── Mira.Windows.Core/         # C# business logic (auth, device fingerprint, entitlements)
+    └── Mira.Windows.Core.Tests/   # xunit tests for Mira.Windows.Core
 ```
 
 Do **not** touch `Mira/`, `Mira.xcodeproj/`, or existing `docs/architecture/` content — this audit and any Phase 1 work add files, they don't move or edit the macOS app.
@@ -90,12 +91,10 @@ Do **not** touch `Mira/`, `Mira.xcodeproj/`, or existing `docs/architecture/` co
 
 ## 5. Windows technology direction
 
-**Recommendation: C# / .NET 8+ with WinUI 3** for the app shell, given the user's own framing of the question ("how C# and Swift types should be generated") assumes C# as the target. Rationale:
-- WinUI 3 is Microsoft's current native Windows UI framework with Mica/Acrylic backdrop support — the closest analog to the `NSVisualEffectView`/Liquid-Glass materials used throughout the macOS chip/panel UI.
-- .NET has first-class support for everything the shared backend needs: `HttpClient`/`ClientWebSocket` for Supabase/provider calls, `System.Diagnostics.Process` for launching the Node sidecar, DPAPI/`Windows.Security.Credentials.PasswordVault` for secret storage, UI Automation via `System.Windows.Automation` or the newer WinRT UIA COM interop, `Microsoft.Windows.AppNotifications` for toasts.
-- WPF is a credible fallback if WinUI 3's packaging/deployment model (MSIX-first) proves friction for a Sparkle-style direct-download distribution — flag this as a decision to revisit once the update/distribution mechanism (§ Feature 34) is designed, not before.
+**Decided (2026-07-18): C# / .NET 10 with WPF**, not WinUI 3. This was a live decision point, not a straight application of this document's original recommendation — when scaffolding actually started, WinUI 3 turned out to have no stable `dotnet new` template (only a Microsoft *preview* template or a third-party NuGet package), and its packaging model is MSIX-first, which sits awkwardly against Mira's direct-download/Sparkle-style distribution. WPF ships project templates in the .NET SDK today with zero extra tooling, and its traditional non-packaged `.exe` distribution matches the existing update model directly. The user confirmed WPF explicitly when presented with this tradeoff. Revisit only if a future need (e.g. wanting Mica/Acrylic-native chip visuals identical to the macOS `NSVisualEffectView` panels) makes WinUI 3's tooling gap worth paying for — WPF can still get Mica via community libraries (e.g. WPF-UI) or direct `DwmSetWindowAttribute` interop if that's wanted later.
 
-This is a **direction recommendation for Phase 1 discussion**, not a locked decision — the user should confirm before any project scaffolding is created.
+- .NET has first-class support for everything the shared backend needs: `HttpClient` for Supabase/provider calls (confirmed working via `Mira.Windows.Core.Auth.SupabaseService`), `System.Diagnostics.Process` for launching the Node sidecar (not yet built), DPAPI (`System.Security.Cryptography.ProtectedData`, confirmed working via `Mira.Windows.Core.Storage.DpapiFileStore`) for secret storage, UI Automation via `System.Windows.Automation` (not yet built), `Microsoft.Windows.AppNotifications` for toasts (not yet built).
+- Tray presence uses `System.Windows.Forms.NotifyIcon` via interop (`<UseWindowsForms>true</UseWindowsForms>`) — WPF has no native tray-icon control; this is the standard dependency-free way to get one, confirmed working in `Mira.Windows.App.TrayIconManager`.
 
 ### Type/schema generation — avoiding hand-duplicated Swift/C# types
 

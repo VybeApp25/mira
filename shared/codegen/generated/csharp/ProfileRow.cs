@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.ProfileRow;
 //
 //    var profileRow = ProfileRow.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.ProfileRow
 {
     using System;
     using System.Collections.Generic;
@@ -64,12 +64,12 @@ namespace QuickType
 
     public partial class ProfileRow
     {
-        public static ProfileRow FromJson(string json) => JsonConvert.DeserializeObject<ProfileRow>(json, QuickType.Converter.Settings);
+        public static ProfileRow FromJson(string json) => JsonConvert.DeserializeObject<ProfileRow>(json, Mira.Contracts.ProfileRow.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this ProfileRow self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this ProfileRow self) => JsonConvert.SerializeObject(self, Mira.Contracts.ProfileRow.Converter.Settings);
     }
 
     internal static class Converter

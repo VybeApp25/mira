@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.ErrorResponse;
 //
 //    var errorResponse = ErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.ErrorResponse
 {
     using System;
     using System.Collections.Generic;
@@ -41,12 +41,12 @@ namespace QuickType
 
     public partial class ErrorResponse
     {
-        public static ErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<ErrorResponse>(json, QuickType.Converter.Settings);
+        public static ErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<ErrorResponse>(json, Mira.Contracts.ErrorResponse.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this ErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this ErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.ErrorResponse.Converter.Settings);
     }
 
     internal static class Converter

@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.AnthropicProxy;
 //
 //    var anthropicProxyRequest = AnthropicProxyRequest.FromJson(jsonString);
 //    var anthropicProxyErrorResponse = AnthropicProxyErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.AnthropicProxy
 {
     using System;
     using System.Collections.Generic;
@@ -91,18 +91,18 @@ namespace QuickType
 
     public partial class AnthropicProxyRequest
     {
-        public static AnthropicProxyRequest FromJson(string json) => JsonConvert.DeserializeObject<AnthropicProxyRequest>(json, QuickType.Converter.Settings);
+        public static AnthropicProxyRequest FromJson(string json) => JsonConvert.DeserializeObject<AnthropicProxyRequest>(json, Mira.Contracts.AnthropicProxy.Converter.Settings);
     }
 
     public partial class AnthropicProxyErrorResponse
     {
-        public static AnthropicProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<AnthropicProxyErrorResponse>(json, QuickType.Converter.Settings);
+        public static AnthropicProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<AnthropicProxyErrorResponse>(json, Mira.Contracts.AnthropicProxy.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this AnthropicProxyRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this AnthropicProxyErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this AnthropicProxyRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.AnthropicProxy.Converter.Settings);
+        public static string ToJson(this AnthropicProxyErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.AnthropicProxy.Converter.Settings);
     }
 
     internal static class Converter

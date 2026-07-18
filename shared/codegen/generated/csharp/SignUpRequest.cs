@@ -2,11 +2,11 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do:
 //
-//    using QuickType;
+//    using Mira.Contracts.SignUpRequest;
 //
 //    var supabaseSignUpRequest = SupabaseSignUpRequest.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.SignUpRequest
 {
     using System;
     using System.Collections.Generic;
@@ -42,12 +42,12 @@ namespace QuickType
 
     public partial class SupabaseSignUpRequest
     {
-        public static SupabaseSignUpRequest FromJson(string json) => JsonConvert.DeserializeObject<SupabaseSignUpRequest>(json, QuickType.Converter.Settings);
+        public static SupabaseSignUpRequest FromJson(string json) => JsonConvert.DeserializeObject<SupabaseSignUpRequest>(json, Mira.Contracts.SignUpRequest.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this SupabaseSignUpRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this SupabaseSignUpRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.SignUpRequest.Converter.Settings);
     }
 
     internal static class Converter

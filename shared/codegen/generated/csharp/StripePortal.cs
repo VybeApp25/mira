@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.StripePortal;
 //
 //    var stripePortalResponse = StripePortalResponse.FromJson(jsonString);
 //    var stripePortalErrorResponse = StripePortalErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.StripePortal
 {
     using System;
     using System.Collections.Generic;
@@ -54,18 +54,18 @@ namespace QuickType
 
     public partial class StripePortalResponse
     {
-        public static StripePortalResponse FromJson(string json) => JsonConvert.DeserializeObject<StripePortalResponse>(json, QuickType.Converter.Settings);
+        public static StripePortalResponse FromJson(string json) => JsonConvert.DeserializeObject<StripePortalResponse>(json, Mira.Contracts.StripePortal.Converter.Settings);
     }
 
     public partial class StripePortalErrorResponse
     {
-        public static StripePortalErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<StripePortalErrorResponse>(json, QuickType.Converter.Settings);
+        public static StripePortalErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<StripePortalErrorResponse>(json, Mira.Contracts.StripePortal.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this StripePortalResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this StripePortalErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this StripePortalResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.StripePortal.Converter.Settings);
+        public static string ToJson(this StripePortalErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.StripePortal.Converter.Settings);
     }
 
     internal static class Converter

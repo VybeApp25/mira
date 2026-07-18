@@ -43,13 +43,17 @@ The lowest-risk, highest-leverage next step, because it touches only the already
 
 The safest first *runnable* milestone, because it's pure networking against an already-hardened, already-live backend — no platform-specific capture/actuation/audio work, no UI-shell design decisions yet.
 
-- Create the `windows/` solution (WinUI3, pending the user's confirmation of tech direction from WINDOWS_ARCHITECTURE.md §5).
-- Implement Supabase email/password sign-in + session persistence (DPAPI-backed, per SECURITY_AND_PRIVACY.md §4's recommendation to improve on the macOS `UserDefaults` approach) + JWT auto-refresh, mirroring `SupabaseService.swift`'s design.
-- Implement the Windows device-fingerprint equivalent and wire it to the existing `check-device`/`register-device` functions unchanged.
-- Implement `EntitlementService`-equivalent plan caching against `profiles.plan`.
-- A bare window (system tray icon + a simple settings/sign-in dialog) — deliberately *not* the notch/island UI yet.
+**Status: done (2026-07-18), with one item deliberately left incomplete.** `windows/Mira.Windows.sln` exists with three projects: `Mira.Windows.Core` (business logic), `Mira.Windows.App` (WPF shell), `Mira.Windows.Core.Tests` (xunit, 30 tests, all passing). WPF was chosen over WinUI 3 — see WINDOWS_ARCHITECTURE.md §5 for why that changed from this doc's original framing.
 
-**Exit criteria:** a Windows user can sign in, see their plan, and the device-lock/entitlement backend treats them correctly — verified against the real Supabase project, with the user reviewing before proceeding.
+- ✅ `Auth/SupabaseService.cs` — email/password sign-in + sign-up, JWT auto-refresh (proactive + reactive-after-401, single-flighted), session persisted via `Storage/DpapiFileStore.cs` (DPAPI-encrypted, not plaintext — a deliberate improvement over the macOS `UserDefaults` approach, confirmed in `Storage/DpapiFileStoreTests.cs`'s "not plaintext on disk" test). Uses the generated `Mira.Contracts.SessionResponse`/`SignInRequest`/`SignUpRequest` types directly rather than hand-rolled duplicates.
+- ✅ `Device/DeviceFingerprintService.cs` — SHA-256(registry `MachineGuid` + DPAPI-persisted random GUID), same `"mira-v1:"`-prefixed shape as the macOS hash; wired to `check-device`/`register-device` via `Account/AccountService.cs` with **zero backend changes** (confirmed: the server treats the hash as an opaque string).
+- ✅ `Entitlements/EntitlementService.cs` — plan cache (client-side, UX-only, exactly like the Swift original), `Can()` gating logic unit-tested against the confirmed Swift source values. Reuses the **generated** `ProfilePlan` enum from `shared/contracts/tables/profile-row.schema.json` rather than declaring a second, parallel plan enum.
+- ✅ A bare window: `Mira.Windows.App` starts as a tray icon only (`TrayIconManager.cs`, via `NotifyIcon`/WinForms interop — WPF has no native tray control), opens a sign-in/status window on demand. Confirmed to actually launch and render (window title "Mira", responsive) via a local smoke test — not just "it compiles."
+- ⚠️ **`Config/MiraConfig.cs`'s `SupabaseAnonKey` is a placeholder empty string, not filled in.** The anon key is safe to embed (public by design, see SECURITY_AND_PRIVACY.md §7) but this audit's checkout never contained the gitignored `Mira/Config/AppSecrets.swift` that holds the real value on the macOS side, so it couldn't be copied from there. **This must be filled in before the app can actually reach Supabase** — get the value from the Supabase project dashboard (Settings → API → anon/public key) or from `AppSecrets.swift` directly on a machine that has it.
+
+**Explicitly not tested end-to-end:** no live sign-in/sign-up was performed against the real Supabase project. Creating an account or entering a password to authenticate isn't something this assistant will do on your behalf even for testing purposes — that verification is yours to run once the anon key above is filled in. Everything short of that (build, unit tests, app launch, DPAPI round-trip, JSON contract shapes) was actually run, not just written.
+
+**Exit criteria:** a Windows user can sign in, see their plan, and the device-lock/entitlement backend treats them correctly — code and local testing done; the live "actually sign in against production" verification is pending the anon key + the user's own pass.
 
 ### Phase 3 — Minimal chat surface
 

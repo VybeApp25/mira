@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.StripeCheckout;
 //
 //    var stripeCheckoutRequest = StripeCheckoutRequest.FromJson(jsonString);
 //    var stripeCheckoutResponse = StripeCheckoutResponse.FromJson(jsonString);
 //    var stripeCheckoutErrorResponse = StripeCheckoutErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.StripeCheckout
 {
     using System;
     using System.Collections.Generic;
@@ -73,24 +73,24 @@ namespace QuickType
 
     public partial class StripeCheckoutRequest
     {
-        public static StripeCheckoutRequest FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutRequest>(json, QuickType.Converter.Settings);
+        public static StripeCheckoutRequest FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutRequest>(json, Mira.Contracts.StripeCheckout.Converter.Settings);
     }
 
     public partial class StripeCheckoutResponse
     {
-        public static StripeCheckoutResponse FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutResponse>(json, QuickType.Converter.Settings);
+        public static StripeCheckoutResponse FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutResponse>(json, Mira.Contracts.StripeCheckout.Converter.Settings);
     }
 
     public partial class StripeCheckoutErrorResponse
     {
-        public static StripeCheckoutErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutErrorResponse>(json, QuickType.Converter.Settings);
+        public static StripeCheckoutErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<StripeCheckoutErrorResponse>(json, Mira.Contracts.StripeCheckout.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this StripeCheckoutRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this StripeCheckoutResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this StripeCheckoutErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this StripeCheckoutRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.StripeCheckout.Converter.Settings);
+        public static string ToJson(this StripeCheckoutResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.StripeCheckout.Converter.Settings);
+        public static string ToJson(this StripeCheckoutErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.StripeCheckout.Converter.Settings);
     }
 
     internal static class Converter

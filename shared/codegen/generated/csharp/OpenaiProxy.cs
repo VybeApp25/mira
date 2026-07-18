@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.OpenaiProxy;
 //
 //    var openAiProxyRequest = OpenAiProxyRequest.FromJson(jsonString);
 //    var openAiProxyErrorResponse = OpenAiProxyErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.OpenaiProxy
 {
     using System;
     using System.Collections.Generic;
@@ -84,18 +84,18 @@ namespace QuickType
 
     public partial class OpenAiProxyRequest
     {
-        public static OpenAiProxyRequest FromJson(string json) => JsonConvert.DeserializeObject<OpenAiProxyRequest>(json, QuickType.Converter.Settings);
+        public static OpenAiProxyRequest FromJson(string json) => JsonConvert.DeserializeObject<OpenAiProxyRequest>(json, Mira.Contracts.OpenaiProxy.Converter.Settings);
     }
 
     public partial class OpenAiProxyErrorResponse
     {
-        public static OpenAiProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<OpenAiProxyErrorResponse>(json, QuickType.Converter.Settings);
+        public static OpenAiProxyErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<OpenAiProxyErrorResponse>(json, Mira.Contracts.OpenaiProxy.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this OpenAiProxyRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this OpenAiProxyErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this OpenAiProxyRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.OpenaiProxy.Converter.Settings);
+        public static string ToJson(this OpenAiProxyErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.OpenaiProxy.Converter.Settings);
     }
 
     internal static class Converter

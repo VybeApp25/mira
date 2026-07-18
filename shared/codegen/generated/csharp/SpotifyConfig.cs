@@ -2,12 +2,12 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.SpotifyConfig;
 //
 //    var spotifyConfigResponse = SpotifyConfigResponse.FromJson(jsonString);
 //    var spotifyConfigErrorResponse = SpotifyConfigErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.SpotifyConfig
 {
     using System;
     using System.Collections.Generic;
@@ -50,18 +50,18 @@ namespace QuickType
 
     public partial class SpotifyConfigResponse
     {
-        public static SpotifyConfigResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifyConfigResponse>(json, QuickType.Converter.Settings);
+        public static SpotifyConfigResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifyConfigResponse>(json, Mira.Contracts.SpotifyConfig.Converter.Settings);
     }
 
     public partial class SpotifyConfigErrorResponse
     {
-        public static SpotifyConfigErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifyConfigErrorResponse>(json, QuickType.Converter.Settings);
+        public static SpotifyConfigErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SpotifyConfigErrorResponse>(json, Mira.Contracts.SpotifyConfig.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this SpotifyConfigResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this SpotifyConfigErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this SpotifyConfigResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SpotifyConfig.Converter.Settings);
+        public static string ToJson(this SpotifyConfigErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SpotifyConfig.Converter.Settings);
     }
 
     internal static class Converter

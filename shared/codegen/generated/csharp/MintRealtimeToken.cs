@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.MintRealtimeToken;
 //
 //    var mintRealtimeTokenRequest = MintRealtimeTokenRequest.FromJson(jsonString);
 //    var mintRealtimeTokenResponse = MintRealtimeTokenResponse.FromJson(jsonString);
 //    var mintRealtimeTokenErrorResponse = MintRealtimeTokenErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.MintRealtimeToken
 {
     using System;
     using System.Collections.Generic;
@@ -83,24 +83,24 @@ namespace QuickType
 
     public partial class MintRealtimeTokenRequest
     {
-        public static MintRealtimeTokenRequest FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenRequest>(json, QuickType.Converter.Settings);
+        public static MintRealtimeTokenRequest FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenRequest>(json, Mira.Contracts.MintRealtimeToken.Converter.Settings);
     }
 
     public partial class MintRealtimeTokenResponse
     {
-        public static MintRealtimeTokenResponse FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenResponse>(json, QuickType.Converter.Settings);
+        public static MintRealtimeTokenResponse FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenResponse>(json, Mira.Contracts.MintRealtimeToken.Converter.Settings);
     }
 
     public partial class MintRealtimeTokenErrorResponse
     {
-        public static MintRealtimeTokenErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenErrorResponse>(json, QuickType.Converter.Settings);
+        public static MintRealtimeTokenErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<MintRealtimeTokenErrorResponse>(json, Mira.Contracts.MintRealtimeToken.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this MintRealtimeTokenRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this MintRealtimeTokenResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this MintRealtimeTokenErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this MintRealtimeTokenRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.MintRealtimeToken.Converter.Settings);
+        public static string ToJson(this MintRealtimeTokenResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.MintRealtimeToken.Converter.Settings);
+        public static string ToJson(this MintRealtimeTokenErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.MintRealtimeToken.Converter.Settings);
     }
 
     internal static class Converter

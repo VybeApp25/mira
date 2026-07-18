@@ -124,6 +124,7 @@ function outputFileName(schemaPath) {
 
 function generateOne(schemaPath, target) {
   const types = namedTypesIn(schemaPath);
+  const fileBaseName = outputFileName(schemaPath);
   const args = [
     QUICKTYPE_ENTRY,
     "--src-lang", "schema",
@@ -140,7 +141,18 @@ function generateOne(schemaPath, target) {
   // from its own schema's `title` correctly (also observed directly).
   if (types.length === 1) args.push("--top-level", types[0].name);
 
-  const outName = `${outputFileName(schemaPath)}.${target.ext}`;
+  // C#-only: quicktype emits a `Serialize`/`Converter` helper class per file, in
+  // every file, NOT as a `partial class` — so two generated .cs files compiled
+  // into the same project collide the instant both are referenced (observed
+  // directly: "the namespace 'QuickType' already contains a definition for
+  // 'Serialize'"). Giving every file its own namespace avoids the collision
+  // entirely (same simple class name is fine in different namespaces). Swift
+  // has no equivalent issue (no per-file namespace concept in the same way,
+  // and its helper functions/`JSONAny` etc. were verified not to collide when
+  // Serialize/Converter's C# analog is what actually breaks).
+  if (target.lang === "csharp") args.push("--namespace", `Mira.Contracts.${fileBaseName}`);
+
+  const outName = `${fileBaseName}.${target.ext}`;
   const outPath = join(target.outDir, outName);
   args.push("-o", outPath);
 

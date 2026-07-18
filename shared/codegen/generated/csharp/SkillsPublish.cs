@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.SkillsPublish;
 //
 //    var skillsPublishRequest = SkillsPublishRequest.FromJson(jsonString);
 //    var skillsPublishResponse = SkillsPublishResponse.FromJson(jsonString);
 //    var skillsPublishErrorResponse = SkillsPublishErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.SkillsPublish
 {
     using System;
     using System.Collections.Generic;
@@ -98,24 +98,24 @@ namespace QuickType
 
     public partial class SkillsPublishRequest
     {
-        public static SkillsPublishRequest FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishRequest>(json, QuickType.Converter.Settings);
+        public static SkillsPublishRequest FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishRequest>(json, Mira.Contracts.SkillsPublish.Converter.Settings);
     }
 
     public partial class SkillsPublishResponse
     {
-        public static SkillsPublishResponse FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishResponse>(json, QuickType.Converter.Settings);
+        public static SkillsPublishResponse FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishResponse>(json, Mira.Contracts.SkillsPublish.Converter.Settings);
     }
 
     public partial class SkillsPublishErrorResponse
     {
-        public static SkillsPublishErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishErrorResponse>(json, QuickType.Converter.Settings);
+        public static SkillsPublishErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<SkillsPublishErrorResponse>(json, Mira.Contracts.SkillsPublish.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this SkillsPublishRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this SkillsPublishResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this SkillsPublishErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this SkillsPublishRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.SkillsPublish.Converter.Settings);
+        public static string ToJson(this SkillsPublishResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SkillsPublish.Converter.Settings);
+        public static string ToJson(this SkillsPublishErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.SkillsPublish.Converter.Settings);
     }
 
     internal static class Converter

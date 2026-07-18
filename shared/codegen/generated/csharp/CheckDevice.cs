@@ -2,13 +2,13 @@
 //
 // To parse this JSON data, add NuGet 'Newtonsoft.Json' then do one of these:
 //
-//    using QuickType;
+//    using Mira.Contracts.CheckDevice;
 //
 //    var checkDeviceRequest = CheckDeviceRequest.FromJson(jsonString);
 //    var checkDeviceResponse = CheckDeviceResponse.FromJson(jsonString);
 //    var checkDeviceErrorResponse = CheckDeviceErrorResponse.FromJson(jsonString);
 
-namespace QuickType
+namespace Mira.Contracts.CheckDevice
 {
     using System;
     using System.Collections.Generic;
@@ -62,24 +62,24 @@ namespace QuickType
 
     public partial class CheckDeviceRequest
     {
-        public static CheckDeviceRequest FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceRequest>(json, QuickType.Converter.Settings);
+        public static CheckDeviceRequest FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceRequest>(json, Mira.Contracts.CheckDevice.Converter.Settings);
     }
 
     public partial class CheckDeviceResponse
     {
-        public static CheckDeviceResponse FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceResponse>(json, QuickType.Converter.Settings);
+        public static CheckDeviceResponse FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceResponse>(json, Mira.Contracts.CheckDevice.Converter.Settings);
     }
 
     public partial class CheckDeviceErrorResponse
     {
-        public static CheckDeviceErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceErrorResponse>(json, QuickType.Converter.Settings);
+        public static CheckDeviceErrorResponse FromJson(string json) => JsonConvert.DeserializeObject<CheckDeviceErrorResponse>(json, Mira.Contracts.CheckDevice.Converter.Settings);
     }
 
     public static class Serialize
     {
-        public static string ToJson(this CheckDeviceRequest self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this CheckDeviceResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
-        public static string ToJson(this CheckDeviceErrorResponse self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+        public static string ToJson(this CheckDeviceRequest self) => JsonConvert.SerializeObject(self, Mira.Contracts.CheckDevice.Converter.Settings);
+        public static string ToJson(this CheckDeviceResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.CheckDevice.Converter.Settings);
+        public static string ToJson(this CheckDeviceErrorResponse self) => JsonConvert.SerializeObject(self, Mira.Contracts.CheckDevice.Converter.Settings);
     }
 
     internal static class Converter
