@@ -14,11 +14,11 @@ This is a phased plan, not an authorization to build. **Phase 0 (this audit) is 
 
 **Explicitly not done, and not in scope until the user says otherwise:** any Windows project scaffolding, any code, any dependency installation, any modification to `Mira/`, `Mira.xcodeproj/`, `AgentService/`, or `supabase/`.
 
-**Open items from this audit that should be resolved before Phase 1 is scoped in detail** (see WINDOWS_ARCHITECTURE.md §7 and SECURITY_AND_PRIVACY.md §1):
-1. Confirm via `strings` on a built macOS binary whether any provider secret still ships client-side today.
-2. Confirm whether Anthropic's `claude` CLI and OpenAI's `codex` CLI have Windows-native builds — this determines whether features 10 and 30 in the parity matrix are portable at all for a v1.
-3. Rotate the committed `CRON_SECRET` (independent of Windows work, should happen regardless of what the user decides about the port).
-4. A follow-up read of `WebsiteBuilderAgent`/`ResearchAgent`/`ContentAgent`/`PublishingAgent`/`WebsiteHealthAgent` (referenced but not opened in this audit) to determine whether that logic belongs in the shared Node sidecar rather than being reimplemented per-client.
+**Open items from this audit, status as of 2026-07-18** (see WINDOWS_ARCHITECTURE.md §7 and SECURITY_AND_PRIVACY.md §1):
+1. ~~Confirm whether Anthropic's `claude` CLI and OpenAI's `codex` CLI have Windows-native builds.~~ **Resolved** — both do. `codex` on Windows has a materially weaker sandbox than macOS/Linux per OpenAI's own docs, and Mira's current `CodexComputerUseService.swift` invocation uses the bypass-sandbox flag — this specific decision (whether to carry that flag into the Windows build) should be revisited in Phase 5, not assumed.
+2. Confirm via `strings` on a built macOS binary whether any provider secret still ships client-side today. **Still open** — `Mira/Config/AppSecrets.swift` isn't just gitignored, its whole directory is absent from this checkout, so it can't be inspected from here at all; needs to happen on the Mac or wherever the file is populated.
+3. Rotate the committed `CRON_SECRET` (independent of Windows work, should happen regardless of what the user decides about the port). **Still open** — this machine has no Supabase CLI installed and no active Supabase login, and the available Supabase MCP tools don't include a secrets-management call, so this needs to be done directly by someone with Supabase project access (CLI or dashboard).
+4. A follow-up read of `WebsiteBuilderAgent`/`ResearchAgent`/`ContentAgent`/`PublishingAgent`/`WebsiteHealthAgent` (referenced but not opened in this audit) to determine whether that logic belongs in the shared Node sidecar rather than being reimplemented per-client. **Still open.**
 
 ---
 

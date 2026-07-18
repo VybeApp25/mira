@@ -279,7 +279,8 @@ These are covered above (§8, §9) and below.
 
 ## Explicit UNKNOWNs carried into the other Phase 0 docs
 
-- Current contents of `Mira/Config/AppSecrets.swift` (file absent from this checkout by design — gitignored).
+- Current contents of `Mira/Config/AppSecrets.swift` — **re-checked 2026-07-18**: not merely gitignored, the entire `Mira/Config/` directory is absent from this checkout. There is no local copy anywhere on this machine to inspect; confirming this requires checking directly on the Mac where the file is populated, or `strings`-inspecting a built `Mira.app` binary.
+- **Resolved 2026-07-18 (external, not from this repo's source):** whether `claude`/`codex` ship native Windows builds — both do, confirmed against each vendor's current documentation. See WINDOWS_ARCHITECTURE.md §7 for the sourced detail and the Codex-Windows-sandbox caveat this surfaced.
 - Whether `BriefingView` is reachable from any live navigation path (code exists; no call site found).
 - The internal actuation mechanism used by the external `codex` CLI process (opaque to this repo).
 - Whether `AVAudioEngine` mic-tap contention between `RealtimeVoiceService`/`AssemblyAIStreamingService`/call-transcription's `MicAudioCapture` is actually resolved at runtime, or remains an open issue as one file's own comment states.
