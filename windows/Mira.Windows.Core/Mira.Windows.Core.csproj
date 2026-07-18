@@ -14,6 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
   </ItemGroup>
@@ -35,6 +36,8 @@
     <Compile Include="..\..\shared\codegen\generated\csharp\ErrorResponse.cs" Link="Generated\ErrorResponse.cs" />
     <Compile Include="..\..\shared\codegen\generated\csharp\CheckDevice.cs" Link="Generated\CheckDevice.cs" />
     <Compile Include="..\..\shared\codegen\generated\csharp\RegisterDevice.cs" Link="Generated\RegisterDevice.cs" />
+    <Compile Include="..\..\shared\codegen\generated\csharp\MintRealtimeToken.cs" Link="Generated\MintRealtimeToken.cs" />
+    <Compile Include="..\..\shared\codegen\generated\csharp\ReportVoiceUsage.cs" Link="Generated\ReportVoiceUsage.cs" />
   </ItemGroup>
 
 </Project>

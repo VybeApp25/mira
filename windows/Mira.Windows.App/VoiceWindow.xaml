@@ -1,0 +1,34 @@
+<Window x:Class="Mira.Windows.App.VoiceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="Mira Voice" Height="420" Width="360"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="StatusText" Text="Not connected" FontSize="18" FontWeight="Bold"
+                   HorizontalAlignment="Center" Margin="0,0,0,12" />
+
+        <Button Grid.Row="1" x:Name="ConnectButton" Content="Connect" Height="32" Click="ConnectButton_Click" Margin="0,0,0,16" />
+
+        <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,16">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="TranscriptText" TextWrapping="Wrap" Text="(assistant reply appears here)" Foreground="#555" />
+            </ScrollViewer>
+        </Border>
+
+        <Button Grid.Row="3" x:Name="PttButton" Content="Hold to talk" Height="64" FontSize="16"
+                IsEnabled="False"
+                PreviewMouseLeftButtonDown="PttButton_MouseDown"
+                PreviewMouseLeftButtonUp="PttButton_MouseUp" />
+    </Grid>
+</Window>

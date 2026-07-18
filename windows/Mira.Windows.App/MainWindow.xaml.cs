@@ -128,4 +128,9 @@ public partial class MainWindow : Window
     {
         new ChatWindow().Show();
     }
+
+    private void OpenVoiceButton_Click(object sender, RoutedEventArgs e)
+    {
+        new VoiceWindow().Show();
+    }
 }
