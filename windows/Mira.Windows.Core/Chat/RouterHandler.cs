@@ -1,5 +1,6 @@
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
+using Mira.Windows.Core.Vision;
 using Newtonsoft.Json.Linq;
 
 namespace Mira.Windows.Core.Chat;
@@ -8,14 +9,14 @@ namespace Mira.Windows.Core.Chat;
 /// The Windows equivalent of macOS's <c>RouterService.handle(prompt:context:apiKey:capture:precomputed:onStreamChunk:)</c>
 /// — classifies, then dispatches. This is where this port's scope narrows
 /// sharply and deliberately: <see cref="Routing.RouterService"/> ported the FULL
-/// 32-route classifier faithfully, but only three routes have a real Windows-side
-/// handler today (<c>local_response</c>, <c>gpt_query</c>, <c>higher_model</c>) —
-/// everything else macOS can do (Spotify control, calendar, computer-use, agent
-/// tasks, Codex, ...) has no Windows implementation yet, because none of those
-/// underlying services have been built for this client. Rather than silently
-/// mis-answering or pretending to do something it can't, an unimplemented route
-/// is classified correctly and reported as not-yet-available — "recognize but
-/// can't do it" instead of "misclassify."
+/// 32-route classifier faithfully, but only four routes have a real Windows-side
+/// handler today (<c>local_response</c>, <c>gpt_query</c>, <c>higher_model</c>,
+/// <c>computer_use</c>) — everything else macOS can do (Spotify control,
+/// calendar, agent tasks, Codex, ...) has no Windows implementation yet, because
+/// none of those underlying services have been built for this client. Rather
+/// than silently mis-answering or pretending to do something it can't, an
+/// unimplemented route is classified correctly and reported as
+/// not-yet-available — "recognize but can't do it" instead of "misclassify."
 /// </summary>
 public static class RouterHandler
 {
@@ -49,8 +50,30 @@ public static class RouterHandler
                 await AnthropicProxyClient.StreamAsync(BuildClaudeBody(history), onStreamChunk ?? (_ => { }), ct),
                 decision.Route),
 
+            MiraRoute.ComputerUse => await ComputerUseReplyAsync(prompt, ct),
+
             _ => new RouteResult(RouteResultKind.NotAvailable, NotAvailableMessage(decision), decision.Route),
         };
+    }
+
+    /// <summary>
+    /// Mirrors RouterService.swift's <c>.computerUse</c> case exactly: a chat
+    /// request can only drive the screen if the user has explicitly turned on
+    /// autonomous mode (<see cref="AutonomySettings.ComputerUseEnabled"/>,
+    /// off by default) — otherwise it falls back to a plain reply explaining
+    /// that, rather than silently doing nothing or silently acting without consent.
+    /// </summary>
+    private static async Task<RouteResult> ComputerUseReplyAsync(string prompt, CancellationToken ct)
+    {
+        if (!AutonomySettings.ComputerUseEnabled)
+        {
+            return new RouteResult(RouteResultKind.NotAvailable,
+                "That would need me to control your screen, and autonomous mode is off. Turn it on in Settings if you want me to act on this.",
+                MiraRoute.ComputerUse);
+        }
+
+        var result = await ComputerUseOrchestrator.Shared.RunAsync(prompt, ct);
+        return new RouteResult(RouteResultKind.Reply, string.IsNullOrEmpty(result) ? "Done." : result, MiraRoute.ComputerUse);
     }
 
     private static async Task<string> GptReplyAsync(string prompt, CancellationToken ct)

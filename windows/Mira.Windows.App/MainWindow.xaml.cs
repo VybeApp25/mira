@@ -1,6 +1,7 @@
 using System.Windows;
 using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Entitlements;
+using Mira.Windows.Core.Vision;
 
 namespace Mira.Windows.App;
 
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
         };
 
         RenderForState(AccountService.Shared.State);
+        AutonomyCheckBox.IsChecked = AutonomySettings.ComputerUseEnabled;
     }
 
     private void OnAuthStateChanged(AuthState state) => Dispatcher.Invoke(() => RenderForState(state));
@@ -127,6 +129,11 @@ public partial class MainWindow : Window
     private void OpenChatButton_Click(object sender, RoutedEventArgs e)
     {
         new ChatWindow().Show();
+    }
+
+    private void AutonomyCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        AutonomySettings.ComputerUseEnabled = AutonomyCheckBox.IsChecked == true;
     }
 
     private void OpenVoiceButton_Click(object sender, RoutedEventArgs e)

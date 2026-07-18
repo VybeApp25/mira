@@ -11,11 +11,15 @@
          own guidance, and is honest about this being a Windows-only assembly in
          practice, not a claim that every line in it is portable. -->
     <SupportedOSPlatform>windows</SupportedOSPlatform>
+    <!-- ScreenCapture.cs reads Bitmap pixel data via a raw pointer for speed
+         when building the change-detection fingerprint. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.10" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
   </ItemGroup>
 

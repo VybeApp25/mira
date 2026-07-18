@@ -27,6 +27,26 @@ public static class AnthropicProxyClient
         public int? StatusCode { get; } = statusCode;
     }
 
+    /// <summary>
+    /// Non-streaming call — returns the full parsed response (every content
+    /// block, stop_reason, etc.), unlike <see cref="SendAsync"/>'s
+    /// text-only convenience shape. Used by <see cref="Vision.ComputerUseOrchestrator"/>,
+    /// which needs raw <c>tool_use</c> blocks, not just concatenated text.
+    /// Accepts optional extra headers (the orchestrator needs <c>anthropic-beta:
+    /// computer-use-2025-11-24</c> to unlock the <c>computer_20251124</c> tool).
+    /// </summary>
+    public static async Task<JObject> SendRawAsync(JObject body, IReadOnlyDictionary<string, string>? extraHeaders = null, CancellationToken ct = default)
+    {
+        body["stream"] = false;
+        using var req = BuildRequest(body);
+        if (extraHeaders is not null)
+            foreach (var (key, value) in extraHeaders) req.Headers.Add(key, value);
+        using var resp = await Http.SendAsync(req, ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode) throw new AnthropicProxyException(text, (int)resp.StatusCode);
+        return JObject.Parse(text);
+    }
+
     /// <summary>Non-streaming call — returns the concatenated text content. Used by <see cref="Routing.RouterService"/>'s Haiku gate.</summary>
     public static async Task<string> SendAsync(JObject body, CancellationToken ct = default)
     {

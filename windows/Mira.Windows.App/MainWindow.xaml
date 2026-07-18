@@ -46,7 +46,17 @@
             <TextBlock x:Name="PlanText" FontSize="14" Margin="0,0,0,20" />
             <Button Content="Open Chat" Height="32" Click="OpenChatButton_Click" Margin="0,0,0,8" FontWeight="Bold" />
             <Button Content="Open Voice" Height="32" Click="OpenVoiceButton_Click" Margin="0,0,0,8" />
-            <Button Content="Refresh plan" Height="30" Click="RefreshPlanButton_Click" Margin="0,0,0,8" />
+            <Button Content="Refresh plan" Height="30" Click="RefreshPlanButton_Click" Margin="0,0,0,16" />
+
+            <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="AutonomyCheckBox" Content="Allow Mira to control my screen (computer use)"
+                              Checked="AutonomyCheckBox_Changed" Unchecked="AutonomyCheckBox_Changed" />
+                    <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#886600" Margin="0,4,0,0"
+                               Text="When on, chat requests can move your mouse, click, type, and take screenshots to complete tasks. Off by default — Windows has no per-use consent prompt for this the way some other permissions do, so this checkbox is the only gate." />
+                </StackPanel>
+            </Border>
+
             <Button Content="Sign Out" Height="30" Click="SignOutButton_Click" />
         </StackPanel>
     </Grid>
