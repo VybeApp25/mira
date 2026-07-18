@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/auth/sign-in-request.schema.json",
+  "title": "SupabaseSignInRequest",
+  "description": "Request body Mira sends to Supabase GoTrue's POST /auth/v1/token?grant_type=password. Confirmed from Mira/Services/SupabaseService.swift's signIn(email:password:). Sent with header apikey: <anon key> (public, not a secret).",
+  "type": "object",
+  "properties": {
+    "email": { "type": "string", "format": "email" },
+    "password": { "type": "string" }
+  },
+  "required": ["email", "password"],
+  "additionalProperties": false
+}

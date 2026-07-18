@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/composio-proxy.schema.json",
+  "title": "ComposioProxy",
+  "description": "supabase/functions/composio-proxy/index.ts. A transparent path-forwarding proxy for the Composio API, called server-to-server from the AgentService Node sidecar (not directly from the Swift/C# client) via the Composio SDK's baseURL option — the SDK builds request URLs by concatenating baseURL + its own internal paths, so this proxy strips its own /composio-proxy prefix and forwards the rest to https://backend.composio.dev unchanged. Auth: Authorization: Bearer <supabase JWT>, injected by the sidecar via the Composio SDK's defaultHeaders (see AgentService/src/agent.ts's makeComposio). Because the caller is the sidecar (not a browser), CORS is permissive by design here, not a security relaxation for a public client. No fixed request/response shape at the proxy level — every Composio API path forwarded through here has its own contract, owned by Composio, not Mira; out of scope to redefine here. (Deliberately no root `type`/`properties` here beyond $defs — see the equivalent note in assemblyai-proxy.schema.json.)",
+  "$defs": {
+    "ComposioProxyErrorResponse": {
+      "title": "ComposioProxyErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "ComposioProxyErrorCode", "type": "string", "enum": ["unauthenticated", "COMPOSIO_API_KEY secret not set"] }
+          }
+        }
+      ]
+    }
+  }
+}

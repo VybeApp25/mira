@@ -25,11 +25,50 @@ The backend was already redesigned around a "no provider secrets in the client" 
 **Why this matters:** anyone with read access to this repository (or its git history, even after a later edit) has this value. If `CRON_SECRET` is still the live value guarding the `spend-alarm` function, that function's trigger can be invoked by anyone who has seen this file or this repo's history.
 
 **Recommended remediation (independent of the Windows port, should happen regardless):**
-1. Rotate the `CRON_SECRET` Supabase secret (`supabase secrets set CRON_SECRET=<new random value>`).
-2. Update the `pg_cron` job definition to reference the new value (the migration file itself documents the re-schedule procedure: unschedule then re-run the `cron.schedule` block with the new header).
+1. Rotate the `CRON_SECRET` Supabase secret.
+2. Update the `pg_cron` job definition to reference the new value.
 3. Going forward, do not commit secret values directly into migration SQL — reference `current_setting()`/a vault entry, or accept that any value written into a migration file must be treated as disclosed the moment it's committed, and rotate immediately after that commit if it wasn't meant to be public.
 
 This finding is not reproduced with its actual value anywhere in this audit's documents, per this task's explicit instruction not to expose secret values.
+
+### Remediation runbook — step by step
+
+**Prerequisite:** the Supabase CLI, logged into the project this repo deploys to (`supabase login`, then `supabase link --project-ref <ref>` if not already linked). This audit's environment has neither the CLI installed nor a project link, so these steps need to be run by whoever holds that access — they are not run as part of this repository change.
+
+1. **Generate a new secret value locally** (don't reuse or lightly modify the old one — treat it as fully compromised):
+   ```bash
+   openssl rand -hex 32
+   ```
+   Keep the output somewhere safe (a password manager), not in a shell history file or an unencrypted note.
+
+2. **Set the new secret on the Supabase project:**
+   ```bash
+   supabase secrets set CRON_SECRET=<the value from step 1>
+   ```
+
+3. **Update the `pg_cron` job to send the new value.** The job lives in `supabase/migrations/20260626120000_device_lock_and_spend_alarm.sql` and was created with `cron.schedule('mira-spend-alarm', ...)`. `pg_cron` jobs aren't re-applied by re-running old migrations — you update the *live* job directly via SQL (run this in the Supabase SQL editor or `psql` against the project, substituting the new value):
+   ```sql
+   select cron.unschedule('mira-spend-alarm');
+   select cron.schedule(
+     'mira-spend-alarm',
+     '0 * * * *',
+     $cron$
+       select net.http_post(
+         url     := 'https://rdbljrbjsmbfqwwpwwvn.supabase.co/functions/v1/spend-alarm',
+         body    := '{}',
+         headers := '{"Content-Type":"application/json","x-cron-secret":"<the new value from step 1>"}'::jsonb
+       );
+     $cron$
+   );
+   ```
+
+4. **Confirm the `spend-alarm` function actually validates `x-cron-secret` against `Deno.env.get("CRON_SECRET")`** — this audit did not open `supabase/functions/spend-alarm/index.ts` to verify the check exists and is enforced (only the cron-job side, in the migration file, was read). Verify this before considering the rotation complete; if the function doesn't check the header at all, the secret was cosmetic and the real fix is adding the check.
+
+5. **Write a new migration file recording that this rotation happened** (a comment is enough — `-- Rotated CRON_SECRET on <date>, prior value revoked, see docs/windows/SECURITY_AND_PRIVACY.md`), so the history explains the gap for future readers rather than looking like an unexplained schedule change. Do **not** put the new secret value in that file — that would repeat the original mistake.
+
+6. **Verify the old value no longer works** by manually invoking the function with it (expect a rejection) — this confirms the rotation actually took effect rather than the new secret being set but the old cron job still holding the stale header.
+
+None of these six steps were executed as part of this session — they require Supabase project credentials this environment doesn't have. This runbook exists so they can be run in a few minutes by whoever does have access, without having to re-derive the procedure from the migration file.
 
 ---
 

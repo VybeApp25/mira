@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/stripe-checkout.schema.json",
+  "title": "StripeCheckout",
+  "description": "supabase/functions/stripe-checkout/index.ts. Authenticated. Creates a Stripe Checkout session for a subscription (mode=subscription) and returns its hosted URL — the client opens this in the system default browser (NSWorkspace.shared.open on macOS; Process.Start on Windows), it does NOT embed Stripe Elements or collect card details itself. client_reference_id and metadata.user_id are both set to the caller's verified user id (never client-supplied) so the stripe-webhook handler can attribute the resulting subscription to the right profiles row. success_url/cancel_url are hardcoded to https://getmira.today (not configurable per-request) — a Windows-specific web destination may need its own decision if the marketing site's post-checkout UX differs by platform.",
+  "$defs": {
+    "StripeCheckoutRequest": {
+      "title": "StripeCheckoutRequest",
+      "type": "object",
+      "properties": {
+        "plan": { "title": "StripeCheckoutPlan", "type": "string", "enum": ["pro", "ultra"], "description": "Any value other than \"ultra\" is treated as \"pro\" server-side (the function does plan === \"ultra\" ? PRICE_ULTRA : PRICE_PRO with no explicit validation error for a bad value) — this is a looseness in the current source, not a documented contract guarantee." }
+      },
+      "required": ["plan"],
+      "additionalProperties": false
+    },
+    "StripeCheckoutResponse": {
+      "title": "StripeCheckoutResponse",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "format": "uri", "description": "Stripe-hosted Checkout session URL." }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
+    "StripeCheckoutErrorResponse": {
+      "title": "StripeCheckoutErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "type": "string", "description": "Either unauthenticated (thrown by requireUser) or Stripe's own session.error.message forwarded through on a Stripe API failure (400)." }
+          }
+        }
+      ]
+    }
+  }
+}

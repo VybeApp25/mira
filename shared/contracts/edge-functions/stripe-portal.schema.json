@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/stripe-portal.schema.json",
+  "title": "StripePortal",
+  "description": "supabase/functions/stripe-portal/index.ts. Authenticated. Creates a Stripe Billing Portal session so a paid user can update payment method or cancel. The Stripe customer id is looked up server-side from the caller's own profiles.stripe_customer_id (never trusted from the client) — if there is no customer id yet (never checked out), returns 400 no_subscription. Request body is empty (no fields) — the function reads only the JWT.",
+  "$defs": {
+    "StripePortalResponse": {
+      "title": "StripePortalResponse",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "format": "uri", "description": "Stripe-hosted Billing Portal session URL." }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
+    "StripePortalErrorResponse": {
+      "title": "StripePortalErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "type": "string", "description": "unauthenticated, no_subscription (no Stripe customer on file yet), or Stripe's own session.error.message on a Stripe API failure." }
+          }
+        }
+      ]
+    }
+  }
+}

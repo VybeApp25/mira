@@ -1,0 +1,13 @@
+{
+  "name": "mira-windows-codegen",
+  "private": true,
+  "description": "Generates Swift and C# types from shared/contracts/**/*.schema.json. See README.md.",
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check"
+  },
+  "devDependencies": {
+    "quicktype": "25.0.0"
+  }
+}

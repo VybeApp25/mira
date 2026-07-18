@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/mint-assemblyai-token.schema.json",
+  "title": "MintAssemblyAIToken",
+  "description": "supabase/functions/mint-assemblyai-token/index.ts. Mints a short-lived (120s) AssemblyAI v3 streaming token, used as a ?token= query param on the wss://streaming.assemblyai.com/v3/ws connection so the raw AssemblyAI key never reaches the client WebSocket. Requires a verified Supabase JWT only (no voice-quota check in this function today — contrast with mint-realtime-token, which does check checkVoiceQuota; this appears to be an asymmetry in the current source, not something this audit should paper over).",
+  "$defs": {
+    "MintAssemblyAITokenResponse": {
+      "title": "MintAssemblyAITokenResponse",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "Empty string if AssemblyAI's response omitted it." }
+      },
+      "required": ["token"],
+      "additionalProperties": false
+    },
+    "MintAssemblyAITokenErrorResponse": {
+      "title": "MintAssemblyAITokenErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "description": "Either a string code (unauthenticated, ASSEMBLYAI_API_KEY secret not set) or the raw AssemblyAI error payload forwarded via json({error: payload}, res.status) on an upstream failure." }
+          }
+        }
+      ]
+    }
+  }
+}

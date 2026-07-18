@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/openai-tts-proxy.schema.json",
+  "title": "OpenAITTSProxy",
+  "description": "supabase/functions/openai-tts-proxy/index.ts. Generates the in-app voice-preview clip (Settings > voice picker). Deliberately narrow: the client sends only {voice}; the model (gpt-4o-mini-tts) and the spoken phrase are fixed server-side (PREVIEW_PHRASE = \"Hi, I'm Mira, your AI companion. How can I help you today?\") so every voice speaks the same line and the endpoint can't be abused as a general-purpose TTS sink. On success, response Content-Type is audio/mpeg (raw MP3 bytes), not JSON — model this as a binary response, not a JSON object.",
+  "$defs": {
+    "OpenAITTSProxyRequest": {
+      "title": "OpenAITTSProxyRequest",
+      "type": "object",
+      "properties": {
+        "voice": {
+          "title": "OpenAITTSProxyVoice",
+          "type": "string",
+          "enum": ["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"],
+          "description": "Server-side allowlist (ALLOWED_VOICES) mirroring MiraVoice in the Swift client."
+        }
+      },
+      "required": ["voice"],
+      "additionalProperties": false
+    },
+    "OpenAITTSProxySuccessResponse": {
+      "title": "OpenAITTSProxySuccessResponse",
+      "type": "string",
+      "contentEncoding": "base64",
+      "contentMediaType": "audio/mpeg",
+      "description": "The actual HTTP response is a raw audio/mpeg byte stream, not JSON — this schema entry exists only to document that binary contract for a codegen target that needs an explicit type (most HTTP client generators treat this endpoint as returning a byte array / Data / Stream, not a decoded model type)."
+    },
+    "OpenAITTSProxyErrorResponse": {
+      "title": "OpenAITTSProxyErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "OpenAITTSProxyErrorCode", "type": "string", "enum": ["method_not_allowed", "unauthenticated", "upgrade_required", "quota_exceeded", "voice_not_allowed", "OPENAI_API_KEY secret not set"] },
+            "voice": { "type": "string", "description": "Present only alongside error=voice_not_allowed; echoes the rejected voice name." }
+          }
+        }
+      ]
+    }
+  }
+}

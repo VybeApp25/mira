@@ -28,11 +28,16 @@ This is a phased plan, not an authorization to build. **Phase 0 (this audit) is 
 
 The lowest-risk, highest-leverage next step, because it touches only the already-shared backend layer and produces artifacts useful regardless of what UI stack is ultimately chosen.
 
-- Stand up `shared/contracts/` with JSON Schema (or OpenAPI) definitions for every Edge Function request/response and the `profiles`/`usage`/`voice_usage`/`task_runs` table shapes.
-- Build the `quicktype`-based codegen script (`shared/codegen/`) that emits both Swift and C# types from those contracts, and verify the generated Swift types are drop-in-compatible with the hand-written structs already in `Mira/Services/*.swift` (a correctness check on the contracts themselves, with zero risk to the shipping macOS app since nothing is wired up yet).
-- Resolve open items 1–2 above.
+**Status: contracts + codegen scaffolding done (2026-07-18).** `shared/contracts/` now has a JSON Schema for every client-facing Edge Function (`anthropic-proxy`, `openai-proxy`, `assemblyai-proxy`, `composio-proxy`, `mint-realtime-token`, `mint-assemblyai-token`, `openai-tts-proxy`, `openai-tts-narration`, `report-voice-usage`, `check-device`, `register-device`, `spotify-config`, `spotify-search`, `stripe-checkout`, `stripe-portal`, `skills-catalog`, `skills-publish`), the Supabase GoTrue auth response/request shapes, and the `profiles` table row — each derived by directly reading the corresponding source file, not guessed. `shared/codegen/` runs quicktype against those contracts and emits both Swift and C# types (`shared/codegen/generated/{swift,csharp}/`); this was actually run, not just written — including finding and fixing two real quicktype quirks (a schema shape that crashes the generator, and cross-file type-name collisions once multiple contracts' output shares one namespace) documented in `shared/codegen/README.md`. The generated `SupabaseAuthResponse`/`SupabaseAuthUser` Swift types were spot-checked field-for-field against the hand-written structs in `Mira/Services/SupabaseService.swift` and match.
 
-**Exit criteria:** a reviewed set of contracts + generated C# types that the user has looked at, with no app code written yet.
+**Not done / explicitly deferred, even though the contracts exist:**
+- `usage`/`voice_usage`/`task_runs` table schemas — only `profiles` (the one table a client reads directly) is modeled; the others are written only by service-role Edge Functions and never read directly by a client, so they weren't prioritized. Add them if a future feature needs to read them directly.
+- Wiring the generated Swift types into `Mira/Services/*.swift` to replace the hand-written structs — deliberately not done as part of standing up the pipeline; that's its own reviewed, call-site-by-call-site change against the live macOS app, per `shared/codegen/README.md`'s own integration note.
+- A Windows C# project to consume `generated/csharp/` — doesn't exist yet (that's Phase 2).
+- CI wiring for `npm run check` (the regenerate-and-diff drift check) — the script exists and works locally; nothing runs it automatically yet.
+- Resolve open items 1–2 above (Windows CLI availability is resolved; `AppSecrets.swift` contents and the CRON_SECRET rotation are unrelated to this contracts work and remain open).
+
+**Exit criteria:** a reviewed set of contracts + generated Swift/C# types — met. No app code (Mira/ or a Windows project) has been written.
 
 ### Phase 2 — Windows project scaffolding + auth/entitlements only
 

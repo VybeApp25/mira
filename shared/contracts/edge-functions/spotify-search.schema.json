@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/spotify-search.schema.json",
+  "title": "SpotifySearch",
+  "description": "supabase/functions/spotify-search/index.ts. Authenticated. Resolves a free-text query (or a split track/artist pair) to a single top-match Spotify track URI via the Spotify Web API Client Credentials flow (catalog/search access only — no user playback scope, so this cannot itself control playback). On macOS, the client then hands the returned URI to the local Spotify app via AppleScript; on Windows this playback step needs its own design (AppleScript has no equivalent — see FEATURE_PARITY_MATRIX.md).",
+  "$defs": {
+    "SpotifySearchRequest": {
+      "title": "SpotifySearchRequest",
+      "type": "object",
+      "description": "Provide either `query` (free text) or `track`/`artist` (used together as Spotify field filters `track:X artist:Y` for a more precise match, or individually as plain search terms). At least one of query/track/artist must resolve to a non-empty search string or the function returns 'missing query'.",
+      "properties": {
+        "query": { "type": "string" },
+        "track": { "type": "string" },
+        "artist": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "SpotifySearchResponse": {
+      "title": "SpotifySearchResponse",
+      "type": "object",
+      "properties": {
+        "uri": { "type": "string", "description": "Spotify URI, e.g. spotify:track:...", "pattern": "^spotify:track:" },
+        "name": { "type": "string" },
+        "artist": { "type": "string", "description": "Comma-joined artist names." }
+      },
+      "required": ["uri", "name", "artist"],
+      "additionalProperties": false
+    },
+    "SpotifySearchErrorResponse": {
+      "title": "SpotifySearchErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "SpotifySearchErrorCode", "type": "string", "enum": ["SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET secret not set", "unauthenticated", "upgrade_required", "missing query", "spotify_token_failed", "spotify_search_failed", "no_match"] },
+            "query": { "type": "string", "description": "Present only alongside error=no_match; echoes the resolved search string." },
+            "status": { "type": "integer", "description": "Present only alongside spotify_token_failed/spotify_search_failed; echoes the upstream Spotify HTTP status." }
+          }
+        }
+      ]
+    }
+  }
+}

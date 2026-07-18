@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/tables/profile-row.schema.json",
+  "title": "ProfileRow",
+  "description": "public.profiles row shape, read via PostgREST (e.g. GET /rest/v1/profiles?select=plan, confirmed from Mira/Services/EntitlementService.swift's fetchAndApplyPlan()). Confirmed columns come from supabase/migrations/20260614120000_secrets_proxy.sql (user_id, plan, stripe_customer_id, updated_at), 20260625120000_stripe_subscription.sql (stripe_subscription_id), and 20260626120000_device_lock_and_spend_alarm.sql (device_id_hash). RLS restricts a signed-in user to SELECT on their own row only (auth.uid() = user_id); there is no user-facing INSERT/UPDATE policy — every write happens through a service-role Edge Function (stripe-webhook for plan/stripe_customer_id/stripe_subscription_id; register-device for device_id_hash).",
+  "type": "object",
+  "properties": {
+    "user_id": { "type": "string", "format": "uuid" },
+    "plan": { "title": "ProfilePlan", "type": "string", "enum": ["free", "pro", "ultra"], "description": "Server-side source of truth for entitlement. EntitlementService.swift's client-side cache is UX-only and must never be trusted for authorization decisions." },
+    "stripe_customer_id": { "type": ["string", "null"] },
+    "stripe_subscription_id": { "type": ["string", "null"] },
+    "device_id_hash": { "type": ["string", "null"], "description": "SHA-256(hardware serial + persisted random UUID). A partial unique index enforces at most one device_id_hash per free-tier account; paid accounts are exempt. See SECURITY_AND_PRIVACY.md for the Windows-equivalent fingerprint scheme this needs." },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["user_id", "plan"],
+  "additionalProperties": false
+}

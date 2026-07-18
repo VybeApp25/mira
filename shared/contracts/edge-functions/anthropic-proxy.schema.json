@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/anthropic-proxy.schema.json",
+  "title": "AnthropicProxy",
+  "description": "supabase/functions/anthropic-proxy/index.ts. POST only. Auth: Authorization: Bearer <supabase JWT> + apikey: <anon key>. This is a TRANSPARENT reverse proxy of Anthropic's POST /v1/messages — the function only inspects/constrains `model` and `max_tokens` on the request, and passes every other field through unchanged. It also forwards the client's `anthropic-version` and `anthropic-beta` headers verbatim (the latter is required for the `computer` tool used by ComputerUseOrchestrator/ElementLocationDetector to work at all). The success response (streamed SSE when request.stream=true, else JSON) is Anthropic's own Messages API response, forwarded byte-for-byte — this schema does not redefine that upstream shape, only the request fields Mira's proxy actually validates and the proxy-specific error shapes.",
+  "$defs": {
+    "AnthropicProxyRequest": {
+      "title": "AnthropicProxyRequest",
+      "type": "object",
+      "description": "Passthrough of the Anthropic Messages API request body. Only `model` and `max_tokens` are inspected server-side; everything else (messages, system, tools, tool_choice, stream, metadata, etc.) is forwarded as-is to api.anthropic.com/v1/messages.",
+      "properties": {
+        "model": {
+          "title": "AnthropicProxyModel",
+          "type": "string",
+          "enum": [
+            "claude-sonnet-5",
+            "claude-fable-5",
+            "claude-opus-4-8",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001"
+          ],
+          "description": "Server-side allowlist (ALLOWED_MODELS in the function) — any other value is rejected with model_not_allowed. This list is a snapshot as of this audit and WILL drift as Mira adopts new models; treat it as a live value to re-derive from source at codegen time, not a frozen constant."
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Capped server-side to a per-plan ceiling (free: 1500, pro: 8000, ultra: 16000) via Math.min — the client's requested value is silently reduced, never rejected, if it exceeds the cap."
+        },
+        "stream": {
+          "type": "boolean",
+          "description": "When true, the response is Content-Type: text/event-stream, metered by tapping message_start/message_delta usage fields inline. When false/absent, the response is application/json, metered from the final usage block."
+        }
+      },
+      "required": ["model"],
+      "additionalProperties": true
+    },
+    "AnthropicProxyErrorResponse": {
+      "title": "AnthropicProxyErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "AnthropicProxyErrorCode", "type": "string", "enum": ["method_not_allowed", "unauthenticated", "upgrade_required", "quota_exceeded", "invalid_body", "model_not_allowed", "ANTHROPIC_API_KEY secret not set"] },
+            "model": { "type": "string", "description": "Present only alongside error=model_not_allowed; echoes the rejected model name." }
+          }
+        }
+      ]
+    }
+  }
+}
