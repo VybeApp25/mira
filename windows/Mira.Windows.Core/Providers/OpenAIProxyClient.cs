@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Mira.Windows.Core.Auth;
@@ -13,6 +14,10 @@ namespace Mira.Windows.Core.Providers;
 /// by the <c>gpt_query</c> route (an explicit "ask GPT" request) — see
 /// shared/contracts/edge-functions/openai-proxy.schema.json for the request
 /// fields this proxy actually validates (model allowlist, max_tokens cap).
+///
+/// Reacts to a 401 with one refresh-and-retry, same as
+/// <see cref="AnthropicProxyClient"/> and for the same reason — see that
+/// class's doc comment for the bug this fixes.
 /// </summary>
 public static class OpenAIProxyClient
 {
@@ -31,13 +36,15 @@ public static class OpenAIProxyClient
                 ["messages"] = new JArray { new JObject { ["role"] = "user", ["content"] = prompt } },
             };
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, Url)
+            var resp = await SendOnceAsync(body, ct);
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
             {
-                Content = new StringContent(body.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json"),
-            };
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SupabaseService.CachedAccessToken);
+                resp.Dispose();
+                if (!await SupabaseService.Shared.RefreshAfter401Async(ct)) return "";
+                resp = await SendOnceAsync(body, ct);
+            }
 
-            using var resp = await Http.SendAsync(req, ct);
+            using var _ = resp;
             var text = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode) return "";
 
@@ -48,5 +55,15 @@ public static class OpenAIProxyClient
         {
             return "";
         }
+    }
+
+    private static async Task<HttpResponseMessage> SendOnceAsync(JObject body, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, Url)
+        {
+            Content = new StringContent(body.ToString(Newtonsoft.Json.Formatting.None), Encoding.UTF8, "application/json"),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SupabaseService.CachedAccessToken);
+        return await Http.SendAsync(req, ct);
     }
 }

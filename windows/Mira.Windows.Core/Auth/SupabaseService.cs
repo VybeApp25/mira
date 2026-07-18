@@ -49,11 +49,36 @@ public sealed class SupabaseService
     private SupabaseSession? _session;
     private Task? _refreshInFlight;
     private readonly object _refreshGate = new();
+    private Timer? _refreshTimer;
 
     private SupabaseService()
     {
         _session = SecureSessionStore.Load();
         CachedAccessToken = _session?.AccessToken ?? "";
+        ScheduleAutoRefresh();
+    }
+
+    /// <summary>
+    /// (Re)starts the proactive-refresh poll — mirrors Swift's
+    /// <c>scheduleAutoRefresh()</c>. THIS WAS MISSING FOR ALL OF PHASE 2-5's
+    /// testing: <see cref="EnsureFreshTokenAsync"/> existed but nothing ever
+    /// called it, so a session token that expired mid-session (Supabase access
+    /// tokens live ~1h) never refreshed — every authed proxy call then failed
+    /// with a token-verification error from Supabase's gateway (observed
+    /// directly: <c>{"code":"UNAUTHORIZED_ASYMMETRIC_JWT","message":"Invalid JWT"}</c>
+    /// on both a plain chat message and a computer-use request, hours into the
+    /// same signed-in session — not specific to either route, which is what
+    /// pointed at an auth-layer problem rather than a routing or vision bug).
+    /// Armed on every session change (sign-in/sign-up/refresh); a null session
+    /// tears it down. A repeating timer rather than a single long delay for the
+    /// same reason as Swift: cheap to re-check, and resilient to the process
+    /// having been suspended/idle past when a one-shot timer would have fired.
+    /// </summary>
+    private void ScheduleAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        if (_session is null) { _refreshTimer = null; return; }
+        _refreshTimer = new Timer(_ => _ = EnsureFreshTokenAsync(), null, TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(120));
     }
 
     public SupabaseSession? Session => _session;
@@ -213,6 +238,7 @@ public sealed class SupabaseService
         CachedAccessToken = session?.AccessToken ?? "";
         if (session is null) SecureSessionStore.Clear();
         else SecureSessionStore.Save(session);
+        ScheduleAutoRefresh();
         SessionChanged?.Invoke(session);
     }
 }

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Mira.Windows.Core.Auth;
@@ -16,6 +17,17 @@ namespace Mira.Windows.Core.Providers;
 /// Messages API — request/response bodies here are the real upstream shapes, not
 /// the deliberately-unmodeled contract in shared/contracts/edge-functions/anthropic-proxy.schema.json
 /// (see that schema's own note: success responses are out of scope to redefine there).
+///
+/// Every call here reacts to a 401 by forcing one token refresh and retrying
+/// once — mirrors Swift's <c>MiraBackend.proxyData</c>/<c>proxyBytes</c>. This
+/// was missing until a live test caught it: <see cref="SupabaseService"/>'s
+/// proactive refresh timer existed as a method but was never scheduled (see
+/// its own fix), so a session that outlived its ~1h access token failed every
+/// authed call with a gateway-level JWT-verification error
+/// (<c>{"code":"UNAUTHORIZED_ASYMMETRIC_JWT","message":"Invalid JWT"}</c>) with
+/// no self-healing path — even with the timer now armed, a call landing in the
+/// ~2-minute gap between checks (or right as the token crosses its expiry
+/// during a long-running request) still needs this reactive path.
 /// </summary>
 public static class AnthropicProxyClient
 {
@@ -38,10 +50,7 @@ public static class AnthropicProxyClient
     public static async Task<JObject> SendRawAsync(JObject body, IReadOnlyDictionary<string, string>? extraHeaders = null, CancellationToken ct = default)
     {
         body["stream"] = false;
-        using var req = BuildRequest(body);
-        if (extraHeaders is not null)
-            foreach (var (key, value) in extraHeaders) req.Headers.Add(key, value);
-        using var resp = await Http.SendAsync(req, ct);
+        using var resp = await SendWithRetryAsync(body, extraHeaders, HttpCompletionOption.ResponseContentRead, ct);
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode) throw new AnthropicProxyException(text, (int)resp.StatusCode);
         return JObject.Parse(text);
@@ -51,8 +60,7 @@ public static class AnthropicProxyClient
     public static async Task<string> SendAsync(JObject body, CancellationToken ct = default)
     {
         body["stream"] = false;
-        using var req = BuildRequest(body);
-        using var resp = await Http.SendAsync(req, ct);
+        using var resp = await SendWithRetryAsync(body, null, HttpCompletionOption.ResponseContentRead, ct);
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode) throw new AnthropicProxyException(text, (int)resp.StatusCode);
 
@@ -73,8 +81,7 @@ public static class AnthropicProxyClient
     public static async Task<string> StreamAsync(JObject body, Action<string> onToken, CancellationToken ct = default)
     {
         body["stream"] = true;
-        using var req = BuildRequest(body);
-        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var resp = await SendWithRetryAsync(body, null, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!resp.IsSuccessStatusCode)
         {
             var errText = await resp.Content.ReadAsStringAsync(ct);
@@ -105,6 +112,32 @@ public static class AnthropicProxyClient
         }
 
         return full.ToString();
+    }
+
+    /// <summary>Sends once; on a 401, forces a token refresh and retries exactly once with a freshly-built request (a spent <see cref="HttpRequestMessage"/> can't be resent, so this rebuilds from <paramref name="body"/> rather than reusing one).</summary>
+    private static async Task<HttpResponseMessage> SendWithRetryAsync(
+        JObject body, IReadOnlyDictionary<string, string>? extraHeaders, HttpCompletionOption completionOption, CancellationToken ct)
+    {
+        var resp = await SendOnceAsync(body, extraHeaders, completionOption, ct);
+        if (resp.StatusCode != HttpStatusCode.Unauthorized) return resp;
+        resp.Dispose();
+
+        // RefreshAfter401Async signs the user out if the refresh token is ALSO
+        // dead — retrying with a token we already know is invalid would just
+        // fail again with a less clear error, so surface a direct message instead.
+        var refreshed = await SupabaseService.Shared.RefreshAfter401Async(ct);
+        if (!refreshed) throw new AnthropicProxyException("Your session expired. Please sign in again.", (int)HttpStatusCode.Unauthorized);
+
+        return await SendOnceAsync(body, extraHeaders, completionOption, ct);
+    }
+
+    private static async Task<HttpResponseMessage> SendOnceAsync(
+        JObject body, IReadOnlyDictionary<string, string>? extraHeaders, HttpCompletionOption completionOption, CancellationToken ct)
+    {
+        using var req = BuildRequest(body);
+        if (extraHeaders is not null)
+            foreach (var (key, value) in extraHeaders) req.Headers.Add(key, value);
+        return await Http.SendAsync(req, completionOption, ct);
     }
 
     private static HttpRequestMessage BuildRequest(JObject body)
