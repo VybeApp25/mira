@@ -42,12 +42,38 @@ public sealed class ComputerUseOrchestrator
 
     public event Action<ComputerUseStep>? StepCompleted;
 
+    /// <summary>
+    /// Fired once at the start/end of every <see cref="RunAsync"/> call — the
+    /// hook <see cref="Shell.AgentActivityWindow"/> uses to show/hide the
+    /// floating activity chip (there's no persisted "AgentJob" system on
+    /// Windows yet, unlike macOS's <c>AgentJobStore</c>-backed chips, so this
+    /// covers only the ephemeral "AgentActivity" half of the Mac app's chip
+    /// system for now — see docs/windows/IMPLEMENTATION_PLAN.md Phase 6).
+    /// </summary>
+    public event Action? TaskStarted;
+
+    /// <summary>Fired exactly once per <see cref="RunAsync"/> call, on every exit path (success, refusal, API error, step-ceiling, or <see cref="Stop"/>).</summary>
+    public event Action? TaskFinished;
+
     private ComputerUseOrchestrator() { }
 
     public void Stop() => _stopRequested = true;
 
     /// <summary>Runs the vision-control loop for <paramref name="task"/> until Claude signals completion, the step ceiling is hit, or <see cref="Stop"/> is called. Returns Claude's final text.</summary>
     public async Task<string> RunAsync(string task, CancellationToken ct = default)
+    {
+        TaskStarted?.Invoke();
+        try
+        {
+            return await RunCoreAsync(task, ct);
+        }
+        finally
+        {
+            TaskFinished?.Invoke();
+        }
+    }
+
+    private async Task<string> RunCoreAsync(string task, CancellationToken ct)
     {
         _stopRequested = false;
         var width = ScreenCapture.DisplayWidth;

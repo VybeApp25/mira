@@ -13,6 +13,7 @@ public partial class App : System.Windows.Application
     private TrayIconManager? _tray;
     private MainWindow? _mainWindow;
     private IslandWindow? _island;
+    private AgentActivityWindow? _agentActivity;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -46,6 +47,12 @@ public partial class App : System.Windows.Application
         // than needing to be opened like Chat/Voice do.
         AccountService.Shared.StateChanged += OnAuthStateChanged;
         if (AccountService.Shared.IsSignedIn) ShowIsland();
+
+        // Unlike the island, this doesn't need to gate on sign-in -- it stays
+        // hidden and inert until a computer-use run actually starts (which
+        // itself requires being signed in), so there's no harm creating it
+        // unconditionally at launch.
+        _agentActivity = new AgentActivityWindow();
 
         ShowMainWindow(); // first run: surface the sign-in UI immediately rather than
                           // leaving a brand-new user staring at nothing but a tray icon
@@ -87,6 +94,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         AccountService.Shared.StateChanged -= OnAuthStateChanged;
+        _agentActivity?.Close();
         _tray?.Dispose();
         base.OnExit(e);
     }
