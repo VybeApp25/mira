@@ -42,7 +42,7 @@ public static class RouterHandler
             MiraRoute.PermissionRequired => new RouteResult(RouteResultKind.NotAvailable,
                 "A required permission is missing.", decision.Route),
 
-            MiraRoute.LocalResponse => new RouteResult(RouteResultKind.Reply, RouterService.LocalReply(prompt), decision.Route),
+            MiraRoute.LocalResponse => await LocalOrEscalatedReplyAsync(prompt, history, onStreamChunk, decision.Route, ct),
 
             MiraRoute.GptQuery => new RouteResult(RouteResultKind.Reply, await GptReplyAsync(prompt, ct), decision.Route),
 
@@ -74,6 +74,28 @@ public static class RouterHandler
 
         var result = await ComputerUseOrchestrator.Shared.RunAsync(prompt, ct);
         return new RouteResult(RouteResultKind.Reply, string.IsNullOrEmpty(result) ? "Done." : result, MiraRoute.ComputerUse);
+    }
+
+    /// <summary>
+    /// local_response covers genuine small talk (canned, instant) AND anything
+    /// the classifier judged "answerable without tools or live data" — the
+    /// latter is often a real question ("what day is it", "what's 12% of 340")
+    /// that <see cref="RouterService.LocalReply"/> has no canned line for. A
+    /// bare fallback string there ("Got it.") is indistinguishable from the
+    /// assistant not understanding at all, which is exactly what got reported
+    /// as "not actually smart... only hallucinations." So: use the canned
+    /// reply when one truly fits, otherwise fall through to the same real
+    /// Claude call <see cref="MiraRoute.HigherModel"/> uses — a correct answer
+    /// beats a fast non-answer.
+    /// </summary>
+    private static async Task<RouteResult> LocalOrEscalatedReplyAsync(
+        string prompt, IReadOnlyList<ChatMessage> history, Action<string>? onStreamChunk, MiraRoute route, CancellationToken ct)
+    {
+        var canned = RouterService.LocalReply(prompt);
+        if (canned is not null) return new RouteResult(RouteResultKind.Reply, canned, route);
+
+        var reply = await AnthropicProxyClient.StreamAsync(BuildClaudeBody(history), onStreamChunk ?? (_ => { }), ct);
+        return new RouteResult(RouteResultKind.Reply, reply, route);
     }
 
     private static async Task<string> GptReplyAsync(string prompt, CancellationToken ct)

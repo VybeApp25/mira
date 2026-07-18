@@ -565,7 +565,17 @@ public sealed class RouterService
 
     // ---- Execution helpers used by RouterHandler ------------------------------
 
-    public static string LocalReply(string prompt)
+    /// <summary>
+    /// Canned, zero-latency replies for genuine small talk plus anything
+    /// answerable from the local system clock alone (real data, not a model
+    /// guess). Returns <c>null</c> when the prompt doesn't match anything
+    /// specific — callers MUST treat <c>null</c> as "escalate to a real model,"
+    /// not as license to print a placeholder. This used to fall through to a
+    /// bare "Got it." for anything unmatched (e.g. "what day is it"), which is
+    /// exactly what looked like the assistant "not pulling any intelligence" —
+    /// see <see cref="Chat.RouterHandler"/>'s local_response handling for the fix.
+    /// </summary>
+    public static string? LocalReply(string prompt)
     {
         var lower = prompt.ToLowerInvariant().Trim(PunctuationToTrim);
         if (lower.StartsWith("hi") || lower.StartsWith("hello") || lower.StartsWith("hey"))
@@ -576,7 +586,34 @@ public sealed class RouterService
             return "Right now: text chat via Claude and GPT. Voice, screen awareness, and desktop automation are coming in later phases.";
         if (lower.Contains("thanks") || lower.Contains("thank you")) return "Happy to help!";
         if (lower.Contains("bye") || lower.Contains("goodbye")) return "I'll be here when you need me.";
-        return "Got it.";
+
+        var dateTimeReply = TryDateTimeReply(lower);
+        if (dateTimeReply is not null) return dateTimeReply;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Answers date/day/time questions from the real local system clock —
+    /// genuinely "answerable without tools or live data" (it's on the machine),
+    /// so it belongs in local_response rather than a model round-trip, but only
+    /// when we can answer it correctly rather than guessing.
+    /// </summary>
+    private static string? TryDateTimeReply(string lower)
+    {
+        var now = DateTime.Now;
+        var wantsDate = lower.Contains("what day") || lower.Contains("what's the date") || lower.Contains("whats the date")
+            || lower.Contains("today's date") || lower.Contains("todays date") || lower.Contains("current date")
+            || (lower.Contains("what") && lower.Contains("date") && lower.Contains("today"));
+        var wantsTime = lower.Contains("what time") || lower.Contains("current time") || lower.Contains("time is it");
+
+        if (wantsDate && wantsTime)
+            return $"It's {now:dddd, MMMM d, yyyy} and the time is {now:h:mm tt}.";
+        if (wantsDate)
+            return $"Today is {now:dddd, MMMM d, yyyy}.";
+        if (wantsTime)
+            return $"It's {now:h:mm tt}.";
+        return null;
     }
 
     public static string ExtractMemoryQuery(string prompt)
