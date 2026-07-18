@@ -26,12 +26,13 @@ public sealed class TrayIconManager : IDisposable
     private readonly NotifyIcon _icon;
     private readonly Action _openMainWindow;
 
-    public TrayIconManager(Action openMainWindow)
+    public TrayIconManager(Action openMainWindow, Action showIsland)
     {
         _openMainWindow = openMainWindow;
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Mira", null, (_, _) => _openMainWindow());
+        menu.Items.Add("Show Island", null, (_, _) => showIsland());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Sign Out", null, (_, _) => AccountService.Shared.SignOut());
         menu.Items.Add(new ToolStripSeparator());

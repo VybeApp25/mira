@@ -1,4 +1,6 @@
 using System.Windows;
+using Mira.Windows.App.Shell;
+using Mira.Windows.Core.Account;
 
 namespace Mira.Windows.App;
 
@@ -10,6 +12,7 @@ public partial class App : System.Windows.Application
 {
     private TrayIconManager? _tray;
     private MainWindow? _mainWindow;
+    private IslandWindow? _island;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -35,10 +38,24 @@ public partial class App : System.Windows.Application
                     "Mira", MessageBoxButton.OK, MessageBoxImage.Error);
         };
 
-        _tray = new TrayIconManager(ShowMainWindow);
+        _tray = new TrayIconManager(ShowMainWindow, ShowIsland);
+
+        // The island is the Windows equivalent of the Mac app's always-present
+        // notch shell (Phase 6) — it shows itself once signed in, same as
+        // NotchManager.setup() runs for the whole session on macOS, rather
+        // than needing to be opened like Chat/Voice do.
+        AccountService.Shared.StateChanged += OnAuthStateChanged;
+        if (AccountService.Shared.IsSignedIn) ShowIsland();
+
         ShowMainWindow(); // first run: surface the sign-in UI immediately rather than
                           // leaving a brand-new user staring at nothing but a tray icon
     }
+
+    private void OnAuthStateChanged(AuthState state) => Dispatcher.Invoke(() =>
+    {
+        if (state == AuthState.SignedIn) ShowIsland();
+        else if (state == AuthState.SignedOut) HideIsland();
+    });
 
     private void ShowMainWindow()
     {
@@ -51,8 +68,25 @@ public partial class App : System.Windows.Application
         _mainWindow.Activate();
     }
 
+    private void ShowIsland()
+    {
+        if (_island is null || !_island.IsLoaded)
+        {
+            _island = new IslandWindow();
+            _island.Closed += (_, _) => _island = null;
+        }
+        _island.Show();
+    }
+
+    private void HideIsland()
+    {
+        _island?.Close();
+        _island = null;
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        AccountService.Shared.StateChanged -= OnAuthStateChanged;
         _tray?.Dispose();
         base.OnExit(e);
     }

@@ -1,0 +1,74 @@
+<Window x:Class="Mira.Windows.App.Shell.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Mira.Windows.App"
+        mc:Ignorable="d"
+        Title="Mira"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+    <Window.Resources>
+        <local:BoolToAlignmentConverter x:Key="BoolToAlignmentConverter" />
+        <local:BoolToBubbleBrushConverter x:Key="BoolToBubbleBrushConverter" />
+        <local:BoolToBubbleForegroundConverter x:Key="BoolToBubbleForegroundConverter" />
+    </Window.Resources>
+
+    <Border x:Name="Shell" Background="Black" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
+        <Grid x:Name="RootGrid">
+            <!-- Pulsing accent border shown only while a reply is in flight. -->
+            <Border x:Name="ThinkingGlow" BorderThickness="2" BorderBrush="#9E80EB" Opacity="0" IsHitTestVisible="False" />
+
+            <!-- Collapsed state: just a quiet label. -->
+            <TextBlock x:Name="CollapsedLabel" Text="Mira" Foreground="#ADB5B2" FontSize="13"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+
+            <!-- Expanded state: header + chat + input. -->
+            <Grid x:Name="ExpandedContent" Visibility="Collapsed" Margin="14,12,14,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <TextBlock Text="Mira" Foreground="#ECEEED" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+                    <Button x:Name="CollapseButton" Content="&#x2715;" HorizontalAlignment="Right" Width="22" Height="22"
+                            Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
+                            Click="CollapseButton_Click" />
+                </Grid>
+
+                <ScrollViewer x:Name="Scroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                    <ItemsControl x:Name="MessagesList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:ChatBubbleViewModel}">
+                                <Border Margin="4" Padding="10,6" CornerRadius="10" MaxWidth="300"
+                                        HorizontalAlignment="{Binding IsUser, Converter={StaticResource BoolToAlignmentConverter}}"
+                                        Background="{Binding IsUser, Converter={StaticResource BoolToBubbleBrushConverter}}">
+                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                               Foreground="{Binding IsUser, Converter={StaticResource BoolToBubbleForegroundConverter}}" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="InputBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
+                             KeyDown="InputBox_KeyDown" />
+                    <Button x:Name="SendButton" Grid.Column="1" Content="Send" Width="60" Height="30" Margin="8,0,0,0"
+                            Click="SendButton_Click" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
