@@ -4,12 +4,17 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Mira.Windows.App.Camera;
+using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Vision;
 using Button = System.Windows.Controls.Button;
+using Color = System.Windows.Media.Color;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
 
 namespace Mira.Windows.App.Shell;
 
@@ -48,9 +53,11 @@ public partial class IslandWindow : Window
 
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
-        (IslandTab.Shelf, "Shelf"), (IslandTab.Camera, "Camera"), (IslandTab.Agents, "Agents"),
+        (IslandTab.Shelf, "Shelf"), (IslandTab.Agents, "Agents"),
         (IslandTab.Labs, "Labs"), (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
     ];
+
+    private static readonly string[] WeekdayInitials = ["S", "M", "T", "W", "T", "F", "S"];
 
     private readonly ObservableCollection<ChatBubbleViewModel> _bubbles = new();
     private readonly List<ChatMessage> _history = new();
@@ -60,6 +67,10 @@ public partial class IslandWindow : Window
     private IslandTab _activeTab = IslandTab.Home;
     private DispatcherTimer? _collapseTimer;
     private GlobalHotkey? _hotkey;
+
+    private bool _isSeekingNowPlaying;
+    private WriteableBitmap? _cameraBitmap;
+    private bool _cameraFrameDispatchPending;
 
     public IslandWindow()
     {
@@ -90,6 +101,10 @@ public partial class IslandWindow : Window
             _hotkey?.Dispose();
             AccountService.Shared.StateChanged -= OnAuthStateChanged;
             EntitlementService.Shared.PlanChanged -= OnPlanChanged;
+            NowPlayingService.Shared.Changed -= OnNowPlayingChanged;
+            CameraPreviewService.Shared.FrameArrived -= OnCameraFrame;
+            CameraPreviewService.Shared.StartFailed -= OnCameraStartFailed;
+            CameraPreviewService.Shared.Stop();
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -98,6 +113,19 @@ public partial class IslandWindow : Window
         EntitlementService.Shared.PlanChanged += OnPlanChanged;
         AutonomyCheckBox.IsChecked = AutonomySettings.ComputerUseEnabled;
         RenderForAuthState(AccountService.Shared.State);
+
+        // Home tab is the default landing tab, matching NotchHomeIdleView's
+        // .onAppear { np.start() } -- started unconditionally here rather
+        // than gated to first-tab-selection since Home is always the first
+        // thing shown.
+        NowPlayingService.Shared.Changed += OnNowPlayingChanged;
+        _ = NowPlayingService.Shared.StartAsync();
+        RenderNowPlaying();
+        BuildCalendarStrip();
+
+        CameraPreviewService.Shared.FrameArrived += OnCameraFrame;
+        CameraPreviewService.Shared.StartFailed += OnCameraStartFailed;
+
         SelectTab(IslandTab.Home);
     }
 
@@ -197,10 +225,12 @@ public partial class IslandWindow : Window
 
     private void SelectTab(IslandTab tab)
     {
+        var previousTab = _activeTab;
         _activeTab = tab;
 
         HomePanel.Visibility = tab == IslandTab.Home ? Visibility.Visible : Visibility.Collapsed;
         ChatPanel.Visibility = tab == IslandTab.Chat ? Visibility.Visible : Visibility.Collapsed;
+        CameraPanel.Visibility = tab == IslandTab.Camera ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
@@ -215,11 +245,190 @@ public partial class IslandWindow : Window
         }
 
         if (tab == IslandTab.Chat && _isExpanded) InputBox.Focus();
+
+        // Only capture while the tab is actually visible -- mirrors
+        // NotchCameraTabView's .onAppear/.onDisappear start/stop lifecycle,
+        // so the camera light isn't on any longer than the user can see the preview.
+        if (tab == IslandTab.Camera && previousTab != IslandTab.Camera)
+        {
+            CameraStatusText.Text = "Starting camera…";
+            CameraPlaceholder.Visibility = Visibility.Visible;
+            _ = CameraPreviewService.Shared.StartAsync();
+        }
+        else if (tab != IslandTab.Camera && previousTab == IslandTab.Camera)
+        {
+            CameraPreviewService.Shared.Stop();
+            CameraImage.Source = null;
+            _cameraBitmap = null;
+        }
     }
 
-    // ---- Home ----
+    // ---- Home: Now Playing media panel ----
 
     private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => new VoiceWindow().Show();
+
+    private void OnNowPlayingChanged() => Dispatcher.Invoke(RenderNowPlaying);
+
+    private void RenderNowPlaying()
+    {
+        var np = NowPlayingService.Shared;
+
+        NowPlayingContent.Visibility = np.HasContent ? Visibility.Visible : Visibility.Collapsed;
+        NowPlayingNothingText.Visibility = np.HasContent ? Visibility.Collapsed : Visibility.Visible;
+        if (!np.HasContent)
+        {
+            AlbumArt.Source = null;
+            AlbumArtGlow.Source = null;
+            NoArtIcon.Visibility = Visibility.Visible;
+            return;
+        }
+
+        TrackTitleText.Text = np.Title;
+        TrackArtistText.Text = np.Artist;
+        PlayPauseButton.Content = np.IsPlaying ? "⏸" : "▶";
+        ShuffleButton.Opacity = np.IsShuffleActive ? 1.0 : 0.55;
+        RepeatButton.Opacity = np.IsRepeatActive ? 1.0 : 0.55;
+
+        if (np.ThumbnailBgra is not null && np.ThumbnailWidth > 0 && np.ThumbnailHeight > 0)
+        {
+            var bmp = CreateBitmapSource(np.ThumbnailBgra, np.ThumbnailWidth, np.ThumbnailHeight);
+            AlbumArt.Source = bmp;
+            AlbumArtGlow.Source = bmp;
+            NoArtIcon.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            AlbumArt.Source = null;
+            AlbumArtGlow.Source = null;
+            NoArtIcon.Visibility = Visibility.Visible;
+        }
+
+        if (!_isSeekingNowPlaying)
+        {
+            var duration = np.Duration.TotalSeconds > 0 ? np.Duration.TotalSeconds : 1;
+            var progress = Math.Clamp(np.Position.TotalSeconds / duration, 0, 1);
+            SeekFill.Width = SeekTrack.ActualWidth * progress;
+            PositionText.Text = FormatTime(np.Position);
+            DurationText.Text = FormatTime(np.Duration);
+        }
+    }
+
+    private static string FormatTime(TimeSpan t) => $"{(int)t.TotalMinutes}:{t.Seconds:D2}";
+
+    private async void ShuffleButton_Click(object sender, RoutedEventArgs e) => await NowPlayingService.Shared.ToggleShuffleAsync();
+    private async void PreviousButton_Click(object sender, RoutedEventArgs e) => await NowPlayingService.Shared.PreviousTrackAsync();
+    private async void PlayPauseButton_Click(object sender, RoutedEventArgs e) => await NowPlayingService.Shared.TogglePlayPauseAsync();
+    private async void NextButton_Click(object sender, RoutedEventArgs e) => await NowPlayingService.Shared.NextTrackAsync();
+    private async void RepeatButton_Click(object sender, RoutedEventArgs e) => await NowPlayingService.Shared.ToggleRepeatAsync();
+
+    private void SeekTrack_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _isSeekingNowPlaying = true;
+        UpdateSeekPreview(e.GetPosition(SeekTrack).X);
+        ((UIElement)sender).CaptureMouse();
+    }
+
+    private void SeekTrack_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_isSeekingNowPlaying) UpdateSeekPreview(e.GetPosition(SeekTrack).X);
+    }
+
+    private async void SeekTrack_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isSeekingNowPlaying) return;
+        ((UIElement)sender).ReleaseMouseCapture();
+        var ratio = Math.Clamp(e.GetPosition(SeekTrack).X / Math.Max(SeekTrack.ActualWidth, 1), 0, 1);
+        _isSeekingNowPlaying = false;
+        await NowPlayingService.Shared.SeekAsync(TimeSpan.FromSeconds(ratio * NowPlayingService.Shared.Duration.TotalSeconds));
+    }
+
+    private void UpdateSeekPreview(double x)
+    {
+        var ratio = Math.Clamp(x / Math.Max(SeekTrack.ActualWidth, 1), 0, 1);
+        SeekFill.Width = SeekTrack.ActualWidth * ratio;
+        PositionText.Text = FormatTime(TimeSpan.FromSeconds(ratio * NowPlayingService.Shared.Duration.TotalSeconds));
+    }
+
+    // ---- Home: calendar panel (visual shell only -- no Windows calendar account integration yet) ----
+
+    private void BuildCalendarStrip()
+    {
+        var today = DateTime.Today;
+        CalendarMonthYearText.Text = today.ToString("MMMM yyyy");
+        CalendarDateStrip.Children.Clear();
+
+        for (var offset = -3; offset <= 3; offset++)
+        {
+            var day = today.AddDays(offset);
+            var isToday = offset == 0;
+
+            var dayNumber = new Border
+            {
+                Width = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Background = isToday ? new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)) : System.Windows.Media.Brushes.Transparent,
+                Child = new TextBlock
+                {
+                    Text = day.Day.ToString(),
+                    FontSize = 11,
+                    FontWeight = isToday ? FontWeights.Bold : FontWeights.Medium,
+                    Foreground = System.Windows.Media.Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+
+            var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            stack.Children.Add(new TextBlock
+            {
+                Text = WeekdayInitials[(int)day.DayOfWeek],
+                FontSize = 8,
+                Foreground = new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 2),
+            });
+            stack.Children.Add(dayNumber);
+
+            var button = new Button { Style = (Style)FindResource("CalendarDayButtonStyle"), Content = stack };
+            CalendarDateStrip.Children.Add(button);
+        }
+    }
+
+    // ---- Camera ----
+
+    private void OnCameraFrame(byte[] bgra, int width, int height)
+    {
+        if (_cameraFrameDispatchPending) return; // drop frames the UI thread can't keep up with rather than backing up the WinRT capture thread
+        _cameraFrameDispatchPending = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _cameraFrameDispatchPending = false;
+            if (_activeTab != IslandTab.Camera) return; // stopped/switched away while this frame was in flight
+
+            if (_cameraBitmap is null || _cameraBitmap.PixelWidth != width || _cameraBitmap.PixelHeight != height)
+            {
+                _cameraBitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+                CameraImage.Source = _cameraBitmap;
+            }
+            _cameraBitmap.WritePixels(new Int32Rect(0, 0, width, height), bgra, width * 4, 0);
+            CameraPlaceholder.Visibility = Visibility.Collapsed;
+        });
+    }
+
+    private void OnCameraStartFailed(string message) => Dispatcher.Invoke(() =>
+    {
+        CameraPlaceholder.Visibility = Visibility.Visible;
+        CameraStatusText.Text = message;
+    });
+
+    private static BitmapSource CreateBitmapSource(byte[] bgra, int width, int height)
+    {
+        var bmp = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+        bmp.WritePixels(new Int32Rect(0, 0, width, height), bgra, width * 4, 0);
+        bmp.Freeze();
+        return bmp;
+    }
 
     // ---- Settings (folded in from the old MainWindow) ----
 

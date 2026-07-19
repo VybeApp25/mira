@@ -43,6 +43,33 @@
         <Style x:Key="IslandTabButtonStyleDim" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
             <Setter Property="Opacity" Value="0.32" />
         </Style>
+
+        <Style x:Key="MediaCtrlButtonStyle" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+        </Style>
+        <Style x:Key="MediaCtrlButtonStylePlay" TargetType="Button" BasedOn="{StaticResource MediaCtrlButtonStyle}">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Width" Value="28" />
+        </Style>
+        <Style x:Key="CalendarDayButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border x:Name="Shell" Background="Black" Margin="24,0,24,24" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
@@ -67,7 +94,7 @@
                         <Button x:Name="TabHome" Tag="Home" Content="🏠" ToolTip="Home" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabChat" Tag="Chat" Content="💬" ToolTip="Chat" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabShelf" Tag="Shelf" Content="🗂" ToolTip="Shelf" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
-                        <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
@@ -85,12 +112,101 @@
 
                 <!-- Content area: exactly one panel visible at a time. -->
                 <Grid Grid.Row="1">
-                    <!-- Home -->
-                    <StackPanel x:Name="HomePanel" Visibility="Visible">
-                        <TextBlock Text="Hi! I'm Mira." Foreground="#ECEEED" FontSize="17" FontWeight="Bold" Margin="0,4,0,6" />
-                        <TextBlock x:Name="HomeStatusText" Foreground="#ADB5B2" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16" />
-                        <Button Content="Open Voice" Height="30" Width="140" HorizontalAlignment="Left" Click="OpenVoiceButton_Click" />
-                    </StackPanel>
+                    <!-- Home: media panel (left, Now Playing) + calendar panel (right), mirroring NotchHomeIdleView.swift's BoringNotch-parity layout. -->
+                    <Grid x:Name="HomePanel" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Small header, not part of the Mac layout, but Voice has no other Home-tab entry point since it stays its own window on Windows. -->
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock x:Name="HomeStatusText" Foreground="#8CFFFFFF" FontSize="10" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <Button Content="🎙 Voice" HorizontalAlignment="Right" Height="22" Padding="8,0"
+                                Background="#14FFFFFF" Foreground="#ECEEED" BorderThickness="0" Cursor="Hand"
+                                Click="OpenVoiceButton_Click" />
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Media panel -->
+                        <Grid Grid.Column="0" Margin="0,0,16,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0" Width="84" Height="84" VerticalAlignment="Top">
+                                <Image x:Name="AlbumArtGlow" Stretch="UniformToFill" Opacity="0.5" Width="84" Height="84">
+                                    <Image.Effect>
+                                        <BlurEffect Radius="24" />
+                                    </Image.Effect>
+                                </Image>
+                                <Border CornerRadius="13" Width="80" Height="80" ClipToBounds="True">
+                                    <Grid>
+                                        <Border Background="#14FFFFFF" />
+                                        <TextBlock x:Name="NoArtIcon" Text="🎵" FontSize="24" Opacity="0.25"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Image x:Name="AlbumArt" Stretch="UniformToFill" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Column="1" Margin="10,4,0,0">
+                                <TextBlock x:Name="NowPlayingNothingText" Text="Nothing Playing" Foreground="#4DFFFFFF" FontSize="12"
+                                           Visibility="Collapsed" VerticalAlignment="Center" />
+                                <StackPanel x:Name="NowPlayingContent">
+                                    <TextBlock x:Name="TrackTitleText" Foreground="White" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock x:Name="TrackArtistText" Foreground="#80FFFFFF" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+
+                                    <Grid Margin="0,8,0,0" Height="14" Cursor="Hand"
+                                          MouseLeftButtonDown="SeekTrack_MouseLeftButtonDown" MouseMove="SeekTrack_MouseMove" MouseLeftButtonUp="SeekTrack_MouseLeftButtonUp">
+                                        <Border x:Name="SeekTrack" VerticalAlignment="Center" Height="3" Background="#24FFFFFF" CornerRadius="1.5" />
+                                        <Border x:Name="SeekFill" VerticalAlignment="Center" Height="3" Width="0" HorizontalAlignment="Left" Background="#BFFFFFFF" CornerRadius="1.5" IsHitTestVisible="False" />
+                                    </Grid>
+                                    <Grid>
+                                        <TextBlock x:Name="PositionText" Foreground="#59FFFFFF" FontSize="8" HorizontalAlignment="Left" Text="0:00" />
+                                        <TextBlock x:Name="DurationText" Foreground="#59FFFFFF" FontSize="8" HorizontalAlignment="Right" Text="0:00" />
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button x:Name="ShuffleButton" Content="🔀" ToolTip="Shuffle" Click="ShuffleButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button Content="⏮" ToolTip="Previous" Click="PreviousButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button x:Name="PlayPauseButton" Content="▶" ToolTip="Play/Pause" Click="PlayPauseButton_Click" Style="{StaticResource MediaCtrlButtonStylePlay}" />
+                                        <Button Content="⏭" ToolTip="Next" Click="NextButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button x:Name="RepeatButton" Content="🔁" ToolTip="Repeat" Click="RepeatButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+
+                        <!-- Calendar panel -->
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="CalendarMonthYearText" Foreground="White" FontSize="13" FontWeight="Bold" />
+                            <StackPanel x:Name="CalendarDateStrip" Orientation="Horizontal" Margin="0,8,0,8" />
+                            <Border BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Margin="0,0,0,10" />
+                            <StackPanel HorizontalAlignment="Center" Margin="0,14,0,0">
+                                <TextBlock Text="📅" FontSize="16" Opacity="0.25" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="10" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="170"
+                                           Text="Calendar isn't connected on Windows yet." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    </Grid>
+
+                    <!-- Camera -->
+                    <Grid x:Name="CameraPanel" Visibility="Collapsed">
+                        <Image x:Name="CameraImage" Stretch="Uniform" />
+                        <StackPanel x:Name="CameraPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="📷" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                            <TextBlock x:Name="CameraStatusText" Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxWidth="360" Text="Starting camera…" />
+                        </StackPanel>
+                    </Grid>
 
                     <!-- Chat -->
                     <Grid x:Name="ChatPanel" Visibility="Collapsed">
