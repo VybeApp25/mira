@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Mira.Windows.Core.Browser;
 using Mira.Windows.Core.LiveLookup;
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
@@ -98,8 +99,35 @@ public static class RouterHandler
                 MiraRoute.ComputerUse);
         }
 
+        // The Windows equivalent of Mac's "Confirm risky actions" Autonomous
+        // setting ("Pause before anything irreversible: send, delete, buy,
+        // submit…"). This port's ComputerUseOrchestrator runs as a single
+        // synchronous loop with no mid-task pause point built in, so this is
+        // a pre-flight gate rather than a per-step one -- reuses the existing
+        // RouteResultKind.Confirm flow the classifier already produces for
+        // other routes, rather than inventing new UI just for this.
+        if (AutonomySettings.ConfirmRiskyActions && IsRiskyPrompt(prompt))
+        {
+            return new RouteResult(RouteResultKind.Confirm,
+                $"This looks like it might do something hard to undo: \"{prompt}\". Want me to go ahead? (You can turn this check off in Settings.)",
+                MiraRoute.ComputerUse);
+        }
+
         var result = await ComputerUseOrchestrator.Shared.RunAsync(prompt, ct);
         return new RouteResult(RouteResultKind.Reply, string.IsNullOrEmpty(result) ? "Done." : result, MiraRoute.ComputerUse);
+    }
+
+    private static readonly string[] RiskyKeywords =
+    [
+        "send", "delete", "buy", "purchase", "pay", "submit", "transfer",
+        "remove", "uninstall", "cancel", "unsubscribe", "checkout", "order",
+    ];
+
+    /// <summary>Pure — a deliberately simple keyword heuristic, matching the spirit (not a literal port) of Mac's own "send, delete, buy, submit…" example list.</summary>
+    public static bool IsRiskyPrompt(string prompt)
+    {
+        var lower = prompt.ToLowerInvariant();
+        return RiskyKeywords.Any(k => lower.Contains(k));
     }
 
     /// <summary>
@@ -176,7 +204,7 @@ public static class RouterHandler
 
         try
         {
-            Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={Uri.EscapeDataString(query)}") { UseShellExecute = true });
+            BrowserLauncher.Open($"https://www.google.com/search?q={Uri.EscapeDataString(query)}");
         }
         catch
         {
@@ -271,7 +299,7 @@ public static class RouterHandler
 
         try
         {
-            Process.Start(new ProcessStartInfo($"https://www.google.com/maps/search/?api=1&query={place.Lat},{place.Lon}") { UseShellExecute = true });
+            BrowserLauncher.Open($"https://www.google.com/maps/search/?api=1&query={place.Lat},{place.Lon}");
         }
         catch
         {
@@ -295,7 +323,7 @@ public static class RouterHandler
         var query = ImageQuery(prompt);
         try
         {
-            Process.Start(new ProcessStartInfo($"https://duckduckgo.com/?q={Uri.EscapeDataString(query)}&iax=images&ia=images") { UseShellExecute = true });
+            BrowserLauncher.Open($"https://duckduckgo.com/?q={Uri.EscapeDataString(query)}&iax=images&ia=images");
             return new RouteResult(RouteResultKind.Reply, $"Opened image results for \"{query}\" in your browser.", MiraRoute.ImageSearch);
         }
         catch
@@ -323,7 +351,7 @@ public static class RouterHandler
         var query = VideoQuery(prompt);
         try
         {
-            Process.Start(new ProcessStartInfo($"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}") { UseShellExecute = true });
+            BrowserLauncher.Open($"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}");
             return new RouteResult(RouteResultKind.Reply, $"Pulling up \"{query}\" on YouTube in your browser — top result's right there.", MiraRoute.VideoPlayback);
         }
         catch
@@ -372,7 +400,7 @@ public static class RouterHandler
 
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            BrowserLauncher.Open(url);
             return new RouteResult(RouteResultKind.Reply, $"Opened {url}.", MiraRoute.OpenUrl);
         }
         catch
@@ -553,9 +581,19 @@ public static class RouterHandler
             })),
         };
 
-        var skillContext = SkillStore.Shared.BuildContext();
-        if (!string.IsNullOrEmpty(skillContext)) body["system"] = skillContext;
+        var system = BuildSystemPrompt();
+        if (!string.IsNullOrEmpty(system)) body["system"] = system;
         return body;
+    }
+
+    /// <summary>Joins whatever currently-active prompt biases apply — skill context plus Cat Mode — into one system prompt.</summary>
+    private static string BuildSystemPrompt()
+    {
+        var parts = new List<string>();
+        var skillContext = SkillStore.Shared.BuildContext();
+        if (!string.IsNullOrEmpty(skillContext)) parts.Add(skillContext);
+        if (PersonalitySettings.CatModeEnabled) parts.Add(PersonalitySettings.CatModeInstruction);
+        return string.Join("\n\n", parts);
     }
 
     /// <summary>Condensed transcript for the classifier's context, mirroring the shape <c>RouterContext.recentTranscript</c> carries on macOS — last few turns only.</summary>

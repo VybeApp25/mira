@@ -15,29 +15,52 @@ public static class AutonomySettings
 
     public static bool ComputerUseEnabled
     {
-        get => LoadEnabled();
-        set => Persist(value);
+        get => LoadBool("computer_use_enabled", false);
+        set => Persist("computer_use_enabled", value);
     }
 
-    private static bool LoadEnabled()
+    /// <summary>
+    /// The Windows equivalent of macOS's <c>mira_autonomous_confirm_risky</c>
+    /// (SettingsView.swift's Autonomous section) — default true, matching Mac:
+    /// "Pause before anything irreversible (send, delete, buy, submit…). Off =
+    /// fully hands-off." Checked by <see cref="Chat.RouterHandler"/>'s
+    /// <c>computer_use</c> handler as a pre-flight keyword gate rather than a
+    /// mid-task pause — this port's <see cref="ComputerUseOrchestrator"/> runs
+    /// as a single synchronous loop with no pause/resume point built in yet,
+    /// so gating before the loop starts (reusing the existing
+    /// <c>RouteResultKind.Confirm</c> flow already used elsewhere) is the
+    /// honest, bounded equivalent rather than a deeper per-step pause this
+    /// pass doesn't build.
+    /// </summary>
+    public static bool ConfirmRiskyActions
+    {
+        get => LoadBool("confirm_risky_actions", true);
+        set => Persist("confirm_risky_actions", value);
+    }
+
+    private static bool LoadBool(string key, bool fallback)
     {
         var path = LocalAppData.PathFor(FileName);
-        if (!File.Exists(path)) return false;
+        if (!File.Exists(path)) return fallback;
         try
         {
             var raw = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path));
-            return (bool?)raw["computer_use_enabled"] ?? false;
+            return (bool?)raw[key] ?? fallback;
         }
         catch
         {
-            return false;
+            return fallback;
         }
     }
 
-    private static void Persist(bool enabled)
+    private static void Persist(string key, bool value)
     {
-        var json = new Newtonsoft.Json.Linq.JObject { ["computer_use_enabled"] = enabled }
-            .ToString(Newtonsoft.Json.Formatting.None);
-        File.WriteAllText(LocalAppData.PathFor(FileName), json);
+        var path = LocalAppData.PathFor(FileName);
+        Newtonsoft.Json.Linq.JObject json;
+        try { json = File.Exists(path) ? Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path)) : new Newtonsoft.Json.Linq.JObject(); }
+        catch { json = new Newtonsoft.Json.Linq.JObject(); }
+
+        json[key] = value;
+        File.WriteAllText(path, json.ToString(Newtonsoft.Json.Formatting.None));
     }
 }

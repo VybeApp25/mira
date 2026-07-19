@@ -95,6 +95,52 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Mirrors SettingsView.swift's settingsGroup(...) collapsible sections. -->
+        <Style x:Key="SettingsGroupExpanderStyle" TargetType="Expander">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Border Background="#0DFFFFFF" CornerRadius="8" Padding="10,8">
+                            <DockPanel>
+                                <ToggleButton DockPanel.Dock="Top"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              Cursor="Hand" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Grid Background="Transparent">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Header, RelativeSource={RelativeSource AncestorType=Expander}}"
+                                                           FontSize="13" FontWeight="SemiBold" Foreground="#ECEEED" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="Arrow" Grid.Column="1" Text="&#x25BE;" Foreground="#8CFFFFFF" FontSize="10" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="False">
+                                                    <Setter TargetName="Arrow" Property="Text" Value="&#x25B8;" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter x:Name="ExpandSite" DockPanel.Dock="Bottom" Visibility="Collapsed" />
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border x:Name="Shell" Background="Black" Margin="24,0,24,24" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
@@ -102,9 +148,41 @@
             <!-- Pulsing accent border shown only while a reply is in flight. -->
             <Border x:Name="ThinkingGlow" BorderThickness="2" BorderBrush="#9E80EB" Opacity="0" IsHitTestVisible="False" />
 
-            <!-- Collapsed state: just a quiet label. -->
-            <TextBlock x:Name="CollapsedLabel" Text="Mira" Foreground="#ADB5B2" FontSize="13"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <!-- Collapsed state: twin animated "eyes" (ports SharedStatusView.swift's
+                 notchEyes/singleEye: blink every 3.7s, subtle side-to-side gaze drift,
+                 both driven by absolute elapsed time so they never reset). Mac's own
+                 idle collapsed state shows nothing at all (its physical hardware notch
+                 already occupies that space), but Windows has no notch to hide behind,
+                 so the eyes stand in as the default resting look instead of blank space
+                 or a static text label. -->
+            <StackPanel x:Name="CollapsedIdleView" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                <Grid Width="9" Height="7" Margin="0,0,3,0">
+                    <Rectangle x:Name="EyeLeftSclera" Fill="#E6FFFFFF" Width="9" Height="7" RadiusX="3.5" RadiusY="3.5" />
+                    <Ellipse x:Name="EyeLeftIris" Width="4.5" Height="4.5" Fill="#EB0DCCC0">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeLeftIrisTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse x:Name="EyeLeftPupil" Width="2" Height="2" Fill="#CC000000">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeLeftPupilTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                </Grid>
+                <Grid Width="9" Height="7">
+                    <Rectangle x:Name="EyeRightSclera" Fill="#E6FFFFFF" Width="9" Height="7" RadiusX="3.5" RadiusY="3.5" />
+                    <Ellipse x:Name="EyeRightIris" Width="4.5" Height="4.5" Fill="#EB0DCCC0">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeRightIrisTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse x:Name="EyeRightPupil" Width="2" Height="2" Fill="#CC000000">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeRightPupilTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                </Grid>
+            </StackPanel>
 
             <!-- Expanded state: tab bar + per-tab content. -->
             <Grid x:Name="ExpandedContent" Visibility="Collapsed" Opacity="0" Margin="16,12,16,14">
@@ -577,50 +655,107 @@
                         </Grid>
                     </Grid>
 
-                    <!-- Settings -->
+                    <!-- Settings: restructured to mirror SettingsView.swift's collapsible-group
+                         layout (7 groups on Mac; only the 4 with real content on Windows are
+                         rendered here. Voice & Audio, Menu Bar, and Agents & Memory would be
+                         empty shells this pass, so they're omitted rather than shown hollow.
+                         See IMPLEMENTATION_PLAN.md for the full section-by-section scope decision. -->
                     <ScrollViewer x:Name="SettingsScroller" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="SettingsPanel" MaxWidth="420" HorizontalAlignment="Left">
-                            <StackPanel x:Name="SettingsSignedOutPanel">
-                                <TextBlock x:Name="ModeLabel" Text="Sign in" Foreground="#ECEEED" FontSize="14" Margin="0,0,0,10" />
 
-                                <TextBlock Text="Email" Foreground="#ADB5B2" FontSize="11" />
-                                <TextBox x:Name="EmailBox" Margin="0,2,0,10" />
+                            <!-- General: Account + Appearance -->
+                            <Expander Header="General" IsExpanded="True" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Account" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
 
-                                <TextBlock Text="Password" Foreground="#ADB5B2" FontSize="11" />
-                                <PasswordBox x:Name="PasswordBox" Margin="0,2,0,10" />
+                                    <StackPanel x:Name="SettingsSignedOutPanel">
+                                        <TextBlock x:Name="ModeLabel" Text="Sign in" Foreground="#ECEEED" FontSize="14" Margin="0,0,0,10" />
 
-                                <StackPanel x:Name="DisplayNamePanel" Visibility="Collapsed">
-                                    <TextBlock Text="Name" Foreground="#ADB5B2" FontSize="11" />
-                                    <TextBox x:Name="DisplayNameBox" Margin="0,2,0,10" />
-                                </StackPanel>
+                                        <TextBlock Text="Email" Foreground="#ADB5B2" FontSize="11" />
+                                        <TextBox x:Name="EmailBox" Margin="0,2,0,10" />
 
-                                <Button x:Name="PrimaryActionButton" Content="Sign In" Height="28" Click="PrimaryActionButton_Click" />
+                                        <TextBlock Text="Password" Foreground="#ADB5B2" FontSize="11" />
+                                        <PasswordBox x:Name="PasswordBox" Margin="0,2,0,10" />
 
-                                <Button x:Name="ToggleModeButton" Content="Need an account? Create one"
-                                        Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
-                                        HorizontalAlignment="Left" Margin="0,8,0,0" Click="ToggleModeButton_Click" />
+                                        <StackPanel x:Name="DisplayNamePanel" Visibility="Collapsed">
+                                            <TextBlock Text="Name" Foreground="#ADB5B2" FontSize="11" />
+                                            <TextBox x:Name="DisplayNameBox" Margin="0,2,0,10" />
+                                        </StackPanel>
 
-                                <TextBlock x:Name="ErrorText" Foreground="#F87171" TextWrapping="Wrap" Margin="0,10,0,0" />
-                            </StackPanel>
+                                        <Button x:Name="PrimaryActionButton" Content="Sign In" Height="28" Click="PrimaryActionButton_Click" />
 
-                            <StackPanel x:Name="SettingsSignedInPanel" Visibility="Collapsed">
-                                <TextBlock x:Name="SignedInAsText" Foreground="#ECEEED" FontSize="13" Margin="0,0,0,4" />
-                                <TextBlock x:Name="PlanText" Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,12" />
+                                        <Button x:Name="ToggleModeButton" Content="Need an account? Create one"
+                                                Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
+                                                HorizontalAlignment="Left" Margin="0,8,0,0" Click="ToggleModeButton_Click" />
 
-                                <Button Content="Refresh plan" Height="26" Width="110" HorizontalAlignment="Left"
-                                        Margin="0,0,0,14" Click="RefreshPlanButton_Click" />
-
-                                <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,14">
-                                    <StackPanel>
-                                        <CheckBox x:Name="AutonomyCheckBox" Content="Allow Mira to control my screen (computer use)"
-                                                  Foreground="#ECEEED" Checked="AutonomyCheckBox_Changed" Unchecked="AutonomyCheckBox_Changed" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#C99A3E" Margin="0,4,0,0"
-                                                   Text="When on, chat requests can move your mouse, click, type, and take screenshots to complete tasks. Off by default." />
+                                        <TextBlock x:Name="ErrorText" Foreground="#F87171" TextWrapping="Wrap" Margin="0,10,0,0" />
                                     </StackPanel>
-                                </Border>
 
-                                <Button Content="Sign Out" Height="26" Width="90" HorizontalAlignment="Left" Click="SignOutButton_Click" />
-                            </StackPanel>
+                                    <StackPanel x:Name="SettingsSignedInPanel" Visibility="Collapsed">
+                                        <TextBlock x:Name="SignedInAsText" Foreground="#ECEEED" FontSize="13" Margin="0,0,0,4" />
+                                        <TextBlock x:Name="PlanText" Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,12" />
+
+                                        <Button Content="Refresh plan" Height="26" Width="110" HorizontalAlignment="Left"
+                                                Margin="0,0,0,14" Click="RefreshPlanButton_Click" />
+
+                                        <Button Content="Sign Out" Height="26" Width="90" HorizontalAlignment="Left" Click="SignOutButton_Click" />
+                                    </StackPanel>
+
+                                    <Border BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Margin="0,16,0,12" />
+
+                                    <TextBlock Text="Appearance" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <CheckBox x:Name="CatModeCheckBox" Content="Cat mode 🐱 — Mira responds with feline energy"
+                                              Foreground="#ECEEED" Margin="0,0,0,8" Checked="CatModeCheckBox_Changed" Unchecked="CatModeCheckBox_Changed" />
+                                    <CheckBox x:Name="ShowInCaptureCheckBox" Content="Show in screen recordings"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="ShowInCaptureCheckBox_Changed" Unchecked="ShowInCaptureCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="When off, Mira's window is excluded from screen recordings and shares (you still see it normally)." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Screen &amp; Guidance: Autonomy -->
+                            <Expander Header="Screen &amp; Guidance" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel x:Name="AutonomyGroupSignedInPanel" Margin="0,10,0,4" Visibility="Collapsed">
+                                    <TextBlock Text="Autonomous" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <CheckBox x:Name="AutonomyCheckBox" Content="Allow Mira to control my screen (computer use)"
+                                                      Foreground="#ECEEED" Checked="AutonomyCheckBox_Changed" Unchecked="AutonomyCheckBox_Changed" />
+                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#C99A3E" Margin="0,4,0,0"
+                                                       Text="When on, chat requests can move your mouse, click, type, and take screenshots to complete tasks. Off by default." />
+                                        </StackPanel>
+                                    </Border>
+                                    <CheckBox x:Name="ConfirmRiskyCheckBox" Content="Confirm risky actions"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="ConfirmRiskyCheckBox_Changed" Unchecked="ConfirmRiskyCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="Pause before anything hard to undo (send, delete, buy, submit…). Off = fully hands-off." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Shortcuts -->
+                            <Expander Header="Shortcuts" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Keyboard Shortcuts" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <TextBlock Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap"
+                                               Text="Expand for text: Ctrl+Alt+T (not yet customizable on Windows)." />
+
+                                    <TextBlock Text="Web Browser" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="BrowserPreferenceCombo" Height="26" SelectionChanged="BrowserPreferenceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="Which browser opens search results, videos, and links Mira finds for you." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Advanced -->
+                            <Expander Header="Advanced" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Privacy" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Privacy Policy" Click="PrivacyPolicyButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                        <Button Content="Terms of Service" Click="TermsButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
                         </StackPanel>
                     </ScrollViewer>
 

@@ -14,6 +14,7 @@ using Mira.Windows.App.Camera;
 using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Agents;
+using Mira.Windows.Core.Browser;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Crons;
@@ -31,6 +32,7 @@ using Path = System.IO.Path;
 using FontFamily = System.Windows.Media.FontFamily;
 using ContextMenu = System.Windows.Controls.ContextMenu;
 using MenuItem = System.Windows.Controls.MenuItem;
+using Rectangle = System.Windows.Shapes.Rectangle;
 
 namespace Mira.Windows.App.Shell;
 
@@ -98,6 +100,9 @@ public partial class IslandWindow : Window
     private Guid? _editingCronId;
     private CronScheduleKind _cronEditorKind = CronScheduleKind.Daily;
 
+    private readonly Stopwatch _eyesClock = Stopwatch.StartNew();
+    private DispatcherTimer? _eyesTimer;
+
     public IslandWindow()
     {
         InitializeComponent();
@@ -124,6 +129,11 @@ public partial class IslandWindow : Window
 
             // Also needs a real HWND, same reason as the hotkey above.
             _clipboardWatcher.Start(this);
+
+            // The OS forgets display affinity every time a new HWND is created,
+            // so this re-applies the persisted preference each launch rather
+            // than trusting any prior window's state.
+            CaptureAffinity.Apply(this, AppearanceSettings.ShowInScreenCaptures);
         };
         Closed += (_, _) =>
         {
@@ -145,6 +155,7 @@ public partial class IslandWindow : Window
             LessonProgressStore.Shared.Changed -= OnLearnChanged;
             LessonRunner.Shared.Changed -= OnLearnChanged;
             LessonRunner.Shared.Stop();
+            _eyesTimer?.Stop();
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -152,6 +163,10 @@ public partial class IslandWindow : Window
         AccountService.Shared.StateChanged += OnAuthStateChanged;
         EntitlementService.Shared.PlanChanged += OnPlanChanged;
         AutonomyCheckBox.IsChecked = AutonomySettings.ComputerUseEnabled;
+        ConfirmRiskyCheckBox.IsChecked = AutonomySettings.ConfirmRiskyActions;
+        CatModeCheckBox.IsChecked = PersonalitySettings.CatModeEnabled;
+        ShowInCaptureCheckBox.IsChecked = AppearanceSettings.ShowInScreenCaptures;
+        PopulateBrowserPreferenceCombo();
         RenderForAuthState(AccountService.Shared.State);
 
         // Home tab is the default landing tab, matching NotchHomeIdleView's
@@ -180,6 +195,13 @@ public partial class IslandWindow : Window
         CronStore.Shared.Changed += OnCronsChanged;
         CronScheduler.Shared.Start();
         PopulateCronCombos();
+
+        // Eyes animate continuously regardless of collapse state -- mirrors
+        // SharedStatusView's "always-mounted, time-driven" design so nothing
+        // resets when the pill expands/collapses.
+        _eyesTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+        _eyesTimer.Tick += (_, _) => UpdateEyes();
+        _eyesTimer.Start();
 
         LessonStore.Shared.Changed += OnLearnChanged;
         LessonProgressStore.Shared.Changed += OnLearnChanged;
@@ -257,8 +279,8 @@ public partial class IslandWindow : Window
     /// <summary>Fades the outgoing content out fast while the incoming content fades in slightly after — mirrors the Mac panel's own staggered 140ms-in/100ms-out content fade rather than an instant Visibility swap.</summary>
     private void CrossfadeContent(bool expanded)
     {
-        UIElement outgoing = expanded ? CollapsedLabel : ExpandedContent;
-        UIElement incoming = expanded ? ExpandedContent : CollapsedLabel;
+        UIElement outgoing = expanded ? CollapsedIdleView : ExpandedContent;
+        UIElement incoming = expanded ? ExpandedContent : CollapsedIdleView;
 
         outgoing.BeginAnimation(OpacityProperty, null);
         incoming.BeginAnimation(OpacityProperty, null);
@@ -272,6 +294,34 @@ public partial class IslandWindow : Window
 
         var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { BeginTime = TimeSpan.FromMilliseconds(60) };
         incoming.BeginAnimation(OpacityProperty, fadeIn);
+    }
+
+    // ---- Eyes (collapsed idle state) ----
+
+    private const double EyeBlinkIntervalSeconds = 3.7;
+    private const double EyeBlinkDurationSeconds = 0.09;
+
+    /// <summary>Mirrors SharedStatusView.swift's <c>notchEyes</c>/<c>singleEye</c> exactly: both eyes share one blink cadence but drift their gaze on offset phases (0.0 / 0.4) so they don't move in perfect lockstep.</summary>
+    private void UpdateEyes()
+    {
+        var t = _eyesClock.Elapsed.TotalSeconds;
+        UpdateSingleEye(t, gazePhase: 0.0, EyeLeftSclera, EyeLeftIris, EyeLeftPupil, EyeLeftIrisTransform, EyeLeftPupilTransform);
+        UpdateSingleEye(t, gazePhase: 0.4, EyeRightSclera, EyeRightIris, EyeRightPupil, EyeRightIrisTransform, EyeRightPupilTransform);
+    }
+
+    private static void UpdateSingleEye(
+        double t, double gazePhase, Rectangle sclera, Ellipse iris, Ellipse pupil,
+        TranslateTransform irisTransform, TranslateTransform pupilTransform)
+    {
+        var gazeX = Math.Sin((t + gazePhase) / 2.2 * Math.PI) * 1.6;
+        var phase = t % EyeBlinkIntervalSeconds;
+        var closed = phase < EyeBlinkDurationSeconds;
+
+        sclera.Height = closed ? 2 : 7;
+        iris.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
+        pupil.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
+        irisTransform.X = gazeX;
+        pupilTransform.X = gazeX;
     }
 
     // ---- Tabs ----
@@ -1580,6 +1630,7 @@ public partial class IslandWindow : Window
             case AuthState.SignedIn:
                 SettingsSignedOutPanel.Visibility = Visibility.Collapsed;
                 SettingsSignedInPanel.Visibility = Visibility.Visible;
+                AutonomyGroupSignedInPanel.Visibility = Visibility.Visible;
                 var user = AccountService.Shared.CurrentUser;
                 SignedInAsText.Text = $"Signed in as {user?.Email ?? user?.DisplayName ?? "(unknown)"}";
                 UpdatePlanAndHomeText();
@@ -1588,6 +1639,7 @@ public partial class IslandWindow : Window
             case AuthState.SignedOut:
                 SettingsSignedOutPanel.Visibility = Visibility.Visible;
                 SettingsSignedInPanel.Visibility = Visibility.Collapsed;
+                AutonomyGroupSignedInPanel.Visibility = Visibility.Collapsed;
                 PrimaryActionButton.IsEnabled = true;
                 HomeStatusText.Text = "Not signed in — open Settings (⚙) to sign in and get started.";
                 break;
@@ -1665,6 +1717,54 @@ public partial class IslandWindow : Window
     private void SignOutButton_Click(object sender, RoutedEventArgs e) => AccountService.Shared.SignOut();
 
     private void AutonomyCheckBox_Changed(object sender, RoutedEventArgs e) => AutonomySettings.ComputerUseEnabled = AutonomyCheckBox.IsChecked == true;
+
+    private void ConfirmRiskyCheckBox_Changed(object sender, RoutedEventArgs e) => AutonomySettings.ConfirmRiskyActions = ConfirmRiskyCheckBox.IsChecked == true;
+
+    private void CatModeCheckBox_Changed(object sender, RoutedEventArgs e) => PersonalitySettings.CatModeEnabled = CatModeCheckBox.IsChecked == true;
+
+    private void ShowInCaptureCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        var visible = ShowInCaptureCheckBox.IsChecked == true;
+        AppearanceSettings.ShowInScreenCaptures = visible;
+        CaptureAffinity.Apply(this, visible);
+    }
+
+    private void PopulateBrowserPreferenceCombo()
+    {
+        BrowserPreferenceCombo.Items.Clear();
+        BrowserPreferenceCombo.Items.Add("System default");
+
+        var preferred = BrowserSettings.PreferredBrowserPath;
+        var selectedIndex = 0;
+        var browsers = InstalledBrowsers.Detect();
+        for (var i = 0; i < browsers.Count; i++)
+        {
+            BrowserPreferenceCombo.Items.Add(browsers[i].Name);
+            if (string.Equals(browsers[i].ExePath, preferred, StringComparison.OrdinalIgnoreCase))
+                selectedIndex = i + 1;
+        }
+
+        BrowserPreferenceCombo.SelectedIndex = selectedIndex;
+    }
+
+    private void BrowserPreferenceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var index = BrowserPreferenceCombo.SelectedIndex;
+        if (index <= 0)
+        {
+            BrowserSettings.PreferredBrowserPath = null;
+            return;
+        }
+
+        var browsers = InstalledBrowsers.Detect();
+        if (index - 1 < browsers.Count) BrowserSettings.PreferredBrowserPath = browsers[index - 1].ExePath;
+    }
+
+    private void PrivacyPolicyButton_Click(object sender, RoutedEventArgs e) =>
+        BrowserLauncher.Open("https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/privacy.html");
+
+    private void TermsButton_Click(object sender, RoutedEventArgs e) =>
+        BrowserLauncher.Open("https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html");
 
     // ---- Chat (identical pipeline to ChatWindow — same RouterHandler call, same streaming) ----
 

@@ -122,4 +122,25 @@ public class RouterHandlerTests
     {
         Assert.Equal(RouterHandler.SpotifyAction.Unsupported, RouterHandler.DetectSpotifyAction(prompt));
     }
+
+    [Theory]
+    [InlineData("send this email to my boss")]
+    [InlineData("delete all my downloads")]
+    [InlineData("buy this on Amazon")]
+    [InlineData("submit the form")]
+    [InlineData("cancel my subscription")]
+    [InlineData("checkout with my saved card")]
+    public void IsRiskyPrompt_KnownRiskyPhrasing_IsTrue(string prompt)
+    {
+        Assert.True(RouterHandler.IsRiskyPrompt(prompt));
+    }
+
+    [Theory]
+    [InlineData("open notepad")]
+    [InlineData("what's on my screen")]
+    [InlineData("scroll down a bit")]
+    public void IsRiskyPrompt_OrdinaryPhrasing_IsFalse(string prompt)
+    {
+        Assert.False(RouterHandler.IsRiskyPrompt(prompt));
+    }
 }
