@@ -17,6 +17,7 @@ using Mira.Windows.Core.Agents;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Crons;
+using Mira.Windows.Core.Learn;
 using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Shelf;
 using Mira.Windows.Core.Skills;
@@ -28,6 +29,8 @@ using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
 using Path = System.IO.Path;
 using FontFamily = System.Windows.Media.FontFamily;
+using ContextMenu = System.Windows.Controls.ContextMenu;
+using MenuItem = System.Windows.Controls.MenuItem;
 
 namespace Mira.Windows.App.Shell;
 
@@ -64,10 +67,7 @@ public partial class IslandWindow : Window
     private const double ExpandedPillWidth = 700, ExpandedPillHeight = 460;
     private const int CollapseGraceMs = 600;
 
-    private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
-    [
-        (IslandTab.Learn, "Learn"),
-    ];
+    private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs = [];
 
     /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — Clipboard and Shelf are real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
     private enum LabsSubTab { Clipboard, Shelf, Shortcuts, Queue, Reminders }
@@ -141,6 +141,10 @@ public partial class IslandWindow : Window
             FileShelfStore.Shared.Changed -= OnShelfChanged;
             CronStore.Shared.Changed -= OnCronsChanged;
             CronScheduler.Shared.Stop();
+            LessonStore.Shared.Changed -= OnLearnChanged;
+            LessonProgressStore.Shared.Changed -= OnLearnChanged;
+            LessonRunner.Shared.Changed -= OnLearnChanged;
+            LessonRunner.Shared.Stop();
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -175,6 +179,10 @@ public partial class IslandWindow : Window
         CronStore.Shared.Changed += OnCronsChanged;
         CronScheduler.Shared.Start();
         PopulateCronCombos();
+
+        LessonStore.Shared.Changed += OnLearnChanged;
+        LessonProgressStore.Shared.Changed += OnLearnChanged;
+        LessonRunner.Shared.Changed += OnLearnChanged;
 
         SelectTab(IslandTab.Home);
     }
@@ -286,11 +294,13 @@ public partial class IslandWindow : Window
         AgentsPanel.Visibility = tab == IslandTab.Agents ? Visibility.Visible : Visibility.Collapsed;
         SkillsPanel.Visibility = tab == IslandTab.Skills ? Visibility.Visible : Visibility.Collapsed;
         CronsPanel.Visibility = tab == IslandTab.Crons ? Visibility.Visible : Visibility.Collapsed;
+        LearnPanel.Visibility = tab == IslandTab.Learn ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         if (tab == IslandTab.Skills) RenderSkillsList();
         if (tab == IslandTab.Shelf) RenderShelfList();
         if (tab == IslandTab.Crons) RenderCronList();
+        if (tab == IslandTab.Learn) RenderLearnTab();
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
         if (placeholder.Name is not null)
@@ -1375,6 +1385,186 @@ public partial class IslandWindow : Window
     }
 
     private void CronCancelButton_Click(object sender, RoutedEventArgs e) => CronEditorPanel.Visibility = Visibility.Collapsed;
+
+    // ---- Learn ----
+
+    private void OnLearnChanged() => Dispatcher.Invoke(RenderLearnTab);
+
+    private void RenderLearnTab()
+    {
+        var running = LessonRunner.Shared.State == LessonRunState.Running;
+        LearnRunningPanel.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+        LearnListScroller.Visibility = running ? Visibility.Collapsed : Visibility.Visible;
+
+        if (running) RenderLearnRunning();
+        else RenderLearnList();
+    }
+
+    private void RenderLearnList()
+    {
+        LearnLessonList.Children.Clear();
+        foreach (var lesson in LessonStore.Shared.All) LearnLessonList.Children.Add(BuildLessonCard(lesson));
+    }
+
+    private UIElement BuildLessonCard(Lesson lesson)
+    {
+        var progress = LessonProgressStore.Shared.Get(lesson.Id);
+        var mastered = LessonProgressStore.IsMastered(progress.CompletionCount);
+        var reviewDue = LessonProgressStore.IsReviewDue(progress.CompletionCount, progress.LastCompletedAt, DateTimeOffset.UtcNow);
+        var inProgress = !mastered && progress.ResumeStepIndex > 0;
+
+        var statusText = reviewDue ? "Review" : mastered ? "Mastered" : inProgress ? "Resume" : "Start";
+        var statusColor = reviewDue ? Color.FromRgb(0xF5, 0x9E, 0x0B)
+            : mastered ? Color.FromRgb(0x33, 0xD6, 0x4A)
+            : new Color { A = 0x59, R = 0xFF, G = 0xFF, B = 0xFF };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new TextBlock { Text = "🎓", FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        Grid.SetColumn(icon, 0);
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(new TextBlock { Text = lesson.Title, Foreground = System.Windows.Media.Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        textStack.Children.Add(new TextBlock
+        {
+            Text = lesson.DomainApp,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)),
+            FontSize = 10,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        Grid.SetColumn(textStack, 1);
+        textStack.ToolTip = lesson.Description;
+
+        var statusBadge = new TextBlock
+        {
+            Text = statusText,
+            Foreground = new SolidColorBrush(statusColor),
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        Grid.SetColumn(statusBadge, 2);
+
+        var startButton = new Button { Content = inProgress || reviewDue ? "Resume" : "Start", Width = 60, Height = 24, FontSize = 10, Style = (Style)FindResource("LabsSubTabButtonStyle") };
+        startButton.Click += (_, e) => { e.Handled = true; LessonRunner.Shared.Start(lesson, Math.Max(0, progress.ResumeStepIndex)); };
+        Grid.SetColumn(startButton, 3);
+
+        grid.Children.Add(icon);
+        grid.Children.Add(textStack);
+        grid.Children.Add(statusBadge);
+        grid.Children.Add(startButton);
+
+        var row = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8, 8, 8),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = grid,
+        };
+
+        if (!lesson.IsBuiltin)
+        {
+            var context = new ContextMenu();
+            var deleteItem = new MenuItem { Header = "Remove lesson" };
+            deleteItem.Click += (_, _) => LessonStore.Shared.Remove(lesson.Id);
+            context.Items.Add(deleteItem);
+            row.ContextMenu = context;
+        }
+
+        return row;
+    }
+
+    private void RenderLearnRunning()
+    {
+        var lesson = LessonRunner.Shared.ActiveLesson;
+        var step = LessonRunner.Shared.CurrentStep;
+        if (lesson is null || step is null) return;
+
+        LearnRunningTitleText.Text = lesson.Title;
+        LearnStepProgressText.Text = $"Step {LessonRunner.Shared.CurrentStepIndex + 1} of {lesson.Steps.Count}";
+        LearnStepInstructionText.Text = step.Instruction;
+        LearnStepRemediationText.Text = step.Remediation ?? "";
+        LearnStepRemediationText.Visibility = string.IsNullOrEmpty(step.Remediation) ? Visibility.Collapsed : Visibility.Visible;
+
+        // No self-certify button for an observable step -- mirrors TeachingEngine.swift's
+        // honesty invariant: only a genuinely-unobservable (.userConfirmation) step can be
+        // marked done by the user, never conflated with a real observation.
+        LearnDoneButton.Visibility = step.Check.Kind == LessonCheckKind.UserConfirmation ? Visibility.Visible : Visibility.Collapsed;
+        LearnStepWaitingText.Visibility = step.Check.IsObservable ? Visibility.Visible : Visibility.Collapsed;
+        LearnStepWaitingText.Text = step.Check.Kind switch
+        {
+            LessonCheckKind.AppFrontmost => $"Waiting until {step.Check.ProcessName} is the active window…",
+            LessonCheckKind.DarkModeEnabled => "Waiting until Dark Mode is turned on…",
+            _ => "",
+        };
+    }
+
+    private void LearnStopButton_Click(object sender, RoutedEventArgs e) => LessonRunner.Shared.Stop();
+    private void LearnDoneButton_Click(object sender, RoutedEventArgs e) => LessonRunner.Shared.ConfirmCurrentStep();
+    private void LearnSkipButton_Click(object sender, RoutedEventArgs e) => LessonRunner.Shared.SkipCurrentStep();
+
+    private void LearnTeachButton_Click(object sender, RoutedEventArgs e)
+    {
+        LearnAppNameBox.Text = "";
+        LearnProcessNameBox.Text = "";
+        LearnGoalBox.Text = "";
+        LearnTeachStatusText.Text = "";
+        LearnTeachPanel.Visibility = Visibility.Visible;
+    }
+
+    private void LearnTeachCancelButton_Click(object sender, RoutedEventArgs e) => LearnTeachPanel.Visibility = Visibility.Collapsed;
+
+    private async void LearnTeachSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var appName = LearnAppNameBox.Text.Trim();
+        if (appName.Length == 0)
+        {
+            LearnTeachStatusText.Text = "An app name is required.";
+            return;
+        }
+
+        var processName = LearnProcessNameBox.Text.Trim();
+        var goal = LearnGoalBox.Text.Trim();
+
+        LearnTeachSaveButton.IsEnabled = false;
+        try
+        {
+            Lesson lesson;
+            if (goal.Length == 0)
+            {
+                lesson = LessonScaffolder.BuildTemplate(appName, processName.Length == 0 ? null : processName);
+            }
+            else
+            {
+                LearnTeachStatusText.Text = "Generating…";
+                lesson = await LessonAuthor.AuthorAsync(appName, goal);
+            }
+
+            var (ok, error) = LessonStore.Shared.Add(lesson);
+            if (!ok)
+            {
+                LearnTeachStatusText.Text = error;
+                return;
+            }
+
+            LearnTeachPanel.Visibility = Visibility.Collapsed;
+            RenderLearnList();
+        }
+        catch (Exception ex)
+        {
+            LearnTeachStatusText.Text = $"Couldn't create a lesson: {ex.Message}";
+        }
+        finally
+        {
+            LearnTeachSaveButton.IsEnabled = true;
+        }
+    }
 
     // ---- Settings (folded in from the old MainWindow) ----
 
