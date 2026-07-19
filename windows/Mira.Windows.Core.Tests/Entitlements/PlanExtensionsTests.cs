@@ -31,4 +31,11 @@ public class PlanExtensionsTests
     [InlineData(ProfilePlan.Ultra, "Ultra")]
     public void DisplayName_MatchesSwiftSource(ProfilePlan plan, string expected)
         => Assert.Equal(expected, plan.DisplayName());
+
+    [Theory]
+    [InlineData(ProfilePlan.Free, 5)]
+    [InlineData(ProfilePlan.Pro, 5)]
+    [InlineData(ProfilePlan.Ultra, int.MaxValue)]
+    public void MaxShelfItems_MatchesSwiftSource(ProfilePlan plan, int expected)
+        => Assert.Equal(expected, plan.MaxShelfItems());
 }

@@ -6,7 +6,9 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Interop;
 using System.Diagnostics;
+using System.IO;
 using Mira.Windows.App.Camera;
 using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
@@ -14,12 +16,14 @@ using Mira.Windows.Core.Agents;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Entitlements;
+using Mira.Windows.Core.Shelf;
 using Mira.Windows.Core.Skills;
 using Mira.Windows.Core.Vision;
 using ClipboardWatcher = Mira.Windows.App.Clipboard.ClipboardWatcher;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using Image = System.Windows.Controls.Image;
 
 namespace Mira.Windows.App.Shell;
 
@@ -58,16 +62,15 @@ public partial class IslandWindow : Window
 
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
-        (IslandTab.Shelf, "Shelf"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+        (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
     ];
 
-    /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — only Clipboard is real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
+    /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — Clipboard and Shelf are real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
     private enum LabsSubTab { Clipboard, Shelf, Shortcuts, Queue, Reminders }
 
     private static readonly (LabsSubTab Tab, string Name)[] LabsPlaceholderSubTabs =
     [
-        (LabsSubTab.Shelf, "Shelf"), (LabsSubTab.Shortcuts, "Shortcuts"),
-        (LabsSubTab.Queue, "Queue"), (LabsSubTab.Reminders, "Reminders"),
+        (LabsSubTab.Shortcuts, "Shortcuts"), (LabsSubTab.Queue, "Queue"), (LabsSubTab.Reminders, "Reminders"),
     ];
 
     private static readonly string[] WeekdayInitials = ["S", "M", "T", "W", "T", "F", "S"];
@@ -129,6 +132,7 @@ public partial class IslandWindow : Window
             ClipboardHistoryStore.Shared.Changed -= OnClipboardHistoryChanged;
             AgentJobStore.Shared.Changed -= OnAgentJobsChanged;
             SkillStore.Shared.Changed -= OnSkillsChanged;
+            FileShelfStore.Shared.Changed -= OnShelfChanged;
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -157,6 +161,8 @@ public partial class IslandWindow : Window
         RenderAgentJobList();
 
         SkillStore.Shared.Changed += OnSkillsChanged;
+
+        FileShelfStore.Shared.Changed += OnShelfChanged;
 
         SelectTab(IslandTab.Home);
     }
@@ -262,6 +268,7 @@ public partial class IslandWindow : Window
 
         HomePanel.Visibility = tab == IslandTab.Home ? Visibility.Visible : Visibility.Collapsed;
         ChatPanel.Visibility = tab == IslandTab.Chat ? Visibility.Visible : Visibility.Collapsed;
+        ShelfPanel.Visibility = tab == IslandTab.Shelf ? Visibility.Visible : Visibility.Collapsed;
         CameraPanel.Visibility = tab == IslandTab.Camera ? Visibility.Visible : Visibility.Collapsed;
         LabsPanel.Visibility = tab == IslandTab.Labs ? Visibility.Visible : Visibility.Collapsed;
         AgentsPanel.Visibility = tab == IslandTab.Agents ? Visibility.Visible : Visibility.Collapsed;
@@ -269,6 +276,7 @@ public partial class IslandWindow : Window
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         if (tab == IslandTab.Skills) RenderSkillsList();
+        if (tab == IslandTab.Shelf) RenderShelfList();
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
         if (placeholder.Name is not null)
@@ -467,6 +475,128 @@ public partial class IslandWindow : Window
         return bmp;
     }
 
+    // ---- Shelf ----
+
+    private void OnShelfChanged() => Dispatcher.Invoke(RenderShelfList);
+
+    private void ShelfOpenFolderButton_Click(object sender, RoutedEventArgs e) => FileShelfStore.Shared.OpenShelfFolder();
+
+    private void ShelfClearButton_Click(object sender, RoutedEventArgs e) => FileShelfStore.Shared.Clear();
+
+    private void ShelfDropZone_DragEnter(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        ShelfDropZoneText.Opacity = 1.0;
+        e.Handled = true;
+    }
+
+    private void ShelfDropZone_DragLeave(object sender, System.Windows.DragEventArgs e) => ShelfDropZoneText.Opacity = 0.66;
+
+    private void ShelfDropZone_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        ShelfDropZoneText.Opacity = 0.66;
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths)
+            FileShelfStore.Shared.Add(paths.Where(File.Exists));
+    }
+
+    private void RenderShelfList()
+    {
+        var store = FileShelfStore.Shared;
+        ShelfDropZoneText.Text = store.AtLimit ? "Shelf full" : "Drop files here";
+        ShelfLimitText.Text = store.Limit == int.MaxValue
+            ? $"{store.Items.Count} item(s) · Unlimited"
+            : $"{store.Items.Count}/{store.Limit} · Ultra for unlimited";
+
+        ShelfList.Children.Clear();
+        var items = store.Items;
+        if (items.Count == 0)
+        {
+            ShelfList.Children.Add(new TextBlock
+            {
+                Text = "Shelf is empty — drag files onto the drop zone above to hold them here temporarily.",
+                Foreground = new SolidColorBrush(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 24, 0, 0),
+            });
+            return;
+        }
+
+        foreach (var path in items) ShelfList.Children.Add(BuildShelfRow(path));
+    }
+
+    private UIElement BuildShelfRow(string path)
+    {
+        var row = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 7, 6, 7),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var iconImage = GetFileIcon(path);
+        UIElement iconElement = iconImage is not null
+            ? new Image { Source = iconImage, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0) }
+            : new TextBlock { Text = "📄", FontSize = 14, Margin = new Thickness(0, 0, 8, 0) };
+        iconElement.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        Grid.SetColumn(iconElement, 0);
+
+        var nameText = new TextBlock
+        {
+            Text = Path.GetFileName(path),
+            Foreground = System.Windows.Media.Brushes.White,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(nameText, 1);
+
+        var deleteButton = new Button
+        {
+            Content = "✕",
+            FontSize = 11,
+            Width = 22,
+            Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Remove",
+        };
+        deleteButton.Click += (_, e) => { e.Handled = true; FileShelfStore.Shared.Remove(path); };
+        Grid.SetColumn(deleteButton, 2);
+
+        grid.Children.Add(iconElement);
+        grid.Children.Add(nameText);
+        grid.Children.Add(deleteButton);
+        row.Child = grid;
+        return row;
+    }
+
+    /// <summary>Real per-file shell icon (Windows' equivalent of Mac's <c>NSWorkspace.icon(forFile:)</c>) with a plain emoji fallback if extraction fails.</summary>
+    private static BitmapSource? GetFileIcon(string path)
+    {
+        try
+        {
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            if (icon is null) return null;
+            var bmp = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ---- Labs / Clipboard ----
 
     private void LabsSubTabButton_Click(object sender, RoutedEventArgs e)
@@ -479,6 +609,7 @@ public partial class IslandWindow : Window
     {
         _activeLabsSubTab = tab;
         LabsClipboardPanel.Visibility = tab == LabsSubTab.Clipboard ? Visibility.Visible : Visibility.Collapsed;
+        LabsShelfRedirectPanel.Visibility = tab == LabsSubTab.Shelf ? Visibility.Visible : Visibility.Collapsed;
 
         var placeholder = Array.Find(LabsPlaceholderSubTabs, p => p.Tab == tab);
         if (placeholder.Name is not null)
@@ -491,6 +622,8 @@ public partial class IslandWindow : Window
             LabsPlaceholderPanel.Visibility = Visibility.Collapsed;
         }
     }
+
+    private void LabsShelfOpenButton_Click(object sender, RoutedEventArgs e) => SelectTab(IslandTab.Shelf);
 
     private void ClipboardSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
