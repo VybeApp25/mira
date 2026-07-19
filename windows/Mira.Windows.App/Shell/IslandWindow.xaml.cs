@@ -107,6 +107,10 @@ public partial class IslandWindow : Window
     private readonly Stopwatch _eyesClock = Stopwatch.StartNew();
     private DispatcherTimer? _eyesTimer;
 
+    private bool _voiceSessionActive;
+    private bool _autoRecordOnReady;
+    private ChatBubbleViewModel? _voiceAssistantBubble;
+
     public IslandWindow()
     {
         InitializeComponent();
@@ -162,6 +166,11 @@ public partial class IslandWindow : Window
             MemoryStore.Shared.Changed -= OnMemoryChanged;
             WakeWordService.Shared.Detected -= OnWakeWordDetected;
             WakeWordService.Shared.Pause();
+            RealtimeVoiceService.Shared.StateChanged -= OnVoiceStateChanged;
+            RealtimeVoiceService.Shared.AssistantTranscriptDelta -= OnVoiceTranscriptDelta;
+            RealtimeVoiceService.Shared.ErrorOccurred -= OnVoiceError;
+            RealtimeVoiceService.Shared.Warning -= OnVoiceWarning;
+            if (_voiceSessionActive) _ = RealtimeVoiceService.Shared.DisconnectAsync();
             _eyesTimer?.Stop();
         };
 
@@ -227,6 +236,14 @@ public partial class IslandWindow : Window
         WakeWordCheckBox.IsChecked = WakeWordSettings.IsEnabled;
         WakeWordService.Shared.Detected += OnWakeWordDetected;
         WakeWordService.Shared.Start();
+
+        // Voice lives entirely inside this window's Chat tab -- there is no
+        // separate voice window, mirroring IslandChatView.swift's realtime
+        // wiring being part of the notch itself, not a standalone surface.
+        RealtimeVoiceService.Shared.StateChanged += OnVoiceStateChanged;
+        RealtimeVoiceService.Shared.AssistantTranscriptDelta += OnVoiceTranscriptDelta;
+        RealtimeVoiceService.Shared.ErrorOccurred += OnVoiceError;
+        RealtimeVoiceService.Shared.Warning += OnVoiceWarning;
 
         SelectTab(IslandTab.Home);
     }
@@ -324,22 +341,47 @@ public partial class IslandWindow : Window
         incoming.BeginAnimation(OpacityProperty, fadeIn);
     }
 
-    // ---- Eyes (collapsed idle state) ----
+    // ---- Eyes (collapsed idle/listening/speaking states) ----
 
     private const double EyeBlinkIntervalSeconds = 3.7;
     private const double EyeBlinkDurationSeconds = 0.09;
 
-    /// <summary>Mirrors SharedStatusView.swift's <c>notchEyes</c>/<c>singleEye</c> exactly: both eyes share one blink cadence but drift their gaze on offset phases (0.0 / 0.4) so they don't move in perfect lockstep.</summary>
+    private static readonly SolidColorBrush IrisTealBrush = new(Color.FromArgb(0xEB, 0x0D, 0xCC, 0xC0));
+    private static readonly SolidColorBrush IrisBlueBrush = new(Color.FromArgb(0xEB, 0x25, 0x63, 0xEB));
+    private static readonly SolidColorBrush VoiceBarBlueBrush = new(Color.FromArgb(0xE0, 0x25, 0x63, 0xEB));
+    private static readonly SolidColorBrush VoiceBarTealBrush = new(Color.FromArgb(0xE0, 0x0D, 0xCC, 0xC0));
+
+    // Mirrors SharedStatusView.swift's listenSpeeds/listenOffsets (first 5 slots) and
+    // reedSpeeds/reedOffsets (all 7) -- per-bar sine speed/phase so the waveform looks
+    // alive rather than uniformly pulsing.
+    private static readonly double[] VoiceBarSpeeds = [0.30, 0.38, 0.28, 0.42, 0.33, 0.38, 0.29];
+    private static readonly double[] VoiceBarOffsets = [0.00, 0.22, 0.44, 0.11, 0.33, 0.44, 0.27];
+
+    private Rectangle[]? _voiceBars;
+
+    /// <summary>
+    /// Mirrors SharedStatusView.swift's <c>notchEyes</c>/<c>singleEye</c>: both eyes
+    /// share one blink cadence but drift their gaze on offset phases (0.0 / 0.4) so
+    /// they don't move in perfect lockstep. Also drives the collapsed pill's
+    /// Idle/Listening/Speaking visuals: iris tints blue and 5 waveform bars appear
+    /// while <see cref="RealtimeVoiceService"/> is Listening, iris stays its default
+    /// teal and 7 bars appear while Speaking -- mirroring exactly how Mac renders
+    /// <c>notchEyes(t:irisColor:)</c> alongside its listening/reed waveforms.
+    /// </summary>
     private void UpdateEyes()
     {
         var t = _eyesClock.Elapsed.TotalSeconds;
-        UpdateSingleEye(t, gazePhase: 0.0, EyeLeftSclera, EyeLeftIris, EyeLeftPupil, EyeLeftIrisTransform, EyeLeftPupilTransform);
-        UpdateSingleEye(t, gazePhase: 0.4, EyeRightSclera, EyeRightIris, EyeRightPupil, EyeRightIrisTransform, EyeRightPupilTransform);
+        var state = RealtimeVoiceService.Shared.State;
+        var irisBrush = state == VoiceSessionState.Listening ? IrisBlueBrush : IrisTealBrush;
+
+        UpdateSingleEye(t, gazePhase: 0.0, EyeLeftSclera, EyeLeftIris, EyeLeftPupil, EyeLeftIrisTransform, EyeLeftPupilTransform, irisBrush);
+        UpdateSingleEye(t, gazePhase: 0.4, EyeRightSclera, EyeRightIris, EyeRightPupil, EyeRightIrisTransform, EyeRightPupilTransform, irisBrush);
+        UpdateVoiceBars(t, state);
     }
 
     private static void UpdateSingleEye(
         double t, double gazePhase, Rectangle sclera, Ellipse iris, Ellipse pupil,
-        TranslateTransform irisTransform, TranslateTransform pupilTransform)
+        TranslateTransform irisTransform, TranslateTransform pupilTransform, SolidColorBrush irisBrush)
     {
         var gazeX = Math.Sin((t + gazePhase) / 2.2 * Math.PI) * 1.6;
         var phase = t % EyeBlinkIntervalSeconds;
@@ -348,8 +390,35 @@ public partial class IslandWindow : Window
         sclera.Height = closed ? 2 : 7;
         iris.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
         pupil.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
+        iris.Fill = irisBrush;
         irisTransform.X = gazeX;
         pupilTransform.X = gazeX;
+    }
+
+    private void UpdateVoiceBars(double t, VoiceSessionState state)
+    {
+        var showBars = state is VoiceSessionState.Listening or VoiceSessionState.Speaking;
+        CollapsedVoiceBars.Visibility = showBars ? Visibility.Visible : Visibility.Collapsed;
+        if (!showBars) return;
+
+        _voiceBars ??= [VoiceBar0, VoiceBar1, VoiceBar2, VoiceBar3, VoiceBar4, VoiceBar5, VoiceBar6];
+        var visibleCount = state == VoiceSessionState.Listening ? 5 : 7;
+        var brush = state == VoiceSessionState.Listening ? VoiceBarBlueBrush : VoiceBarTealBrush;
+        const double minH = 3, maxH = 12;
+
+        for (var i = 0; i < _voiceBars.Length; i++)
+        {
+            var bar = _voiceBars[i];
+            if (i >= visibleCount)
+            {
+                bar.Visibility = Visibility.Collapsed;
+                continue;
+            }
+            bar.Visibility = Visibility.Visible;
+            bar.Fill = brush;
+            var amp = (Math.Sin((t + VoiceBarOffsets[i]) / VoiceBarSpeeds[i] * Math.PI * 2) + 1) / 2;
+            bar.Height = minH + amp * (maxH - minH);
+        }
     }
 
     // ---- Tabs ----
@@ -413,11 +482,11 @@ public partial class IslandWindow : Window
 
     // ---- Home: Now Playing media panel ----
 
-    private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => new VoiceWindow().Show();
+    private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
 
     // Mirrors IslandChatView.swift's .onReceive(.miraActivateVoice) { startVoice() } --
-    // fires from a WinRT callback thread, so marshal to the UI thread before touching any window.
-    private void OnWakeWordDetected(object? sender, EventArgs e) => Dispatcher.Invoke(() => new VoiceWindow().Show());
+    // fires from a WinRT callback thread, so marshal to the UI thread first.
+    private void OnWakeWordDetected(object? sender, EventArgs e) => Dispatcher.Invoke(() => _ = EnterVoiceModeAsync());
 
     private void OnNowPlayingChanged() => Dispatcher.Invoke(RenderNowPlaying);
 
@@ -2009,6 +2078,112 @@ public partial class IslandWindow : Window
             SetThinking(false);
             Scroller.ScrollToBottom();
         }
+    }
+
+    // ---- Voice (embedded in this tab, not a separate window -- mirrors IslandChatView.swift) ----
+
+    /// <summary>
+    /// Brings voice to the front (expand + switch to Chat) and, if no session is
+    /// already active, connects and auto-begins recording the moment the session
+    /// is ready. Shared by the Home tab's mic button, the Chat tab's own mic
+    /// button, and wake-word detection -- there is no separate voice window on
+    /// any of these paths.
+    /// </summary>
+    private async Task EnterVoiceModeAsync()
+    {
+        SetExpanded(true);
+        SelectTab(IslandTab.Chat);
+        if (_voiceSessionActive) return;
+
+        _voiceSessionActive = true;
+        _autoRecordOnReady = true;
+        RenderVoiceComposer(VoiceSessionState.Connecting);
+        await RealtimeVoiceService.Shared.ConnectAsync();
+    }
+
+    private void VoiceMicButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
+
+    private async void VoiceToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var state = RealtimeVoiceService.Shared.State;
+        if (state == VoiceSessionState.Listening) await RealtimeVoiceService.Shared.EndRecordingAndCommitAsync();
+        else if (state == VoiceSessionState.Idle) await RealtimeVoiceService.Shared.BeginRecordingAsync();
+    }
+
+    private async void VoiceCloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        _voiceSessionActive = false;
+        _autoRecordOnReady = false;
+        RenderVoiceComposer(VoiceSessionState.Idle);
+        await RealtimeVoiceService.Shared.DisconnectAsync();
+    }
+
+    private void OnVoiceStateChanged(VoiceSessionState state) => Dispatcher.Invoke(() =>
+    {
+        RenderVoiceComposer(state);
+
+        // The session reaches Idle both once right after connecting (ready for the
+        // first turn) and again after every completed turn -- _autoRecordOnReady
+        // distinguishes "just connected, start listening automatically" (wake word
+        // and the mic buttons both want hands-free start) from "turn finished,
+        // wait for the next explicit tap." BeginRecordingAsync itself no-ops if the
+        // connection actually failed (session never became ready), so this is safe
+        // to call even on the failure path.
+        if (state == VoiceSessionState.Idle && _autoRecordOnReady)
+        {
+            _autoRecordOnReady = false;
+            _ = RealtimeVoiceService.Shared.BeginRecordingAsync();
+        }
+
+        if (state == VoiceSessionState.Thinking && _voiceAssistantBubble is null)
+        {
+            _voiceAssistantBubble = new ChatBubbleViewModel(ChatRole.Assistant, "");
+            _bubbles.Add(_voiceAssistantBubble);
+            Scroller.ScrollToBottom();
+        }
+        else if (state == VoiceSessionState.Idle && _voiceAssistantBubble is not null)
+        {
+            _history.Add(new ChatMessage { Role = ChatRole.Assistant, Content = _voiceAssistantBubble.Text });
+            _voiceAssistantBubble = null;
+        }
+    });
+
+    private void OnVoiceTranscriptDelta(string delta) => Dispatcher.Invoke(() =>
+    {
+        if (_voiceAssistantBubble is null) return;
+        _voiceAssistantBubble.Text += delta;
+        Scroller.ScrollToBottom();
+    });
+
+    private void OnVoiceError(string message) => Dispatcher.Invoke(() =>
+    {
+        _voiceSessionActive = false;
+        _autoRecordOnReady = false;
+        _bubbles.Add(new ChatBubbleViewModel(ChatRole.Assistant, $"Voice error: {message}"));
+        Scroller.ScrollToBottom();
+        RenderVoiceComposer(VoiceSessionState.Idle);
+    });
+
+    private void OnVoiceWarning(string message) => Dispatcher.Invoke(() => VoiceStatusText.Text = message);
+
+    private void RenderVoiceComposer(VoiceSessionState state)
+    {
+        ChatComposerRow.Visibility = _voiceSessionActive ? Visibility.Collapsed : Visibility.Visible;
+        VoiceComposerPanel.Visibility = _voiceSessionActive ? Visibility.Visible : Visibility.Collapsed;
+        if (!_voiceSessionActive) return;
+
+        VoiceStatusText.Text = state switch
+        {
+            VoiceSessionState.Connecting => "Connecting…",
+            VoiceSessionState.Idle => "Tap the mic to talk",
+            VoiceSessionState.Listening => "Listening… tap to send",
+            VoiceSessionState.Thinking => "Thinking…",
+            VoiceSessionState.Speaking => "Speaking…",
+            VoiceSessionState.Error => "Error",
+            _ => VoiceStatusText.Text,
+        };
+        VoiceToggleButton.Content = state == VoiceSessionState.Listening ? "⏹" : "🎙";
+        VoiceToggleButton.IsEnabled = state is VoiceSessionState.Idle or VoiceSessionState.Listening;
     }
 
     private void SetThinking(bool thinking)

@@ -45,7 +45,6 @@
             <TextBlock x:Name="SignedInAsText" FontSize="14" Margin="0,0,0,8" />
             <TextBlock x:Name="PlanText" FontSize="14" Margin="0,0,0,20" />
             <Button Content="Open Chat" Height="32" Click="OpenChatButton_Click" Margin="0,0,0,8" FontWeight="Bold" />
-            <Button Content="Open Voice" Height="32" Click="OpenVoiceButton_Click" Margin="0,0,0,8" />
             <Button Content="Refresh plan" Height="30" Click="RefreshPlanButton_Click" Margin="0,0,0,16" />
 
             <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,16">

@@ -135,9 +135,4 @@ public partial class MainWindow : Window
     {
         AutonomySettings.ComputerUseEnabled = AutonomyCheckBox.IsChecked == true;
     }
-
-    private void OpenVoiceButton_Click(object sender, RoutedEventArgs e)
-    {
-        new VoiceWindow().Show();
-    }
 }
