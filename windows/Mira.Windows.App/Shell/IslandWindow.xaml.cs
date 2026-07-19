@@ -158,6 +158,7 @@ public partial class IslandWindow : Window
         // .onAppear { np.start() } -- started unconditionally here rather
         // than gated to first-tab-selection since Home is always the first
         // thing shown.
+        NowPlayingBridge.Current = NowPlayingService.Shared;
         NowPlayingService.Shared.Changed += OnNowPlayingChanged;
         _ = NowPlayingService.Shared.StartAsync();
         RenderNowPlaying();

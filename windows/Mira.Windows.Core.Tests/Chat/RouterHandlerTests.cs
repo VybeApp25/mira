@@ -25,4 +25,101 @@ public class RouterHandlerTests
         Assert.Equal(prompt, RouterHandler.ExtractSearchQuery(prompt));
     }
 
+    [Theory]
+    [InlineData("show me images of golden retrievers", "golden retrievers")]
+    [InlineData("images of the northern lights", "the northern lights")]
+    [InlineData("pictures of Tokyo at night", "Tokyo at night")]
+    [InlineData("find images of red pandas", "red pandas")]
+    public void ImageQuery_StripsLeadingFiller(string prompt, string expected)
+    {
+        Assert.Equal(expected, RouterHandler.ImageQuery(prompt));
+    }
+
+    [Theory]
+    [InlineData("bring up the usa game highlights from last night", "usa game highlights from last night")]
+    [InlineData("play me the trailer for the new batman movie", "trailer for the new batman movie")]
+    [InlineData("can you pull up a video of cats falling over", "cats falling over")]
+    [InlineData("show me the clip of the buzzer beater", "buzzer beater")]
+    public void VideoQuery_StripsFillerBothPasses(string prompt, string expected)
+    {
+        Assert.Equal(expected, RouterHandler.VideoQuery(prompt));
+    }
+
+    [Fact]
+    public void VideoQuery_EntirelyFiller_FallsBackToOriginalPrompt()
+    {
+        Assert.Equal("play", RouterHandler.VideoQuery("play"));
+    }
+
+    [Fact]
+    public void ExtractUrl_ExplicitHttpsUrl_IsFound()
+    {
+        Assert.Equal("https://example.com/page", RouterHandler.ExtractUrl("check out https://example.com/page please"));
+    }
+
+    [Theory]
+    [InlineData("open github.com", "https://github.com/")]
+    [InlineData("go to reddit.com", "https://reddit.com/")]
+    [InlineData("visit stackoverflow.com", "https://stackoverflow.com/")]
+    public void ExtractUrl_OpenPhrasing_BuildsHttpsUrl(string prompt, string expected)
+    {
+        Assert.Equal(expected, RouterHandler.ExtractUrl(prompt));
+    }
+
+    [Fact]
+    public void ExtractUrl_NoUrlOrOpenPhrasing_ReturnsNull()
+    {
+        Assert.Null(RouterHandler.ExtractUrl("what's the weather like"));
+    }
+
+    [Fact]
+    public void ExtractUrl_OpenPhrasingWithoutDot_ReturnsNull()
+    {
+        Assert.Null(RouterHandler.ExtractUrl("open settings"));
+    }
+
+    [Theory]
+    [InlineData("https://example.com")]
+    [InlineData("https://sub.example.co.uk/path")]
+    public void IsUrlSafe_NormalHost_IsTrue(string url)
+    {
+        Assert.True(RouterHandler.IsUrlSafe(url));
+    }
+
+    [Theory]
+    [InlineData("https://bit.ly/abc123")]
+    [InlineData("https://tinyurl.com/xyz")]
+    public void IsUrlSafe_KnownShortener_IsFalse(string url)
+    {
+        Assert.False(RouterHandler.IsUrlSafe(url));
+    }
+
+    [Fact]
+    public void IsUrlSafe_RawIpAddress_IsFalse()
+    {
+        Assert.False(RouterHandler.IsUrlSafe("http://192.168.1.1/admin"));
+    }
+
+    [Theory]
+    [InlineData("skip this song", RouterHandler.SpotifyAction.Next)]
+    [InlineData("next track", RouterHandler.SpotifyAction.Next)]
+    [InlineData("go back", RouterHandler.SpotifyAction.Previous)]
+    [InlineData("previous song", RouterHandler.SpotifyAction.Previous)]
+    [InlineData("pause spotify", RouterHandler.SpotifyAction.Toggle)]
+    [InlineData("play", RouterHandler.SpotifyAction.Toggle)]
+    [InlineData("play it", RouterHandler.SpotifyAction.Toggle)]
+    public void DetectSpotifyAction_BasicTransport(string prompt, RouterHandler.SpotifyAction expected)
+    {
+        Assert.Equal(expected, RouterHandler.DetectSpotifyAction(prompt));
+    }
+
+    [Theory]
+    [InlineData("favorite this song")]
+    [InlineData("add this to my gym playlist")]
+    [InlineData("follow this artist")]
+    [InlineData("play bohemian rhapsody")]
+    public void DetectSpotifyAction_LibraryActions_AreUnsupported(string prompt)
+    {
+        Assert.Equal(RouterHandler.SpotifyAction.Unsupported, RouterHandler.DetectSpotifyAction(prompt));
+    }
 }

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
+using Mira.Windows.Core.LiveLookup;
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
 using Mira.Windows.Core.Skills;
@@ -57,6 +59,24 @@ public static class RouterHandler
             MiraRoute.ScreenGuidance => await ScreenGuidanceReplyAsync(prompt, onStreamChunk, ct),
 
             MiraRoute.WebSearch => await WebSearchReplyAsync(prompt, ct),
+
+            MiraRoute.WeatherLookup => await WeatherLookupReplyAsync(prompt, ct),
+
+            MiraRoute.StockLookup => await StockLookupReplyAsync(prompt, ct),
+
+            MiraRoute.PlaceSearch => await PlaceSearchReplyAsync(prompt, ct),
+
+            MiraRoute.MapsQuery => await MapsQueryReplyAsync(prompt, ct),
+
+            MiraRoute.ImageSearch => ImageSearchReply(prompt),
+
+            MiraRoute.VideoPlayback => VideoPlaybackReply(prompt),
+
+            MiraRoute.OpenUrl => OpenUrlReply(prompt),
+
+            MiraRoute.MusicQuery => await MusicQueryReplyAsync(),
+
+            MiraRoute.SpotifyControl => await SpotifyControlReplyAsync(prompt),
 
             _ => new RouteResult(RouteResultKind.NotAvailable, NotAvailableMessage(decision), decision.Route),
         };
@@ -200,6 +220,289 @@ public static class RouterHandler
             }
         }
         return q.Length == 0 ? prompt : q;
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>weatherResult</c> — the spoken half only; see <see cref="LiveLookup.WeatherLookup"/>'s doc comment for why the Weather-app-opening half isn't ported.</summary>
+    private static async Task<RouteResult> WeatherLookupReplyAsync(string prompt, CancellationToken ct)
+    {
+        var city = WeatherLookup.ExtractCity(prompt);
+        var summary = await WeatherLookup.LookupAsync(city, ct);
+        var text = summary ?? (city is null ? "I couldn't get the weather right now." : $"I couldn't get the weather for {city} right now.");
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.WeatherLookup);
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>stockLookup</c> case — answers with text directly (Mac's widget-card path has no Windows chat-UI equivalent yet).</summary>
+    private static async Task<RouteResult> StockLookupReplyAsync(string prompt, CancellationToken ct)
+    {
+        var quote = await StockLookup.LookupAsync(prompt, ct);
+        var text = quote ?? "I couldn't find a quote for that — try naming the ticker symbol, like \"AAPL\".";
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.StockLookup);
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>placeSearch</c> case — a single Nominatim lookup answered as text (Mac's widget-card/map path has no Windows chat-UI equivalent yet).</summary>
+    private static async Task<RouteResult> PlaceSearchReplyAsync(string prompt, CancellationToken ct)
+    {
+        var query = PlaceLookup.ExtractPlaceQuery(prompt);
+        var place = await PlaceLookup.LookupAsync(query, ct);
+        var text = place is null
+            ? $"I couldn't find \"{query}\" — try a more specific name or address."
+            : $"{place.Name} — {place.Address}";
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.PlaceSearch);
+    }
+
+    /// <summary>
+    /// The Windows equivalent of RouterService.swift's <c>mapsQuery</c> case
+    /// — scoped down to "where is X" location lookups (reusing the same
+    /// Nominatim client as <see cref="PlaceSearchReplyAsync"/>, matching how
+    /// Mac's own Python maps skill uses the same OSRM/Nominatim combination),
+    /// plus opening the location on Google Maps. Turn-by-turn routing
+    /// ("directions from X to Y") is not ported this pass — see
+    /// docs/windows/IMPLEMENTATION_PLAN.md.
+    /// </summary>
+    private static async Task<RouteResult> MapsQueryReplyAsync(string prompt, CancellationToken ct)
+    {
+        var query = PlaceLookup.ExtractPlaceQuery(prompt);
+        var place = await PlaceLookup.LookupAsync(query, ct);
+        if (place is null)
+        {
+            return new RouteResult(RouteResultKind.Reply,
+                $"I couldn't find \"{query}\" on the map — try a more specific name or address.", MiraRoute.MapsQuery);
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo($"https://www.google.com/maps/search/?api=1&query={place.Lat},{place.Lon}") { UseShellExecute = true });
+        }
+        catch
+        {
+            // Best-effort -- a failed browser launch shouldn't block the spoken answer below.
+        }
+
+        return new RouteResult(RouteResultKind.Reply, $"{place.Name} — {place.Address}. Opened it on the map for you.", MiraRoute.MapsQuery);
+    }
+
+    /// <summary>
+    /// The Windows equivalent of RouterService.swift's <c>imageSearch</c>
+    /// case — Mac's real data source (an unofficial DuckDuckGo scrape feeding
+    /// a thumbnail-grid widget in <c>IslandChatView</c>) has no equivalent
+    /// surface in Windows' plain-text chat yet, so rather than fetching image
+    /// URLs just to print them as a text list, this opens the same DuckDuckGo
+    /// image-results page directly — arguably a better outcome for an image
+    /// query than a list of raw links would be.
+    /// </summary>
+    private static RouteResult ImageSearchReply(string prompt)
+    {
+        var query = ImageQuery(prompt);
+        try
+        {
+            Process.Start(new ProcessStartInfo($"https://duckduckgo.com/?q={Uri.EscapeDataString(query)}&iax=images&ia=images") { UseShellExecute = true });
+            return new RouteResult(RouteResultKind.Reply, $"Opened image results for \"{query}\" in your browser.", MiraRoute.ImageSearch);
+        }
+        catch
+        {
+            return new RouteResult(RouteResultKind.NotAvailable, "I couldn't open a browser to search images right now.", MiraRoute.ImageSearch);
+        }
+    }
+
+    /// <summary>Pure — mirrors <c>ChatWidgetService.imageQuery(from:)</c>'s filler-stripping.</summary>
+    public static string ImageQuery(string prompt)
+    {
+        var lower = prompt.ToLowerInvariant();
+        string[] strips = ["show me images of ", "images of ", "pictures of ", "show me pictures of ", "search images for ", "find images of ", "search for images of "];
+        foreach (var strip in strips)
+        {
+            if (lower.StartsWith(strip, StringComparison.Ordinal))
+                return prompt[strip.Length..].Trim();
+        }
+        return prompt;
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>videoPlayback</c> case — deterministic, no Claude call: clean the query, open YouTube's search results.</summary>
+    private static RouteResult VideoPlaybackReply(string prompt)
+    {
+        var query = VideoQuery(prompt);
+        try
+        {
+            Process.Start(new ProcessStartInfo($"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}") { UseShellExecute = true });
+            return new RouteResult(RouteResultKind.Reply, $"Pulling up \"{query}\" on YouTube in your browser — top result's right there.", MiraRoute.VideoPlayback);
+        }
+        catch
+        {
+            return new RouteResult(RouteResultKind.Reply, "I couldn't work out what to search for — try naming the video.", MiraRoute.VideoPlayback);
+        }
+    }
+
+    private static readonly string[] VideoQueryStrip =
+    [
+        "bring up", "pull up", "pull that up", "pull it up", "put on", "throw on",
+        "show me", "play me", "play the", "play a", "play", "find me", "let me see",
+        "i want to watch", "i wanna watch", "i want to see", "can you", "could you",
+        "would you", "please", "for me", "real quick",
+        "a youtube video", "the youtube video", "youtube video", "on youtube",
+        "the youtube", "youtube", "the video of", "a video of", "video of",
+        "the video", "a video", "the clip of", "a clip of", "clip of", "watch",
+    ];
+
+    /// <summary>Pure — mirrors <c>RouterService.videoQuery(from:)</c>: two passes of filler-phrase stripping, then dropping leftover leading connectors.</summary>
+    public static string VideoQuery(string prompt)
+    {
+        var q = $" {prompt.ToLowerInvariant()} ";
+        for (var pass = 0; pass < 2; pass++)
+            foreach (var strip in VideoQueryStrip)
+                q = q.Replace($" {strip} ", " ", StringComparison.OrdinalIgnoreCase);
+
+        var words = new List<string>(q.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        string[] connectors = ["on", "of", "the", "for", "a", "an"];
+        while (words.Count > 0 && connectors.Contains(words[0]))
+            words.RemoveAt(0);
+
+        var cleaned = string.Join(' ', words).Trim();
+        return cleaned.Length == 0 ? prompt.Trim() : cleaned;
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>openUrl</c> case — extract, validate, open.</summary>
+    private static RouteResult OpenUrlReply(string prompt)
+    {
+        var url = ExtractUrl(prompt);
+        if (url is null || !IsUrlSafe(url))
+        {
+            return new RouteResult(RouteResultKind.NotAvailable,
+                "I couldn't find a safe URL to open in that — try naming the exact site.", MiraRoute.OpenUrl);
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            return new RouteResult(RouteResultKind.Reply, $"Opened {url}.", MiraRoute.OpenUrl);
+        }
+        catch
+        {
+            return new RouteResult(RouteResultKind.NotAvailable, $"I couldn't open {url}.", MiraRoute.OpenUrl);
+        }
+    }
+
+    private static readonly string[] OpenPrefixes = ["open ", "go to ", "visit ", "navigate to ", "take me to "];
+
+    /// <summary>Pure — mirrors <c>RouterService.extractURL(from:)</c>: an explicit http(s) URL anywhere in the text, or an "open/go to &lt;domain&gt;" phrasing.</summary>
+    public static string? ExtractUrl(string text)
+    {
+        foreach (var word in text.Split(' '))
+        {
+            if (Uri.TryCreate(word, UriKind.Absolute, out var explicitUri)
+                && (explicitUri.Scheme == "http" || explicitUri.Scheme == "https"))
+                return explicitUri.ToString();
+        }
+
+        var lower = text.ToLowerInvariant();
+        foreach (var prefix in OpenPrefixes)
+        {
+            var idx = lower.IndexOf(prefix, StringComparison.Ordinal);
+            if (idx < 0) continue;
+
+            var remainder = text[(idx + prefix.Length)..].Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+            if (!remainder.Contains('.')) continue;
+
+            var urlStr = remainder.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? remainder : $"https://{remainder}";
+            if (Uri.TryCreate(urlStr, UriKind.Absolute, out var built) && !string.IsNullOrEmpty(built.Host)) return built.ToString();
+        }
+        return null;
+    }
+
+    private static readonly string[] UrlShorteners = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly"];
+
+    /// <summary>Pure — mirrors <c>RouterService.validateURL(_:)</c>: rejects known shorteners and raw IP hosts (both get routed to confirmation on Mac; this port simply declines rather than adding a confirmation round-trip for such a rare case).</summary>
+    public static bool IsUrlSafe(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.Host)) return false;
+        if (UrlShorteners.Any(s => uri.Host.EndsWith(s, StringComparison.OrdinalIgnoreCase))) return false;
+        return !Regex.IsMatch(uri.Host, @"^\d{1,3}(\.\d{1,3}){3}$");
+    }
+
+    /// <summary>The Windows equivalent of RouterService.swift's <c>musicQuery</c> case, but on genuinely better infrastructure than Mac's own: Mac reads a private, undocumented framework (<c>MRMediaRemote</c>); Windows uses the public, documented GSMTC API already built for the Home tab (<see cref="NowPlayingBridge"/>).</summary>
+    private static Task<RouteResult> MusicQueryReplyAsync()
+    {
+        var np = NowPlayingBridge.Current;
+        var text = np is { HasContent: true }
+            ? $"This is \"{np.Title}\" by {np.Artist}."
+            : "Nothing is currently playing.";
+        return Task.FromResult(new RouteResult(RouteResultKind.Reply, text, MiraRoute.MusicQuery));
+    }
+
+    /// <summary>
+    /// The Windows equivalent of RouterService.swift's <c>spotifyControl</c>
+    /// case, scoped to basic transport only (play/pause/skip/back) via the
+    /// same GSMTC-backed <see cref="NowPlayingBridge"/> as <c>music_query</c>
+    /// — genuinely portable since GSMTC already controls whatever session is
+    /// currently active, Spotify included, with no AppleScript/app-specific
+    /// automation needed. Library actions Mac's own <c>spotifyArgs</c> also
+    /// handles (favorite, add-to-playlist, follow artist, playing a specific
+    /// named song) need the real Spotify Web API with a per-user OAuth token
+    /// — real, bounded work, but a separate one from basic transport, so this
+    /// pass declines those explicitly rather than silently no-op'ing a toggle
+    /// instead of what was actually asked for.
+    /// </summary>
+    private static async Task<RouteResult> SpotifyControlReplyAsync(string prompt)
+    {
+        var action = DetectSpotifyAction(prompt);
+        if (action == SpotifyAction.Unsupported)
+        {
+            return new RouteResult(RouteResultKind.NotAvailable,
+                "I can play/pause, skip, and go back, but favoriting, playlists, following an artist, or playing a specific song aren't wired up on Windows yet.",
+                MiraRoute.SpotifyControl);
+        }
+
+        var np = NowPlayingBridge.Current;
+        if (np is null)
+        {
+            return new RouteResult(RouteResultKind.NotAvailable, "I can't reach media controls right now.", MiraRoute.SpotifyControl);
+        }
+
+        string reply;
+        switch (action)
+        {
+            case SpotifyAction.Next:
+                await np.NextTrackAsync();
+                reply = "Skipped.";
+                break;
+            case SpotifyAction.Previous:
+                await np.PreviousTrackAsync();
+                reply = "Went back.";
+                break;
+            default:
+                await np.TogglePlayPauseAsync();
+                reply = "Done.";
+                break;
+        }
+        return new RouteResult(RouteResultKind.Reply, reply, MiraRoute.SpotifyControl);
+    }
+
+    public enum SpotifyAction { Toggle, Next, Previous, Unsupported }
+
+    /// <summary>Pure — mirrors the basic-transport subset of <c>RouterService.spotifyArgs(from:)</c>; anything needing the real Spotify Web API is flagged <see cref="SpotifyAction.Unsupported"/> rather than guessed at.</summary>
+    public static SpotifyAction DetectSpotifyAction(string prompt)
+    {
+        var lower = prompt.ToLowerInvariant();
+
+        if (lower.Contains("favorite") || lower.Contains("favourite")
+            || lower.Contains("like this") || lower.Contains("like the")
+            || lower.Contains("save this") || lower.Contains("save the") || lower.Contains("heart this"))
+            return SpotifyAction.Unsupported;
+        if (lower.Contains("playlist")) return SpotifyAction.Unsupported;
+        if (lower.Contains("follow") && (lower.Contains("artist") || lower.Contains("them"))) return SpotifyAction.Unsupported;
+
+        if (lower.Contains("next") || lower.Contains("skip")) return SpotifyAction.Next;
+        if (lower.Contains("previous") || lower.Contains("back")) return SpotifyAction.Previous;
+        if (lower.Contains("pause")) return SpotifyAction.Toggle;
+
+        var playMatch = Regex.Match(lower, @"\bplay\s+(\S.*)");
+        if (playMatch.Success)
+        {
+            var named = playMatch.Groups[1].Value.Trim();
+            if (named.Length > 0 && named is not ("it" or "music" or "spotify" or "something"))
+                return SpotifyAction.Unsupported;
+        }
+
+        return SpotifyAction.Toggle;
     }
 
     /// <summary>

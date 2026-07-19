@@ -2,6 +2,7 @@ using Windows.Graphics.Imaging;
 using Windows.Media;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
+using Mira.Windows.Core.Chat;
 
 namespace Mira.Windows.App.Home;
 
@@ -15,8 +16,13 @@ namespace Mira.Windows.App.Home;
 /// "current" session the same way macOS's <c>MPNowPlayingInfoCenter</c> does,
 /// so no extra logic is needed to pick among multiple simultaneously-playing
 /// apps.
+///
+/// Also implements <see cref="INowPlayingBridge"/> so <c>RouterHandler</c>
+/// (in Core, which can't reference WinRT directly) can reach it for the
+/// chat-driven <c>music_query</c>/<c>spotify_control</c> routes — see that
+/// interface's own doc comment for why the indirection exists.
 /// </summary>
-public sealed class NowPlayingService
+public sealed class NowPlayingService : INowPlayingBridge
 {
     public static NowPlayingService Shared { get; } = new();
 
