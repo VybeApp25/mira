@@ -5,6 +5,7 @@ using Mira.Contracts.MintRealtimeToken;
 using Mira.Contracts.ReportVoiceUsage;
 using Mira.Windows.Core.Auth;
 using Mira.Windows.Core.Config;
+using Mira.Windows.Core.Vision;
 using Newtonsoft.Json.Linq;
 
 namespace Mira.Windows.Core.Voice;
@@ -61,7 +62,8 @@ public sealed class RealtimeVoiceService : IDisposable
 
     private const string Model = "gpt-realtime";
     private const string SystemInstructions =
-        "You are Mira, a helpful voice assistant running on Windows. Keep responses concise and conversational.";
+        "You are Mira, a helpful voice assistant running on Windows. Keep responses concise and conversational. "
+        + "A screenshot of the user's current screen is attached at the start of each turn, so you can see and reference what they're looking at.";
 
     // Mirrors RealtimeVoiceService.swift's buildSessionUpdate turn_detection block exactly.
     private const decimal VadThreshold = 0.65m;
@@ -338,12 +340,18 @@ public sealed class RealtimeVoiceService : IDisposable
 
             case "session.updated":
                 StartContinuousMicCapture();
+                // Cold-start turn has no speech_started yet -- attach the screen for the first question.
+                _ = SendScreenSnapshotAsync();
                 SetState(VoiceSessionState.Listening);
                 break;
 
             // ── Server VAD: user speech detected ─────────────────────────────────
             case "input_audio_buffer.speech_started":
                 _chunksSentThisTurn = 0;
+                // Fresh screenshot for every new utterance, not just the first --
+                // mirrors the Swift original's exact two call sites, so Mira's
+                // screen context stays current turn to turn, not stale from launch.
+                _ = SendScreenSnapshotAsync();
                 if (State == VoiceSessionState.Speaking)
                 {
                     // Barge-in: discard whatever's still queued for playback and cancel
@@ -442,6 +450,51 @@ public sealed class RealtimeVoiceService : IDisposable
             SetState(VoiceSessionState.Listening);
         }
         catch (TaskCanceledException) { /* superseded by a newer turn or teardown */ }
+    }
+
+    /// <summary>
+    /// Attaches a fresh screenshot as a <c>conversation.item.create</c> input_image
+    /// message -- mirrors the Swift original's <c>sendScreenSnapshot()</c> exactly,
+    /// including being called both on the cold-start turn and again at the start
+    /// of every subsequent utterance. Reuses <see cref="ScreenCapture.CaptureJpeg"/>,
+    /// the same GDI-based (<c>CopyFromScreen</c>) capture <c>screen_guidance</c>/
+    /// <c>computer_use</c> already use for text chat -- see that class's own doc
+    /// comment for the real, known limitation this inherits: exclusive-fullscreen
+    /// DirectX games (confirmed live: Marvel Rivals) render outside the desktop
+    /// compositor entirely, so GDI's `CopyFromScreen` can only see whatever was on
+    /// the desktop underneath, not the live game frame. Best-effort like the Swift
+    /// original -- any failure here silently skips this turn's screen context
+    /// rather than interrupting the voice turn itself.
+    /// </summary>
+    private async Task SendScreenSnapshotAsync()
+    {
+        if (!VoiceScreenContextSettings.IsEnabled) return;
+        try
+        {
+            var jpeg = ScreenCapture.CaptureJpeg();
+            if (jpeg is null) return;
+            await EmitAsync(new JObject
+            {
+                ["type"] = "conversation.item.create",
+                ["item"] = new JObject
+                {
+                    ["type"] = "message",
+                    ["role"] = "user",
+                    ["content"] = new JArray
+                    {
+                        new JObject
+                        {
+                            ["type"] = "input_image",
+                            ["image_url"] = $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg)}",
+                        },
+                    },
+                },
+            });
+        }
+        catch
+        {
+            // Best-effort, mirrors the Swift original -- the voice turn proceeds without it.
+        }
     }
 
     private Task SendSessionUpdateAsync()
