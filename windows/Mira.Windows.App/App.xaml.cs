@@ -14,6 +14,7 @@ public partial class App : System.Windows.Application
     private MainWindow? _mainWindow;
     private IslandWindow? _island;
     private AgentActivityWindow? _agentActivity;
+    private OverlayWindow? _overlay;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -53,6 +54,10 @@ public partial class App : System.Windows.Application
         // itself requires being signed in), so there's no harm creating it
         // unconditionally at launch.
         _agentActivity = new AgentActivityWindow();
+
+        // Same reasoning as _agentActivity -- inert until screen_guidance
+        // actually locates a target, so no need to gate on sign-in.
+        _overlay = new OverlayWindow();
 
         ShowMainWindow(); // first run: surface the sign-in UI immediately rather than
                           // leaving a brand-new user staring at nothing but a tray icon
@@ -95,6 +100,7 @@ public partial class App : System.Windows.Application
     {
         AccountService.Shared.StateChanged -= OnAuthStateChanged;
         _agentActivity?.Close();
+        _overlay?.Close();
         _tray?.Dispose();
         base.OnExit(e);
     }

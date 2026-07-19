@@ -52,6 +52,8 @@ public static class RouterHandler
 
             MiraRoute.ComputerUse => await ComputerUseReplyAsync(prompt, ct),
 
+            MiraRoute.ScreenGuidance => await ScreenGuidanceReplyAsync(prompt, onStreamChunk, ct),
+
             _ => new RouteResult(RouteResultKind.NotAvailable, NotAvailableMessage(decision), decision.Route),
         };
     }
@@ -74,6 +76,61 @@ public static class RouterHandler
 
         var result = await ComputerUseOrchestrator.Shared.RunAsync(prompt, ct);
         return new RouteResult(RouteResultKind.Reply, string.IsNullOrEmpty(result) ? "Done." : result, MiraRoute.ComputerUse);
+    }
+
+    /// <summary>
+    /// Mirrors RouterService.swift's <c>.screenGuidance</c> case: describes what's
+    /// on screen (streamed, same as <c>higher_model</c>) AND, in parallel,
+    /// asks <see cref="GuidanceLocator"/> to find the specific element that
+    /// answers the question. If one's found with enough confidence, it's
+    /// published to <see cref="GuidanceOverlayHub"/> so the WPF app can both
+    /// point at it (flying triangle) and highlight it (box + label +
+    /// explanation) — ported from <c>ClaudeService.locateGuidanceTarget</c> +
+    /// <c>OverlayWindowController.showGuidance</c>/<c>PointToService</c>.
+    /// </summary>
+    private static async Task<RouteResult> ScreenGuidanceReplyAsync(string prompt, Action<string>? onStreamChunk, CancellationToken ct)
+    {
+        var jpeg = ScreenCapture.CaptureJpeg();
+        if (jpeg is null)
+        {
+            return new RouteResult(RouteResultKind.NotAvailable,
+                "I can't capture your screen right now.", MiraRoute.ScreenGuidance);
+        }
+
+        var describeBody = new JObject
+        {
+            ["model"] = ClaudeChatModel,
+            ["max_tokens"] = 600,
+            ["system"] = "You are Mira, a screen-aware Windows assistant. You CAN see the user's screen — a screenshot is attached to this message. Describe what you see accurately. Be concise and direct.",
+            ["messages"] = new JArray
+            {
+                new JObject
+                {
+                    ["role"] = "user",
+                    ["content"] = new JArray
+                    {
+                        new JObject { ["type"] = "text", ["text"] = prompt },
+                        new JObject
+                        {
+                            ["type"] = "image",
+                            ["source"] = new JObject { ["type"] = "base64", ["media_type"] = "image/jpeg", ["data"] = Convert.ToBase64String(jpeg) },
+                        },
+                    },
+                },
+            },
+        };
+
+        var describeTask = AnthropicProxyClient.StreamAsync(describeBody, onStreamChunk ?? (_ => { }), ct);
+        var locateTask = GuidanceLocator.LocateAsync(prompt, jpeg, ScreenCapture.DisplayWidth, ScreenCapture.DisplayHeight, ct);
+
+        string text;
+        try { text = await describeTask; }
+        catch (Exception ex) { text = $"I couldn't process the screenshot: {ex.Message}"; }
+
+        var target = await locateTask;
+        if (target is not null) GuidanceOverlayHub.Publish(target);
+
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.ScreenGuidance);
     }
 
     /// <summary>
