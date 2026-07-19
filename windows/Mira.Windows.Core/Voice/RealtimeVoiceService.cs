@@ -222,6 +222,17 @@ public sealed class RealtimeVoiceService : IDisposable
 
     private static async Task<string> MintEphemeralTokenAsync(CancellationToken ct)
     {
+        // Renews the Supabase session first if it's stale -- mirrors the Swift
+        // original's openSocketAsync calling ensureFreshToken() before minting.
+        // Confirmed live as the actual cause of a real "Couldn't start voice mode:
+        // {"code":"UNAUTHORIZED_ASYMMETRIC_JWT","message":"Invalid JWT"}" error:
+        // SupabaseService's own 120s proactive-refresh timer (see its
+        // ScheduleAutoRefresh doc comment for this exact failure signature)
+        // covers most cases, but doesn't cover a token that expired in the gap
+        // right before this specific mint call -- this is the same belt-and-
+        // suspenders check Mac takes for exactly this endpoint.
+        await SupabaseService.Shared.EnsureFreshTokenAsync(ct: ct);
+
         using var http = new HttpClient();
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{MiraConfig.SupabaseUrl}/functions/v1/mint-realtime-token");
         req.Headers.Add("apikey", MiraConfig.SupabaseAnonKey);
