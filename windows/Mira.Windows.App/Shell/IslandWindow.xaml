@@ -54,6 +54,31 @@
             <Setter Property="Background" Value="#1AFFFFFF" />
             <Setter Property="Width" Value="28" />
         </Style>
+        <Style x:Key="LabsSubTabButtonBase" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="LabsSubTabButtonStyle" TargetType="Button" BasedOn="{StaticResource LabsSubTabButtonBase}">
+            <Setter Property="Background" Value="#382563EB" />
+        </Style>
+        <Style x:Key="LabsSubTabButtonStyleDim" TargetType="Button" BasedOn="{StaticResource LabsSubTabButtonBase}">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+
         <Style x:Key="CalendarDayButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -96,7 +121,7 @@
                         <Button x:Name="TabShelf" Tag="Shelf" Content="🗂" ToolTip="Shelf" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
-                        <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
@@ -206,6 +231,41 @@
                             <TextBlock x:Name="CameraStatusText" Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap"
                                        TextAlignment="Center" MaxWidth="360" Text="Starting camera…" />
                         </StackPanel>
+                    </Grid>
+
+                    <!-- Labs: sub-tab bar mirroring LabsTabView.swift, only Clipboard is real. -->
+                    <Grid x:Name="LabsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="LabsSubTabClipboard" Tag="Clipboard" Content="📋 Clipboard" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            <Button Tag="Shelf" Content="🗃 Shelf" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                            <Button Tag="Shortcuts" Content="⌨ Shortcuts" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                            <Button Tag="Queue" Content="🔢 Queue" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                            <Button Tag="Reminders" Content="🔔 Reminders" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <Grid x:Name="LabsClipboardPanel" Visibility="Visible">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBox x:Name="ClipboardSearchBox" Grid.Row="0" Height="26" Margin="0,0,0,8"
+                                         TextChanged="ClipboardSearchBox_TextChanged" />
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="ClipboardList" />
+                                </ScrollViewer>
+                            </Grid>
+
+                            <StackPanel x:Name="LabsPlaceholderPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock x:Name="LabsPlaceholderText" Foreground="#6B736F" FontSize="13"
+                                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
 
                     <!-- Chat -->

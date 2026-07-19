@@ -10,8 +10,10 @@ using Mira.Windows.App.Camera;
 using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Chat;
+using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Vision;
+using ClipboardWatcher = Mira.Windows.App.Clipboard.ClipboardWatcher;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
@@ -54,7 +56,16 @@ public partial class IslandWindow : Window
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
         (IslandTab.Shelf, "Shelf"), (IslandTab.Agents, "Agents"),
-        (IslandTab.Labs, "Labs"), (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+        (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+    ];
+
+    /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — only Clipboard is real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
+    private enum LabsSubTab { Clipboard, Shelf, Shortcuts, Queue, Reminders }
+
+    private static readonly (LabsSubTab Tab, string Name)[] LabsPlaceholderSubTabs =
+    [
+        (LabsSubTab.Shelf, "Shelf"), (LabsSubTab.Shortcuts, "Shortcuts"),
+        (LabsSubTab.Queue, "Queue"), (LabsSubTab.Reminders, "Reminders"),
     ];
 
     private static readonly string[] WeekdayInitials = ["S", "M", "T", "W", "T", "F", "S"];
@@ -71,6 +82,9 @@ public partial class IslandWindow : Window
     private bool _isSeekingNowPlaying;
     private WriteableBitmap? _cameraBitmap;
     private bool _cameraFrameDispatchPending;
+    private readonly ClipboardWatcher _clipboardWatcher = new();
+    private LabsSubTab _activeLabsSubTab = LabsSubTab.Clipboard;
+    private string _clipboardSearchQuery = "";
 
     public IslandWindow()
     {
@@ -95,16 +109,21 @@ public partial class IslandWindow : Window
                 Activate();
                 SetExpanded(true);
             };
+
+            // Also needs a real HWND, same reason as the hotkey above.
+            _clipboardWatcher.Start(this);
         };
         Closed += (_, _) =>
         {
             _hotkey?.Dispose();
+            _clipboardWatcher.Stop();
             AccountService.Shared.StateChanged -= OnAuthStateChanged;
             EntitlementService.Shared.PlanChanged -= OnPlanChanged;
             NowPlayingService.Shared.Changed -= OnNowPlayingChanged;
             CameraPreviewService.Shared.FrameArrived -= OnCameraFrame;
             CameraPreviewService.Shared.StartFailed -= OnCameraStartFailed;
             CameraPreviewService.Shared.Stop();
+            ClipboardHistoryStore.Shared.Changed -= OnClipboardHistoryChanged;
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -125,6 +144,9 @@ public partial class IslandWindow : Window
 
         CameraPreviewService.Shared.FrameArrived += OnCameraFrame;
         CameraPreviewService.Shared.StartFailed += OnCameraStartFailed;
+
+        ClipboardHistoryStore.Shared.Changed += OnClipboardHistoryChanged;
+        RenderClipboardList();
 
         SelectTab(IslandTab.Home);
     }
@@ -231,6 +253,7 @@ public partial class IslandWindow : Window
         HomePanel.Visibility = tab == IslandTab.Home ? Visibility.Visible : Visibility.Collapsed;
         ChatPanel.Visibility = tab == IslandTab.Chat ? Visibility.Visible : Visibility.Collapsed;
         CameraPanel.Visibility = tab == IslandTab.Camera ? Visibility.Visible : Visibility.Collapsed;
+        LabsPanel.Visibility = tab == IslandTab.Labs ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
@@ -428,6 +451,194 @@ public partial class IslandWindow : Window
         bmp.WritePixels(new Int32Rect(0, 0, width, height), bgra, width * 4, 0);
         bmp.Freeze();
         return bmp;
+    }
+
+    // ---- Labs / Clipboard ----
+
+    private void LabsSubTabButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tagStr } && Enum.TryParse<LabsSubTab>(tagStr, out var tab))
+            SelectLabsSubTab(tab);
+    }
+
+    private void SelectLabsSubTab(LabsSubTab tab)
+    {
+        _activeLabsSubTab = tab;
+        LabsClipboardPanel.Visibility = tab == LabsSubTab.Clipboard ? Visibility.Visible : Visibility.Collapsed;
+
+        var placeholder = Array.Find(LabsPlaceholderSubTabs, p => p.Tab == tab);
+        if (placeholder.Name is not null)
+        {
+            LabsPlaceholderPanel.Visibility = Visibility.Visible;
+            LabsPlaceholderText.Text = $"{placeholder.Name} isn't available on Windows yet — it's on the roadmap.";
+        }
+        else
+        {
+            LabsPlaceholderPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ClipboardSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _clipboardSearchQuery = ClipboardSearchBox.Text;
+        RenderClipboardList();
+    }
+
+    private void OnClipboardHistoryChanged() => Dispatcher.Invoke(RenderClipboardList);
+
+    private void RenderClipboardList()
+    {
+        ClipboardList.Children.Clear();
+        IEnumerable<ClipboardItem> items = ClipboardHistoryStore.Shared.History;
+
+        if (!string.IsNullOrWhiteSpace(_clipboardSearchQuery))
+        {
+            var q = _clipboardSearchQuery.Trim();
+            items = items.Where(i =>
+                (i.Text ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                i.DisplayTitle.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (i.SourceApp ?? "").Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var list = items.Take(200).ToList(); // cap rendered rows -- this is a live UI list, not a paged data grid
+        if (list.Count == 0)
+        {
+            ClipboardList.Children.Add(new TextBlock
+            {
+                Text = "No clipboard history yet — copy something to see it here.",
+                Foreground = new SolidColorBrush(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 24, 0, 0),
+            });
+            return;
+        }
+
+        foreach (var item in list) ClipboardList.Children.Add(BuildClipboardRow(item));
+    }
+
+    private UIElement BuildClipboardRow(ClipboardItem item)
+    {
+        var row = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 7, 6, 7),
+            Margin = new Thickness(0, 0, 0, 6),
+            Cursor = System.Windows.Input.Cursors.Hand,
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new TextBlock { Text = item.Icon, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(icon, 0);
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(new TextBlock
+        {
+            Text = item.DisplayTitle,
+            Foreground = System.Windows.Media.Brushes.White,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        textStack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrEmpty(item.SourceApp) ? FormatRelativeTime(item.CopiedAt) : $"{item.SourceApp} · {FormatRelativeTime(item.CopiedAt)}",
+            Foreground = new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)),
+            FontSize = 9,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        Grid.SetColumn(textStack, 1);
+
+        var pinButton = new Button
+        {
+            Content = "📌",
+            FontSize = 12,
+            Width = 22,
+            Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Opacity = item.IsPinned ? 1.0 : 0.35,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = item.IsPinned ? "Unpin" : "Pin",
+        };
+        pinButton.Click += (_, e) => { e.Handled = true; ClipboardHistoryStore.Shared.TogglePin(item.Id); };
+        Grid.SetColumn(pinButton, 2);
+
+        var deleteButton = new Button
+        {
+            Content = "✕",
+            FontSize = 11,
+            Width = 22,
+            Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Delete",
+        };
+        deleteButton.Click += (_, e) => { e.Handled = true; ClipboardHistoryStore.Shared.Delete(item.Id); };
+        Grid.SetColumn(deleteButton, 3);
+
+        grid.Children.Add(icon);
+        grid.Children.Add(textStack);
+        grid.Children.Add(pinButton);
+        grid.Children.Add(deleteButton);
+        row.Child = grid;
+
+        row.MouseLeftButtonUp += (_, _) => CopyItemToClipboard(item);
+        return row;
+    }
+
+    private static void CopyItemToClipboard(ClipboardItem item)
+    {
+        try
+        {
+            switch (item.Kind)
+            {
+                case ClipboardItemKind.Text or ClipboardItemKind.Url or ClipboardItemKind.Code or ClipboardItemKind.Color:
+                    if (item.Text is not null) System.Windows.Clipboard.SetText(item.Text);
+                    break;
+
+                case ClipboardItemKind.Image:
+                    if (item.ImagePng is not null)
+                    {
+                        using var ms = new System.IO.MemoryStream(item.ImagePng);
+                        var decoder = new PngBitmapDecoder(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                        System.Windows.Clipboard.SetImage(decoder.Frames[0]);
+                    }
+                    break;
+
+                case ClipboardItemKind.File:
+                    if (item.FilePaths is not null)
+                    {
+                        var collection = new System.Collections.Specialized.StringCollection();
+                        collection.AddRange(item.FilePaths.ToArray());
+                        System.Windows.Clipboard.SetFileDropList(collection);
+                    }
+                    break;
+            }
+        }
+        catch
+        {
+            // The clipboard can be transiently locked by another process -- a failed
+            // copy-back shouldn't be a crash, just a no-op the user can retry.
+        }
+    }
+
+    private static string FormatRelativeTime(DateTimeOffset time)
+    {
+        var span = DateTimeOffset.UtcNow - time;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
     }
 
     // ---- Settings (folded in from the old MainWindow) ----
