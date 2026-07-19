@@ -484,9 +484,10 @@ public partial class IslandWindow : Window
 
     private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
 
-    // Mirrors IslandChatView.swift's .onReceive(.miraActivateVoice) { startVoice() } --
-    // fires from a WinRT callback thread, so marshal to the UI thread first.
-    private void OnWakeWordDetected(object? sender, EventArgs e) => Dispatcher.Invoke(() => _ = EnterVoiceModeAsync());
+    // Mirrors NotchManager.swift's .miraActivateVoice handler exactly: starts the
+    // session without expanding or switching tabs -- fires from a WinRT callback
+    // thread, so marshal to the UI thread first.
+    private void OnWakeWordDetected(object? sender, EventArgs e) => Dispatcher.Invoke(() => _ = StartVoiceSessionAsync());
 
     private void OnNowPlayingChanged() => Dispatcher.Invoke(RenderNowPlaying);
 
@@ -2083,16 +2084,32 @@ public partial class IslandWindow : Window
     // ---- Voice (embedded in this tab, not a separate window -- mirrors IslandChatView.swift) ----
 
     /// <summary>
-    /// Brings voice to the front (expand + switch to Chat) and, if no session is
-    /// already active, connects and auto-begins recording the moment the session
-    /// is ready. Shared by the Home tab's mic button, the Chat tab's own mic
-    /// button, and wake-word detection -- there is no separate voice window on
-    /// any of these paths.
+    /// Expands the island to the Chat tab, then starts voice -- used by the Home
+    /// tab's mic button and the Chat tab's own mic button, both of which are
+    /// explicit manual clicks the user can only make from an already-visible
+    /// panel, so navigating there first is the expected result of the click.
     /// </summary>
     private async Task EnterVoiceModeAsync()
     {
         SetExpanded(true);
         SelectTab(IslandTab.Chat);
+        await StartVoiceSessionAsync();
+    }
+
+    /// <summary>
+    /// Connects and auto-begins recording the moment the session is ready, with
+    /// no window/tab navigation of its own. Mirrors NotchManager.swift's
+    /// <c>.miraActivateVoice</c> handling verbatim: "intentionally no-op --
+    /// mic capture is driven by [voice starting]; island stays closed" -- on
+    /// Mac, wake word and the PTT shortcut both start a session while the pill
+    /// stays fully collapsed, showing only the collapsed pill's own Idle/
+    /// Listening/Speaking eyes+waveform; the expanded panel only appears if the
+    /// user separately hovers to open it. Called directly by wake-word
+    /// detection for that reason -- <see cref="EnterVoiceModeAsync"/> (which
+    /// does force-expand) is only for the two manual mic-button clicks.
+    /// </summary>
+    private async Task StartVoiceSessionAsync()
+    {
         if (_voiceSessionActive) return;
 
         _voiceSessionActive = true;
