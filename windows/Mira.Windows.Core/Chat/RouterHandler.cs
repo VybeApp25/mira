@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
 using Mira.Windows.Core.Skills;
@@ -54,6 +55,8 @@ public static class RouterHandler
             MiraRoute.ComputerUse => await ComputerUseReplyAsync(prompt, ct),
 
             MiraRoute.ScreenGuidance => await ScreenGuidanceReplyAsync(prompt, onStreamChunk, ct),
+
+            MiraRoute.WebSearch => await WebSearchReplyAsync(prompt, ct),
 
             _ => new RouteResult(RouteResultKind.NotAvailable, NotAvailableMessage(decision), decision.Route),
         };
@@ -132,6 +135,71 @@ public static class RouterHandler
         if (target is not null) GuidanceOverlayHub.Publish(target);
 
         return new RouteResult(RouteResultKind.Reply, text, MiraRoute.ScreenGuidance);
+    }
+
+    /// <summary>
+    /// The Windows equivalent of RouterService.swift's <c>webSearchResult</c>/
+    /// <c>webSearchAnswer</c> — this is what was missing when a live query
+    /// ("what time is the world cup game tonight, who's playing") fell
+    /// through to the generic "not built yet" message despite the classifier
+    /// correctly recognizing it as web_search. Mac's fix here needs no new
+    /// infrastructure: it's a single Claude call using Anthropic's own
+    /// server-side <c>web_search_20250305</c> tool (the API fetches and reads
+    /// live pages itself; no client-side scraping/browser automation), plus
+    /// opening the user's browser to the same query so they can see the full
+    /// results — ported as-is since both halves are already fully portable
+    /// through the existing <see cref="AnthropicProxyClient"/>.
+    /// </summary>
+    private static async Task<RouteResult> WebSearchReplyAsync(string prompt, CancellationToken ct)
+    {
+        var query = ExtractSearchQuery(prompt);
+
+        try
+        {
+            Process.Start(new ProcessStartInfo($"https://www.google.com/search?q={Uri.EscapeDataString(query)}") { UseShellExecute = true });
+        }
+        catch
+        {
+            // Best-effort -- a failed browser launch shouldn't block the spoken answer below.
+        }
+
+        var body = new JObject
+        {
+            ["model"] = "claude-haiku-4-5-20251001",
+            ["max_tokens"] = 500,
+            ["system"] = "You are Mira. Use web search to answer with current, accurate information. Reply in 1-3 plain spoken sentences. No markdown, no bullet lists, no citation list.",
+            ["tools"] = new JArray { new JObject { ["type"] = "web_search_20250305", ["name"] = "web_search", ["max_uses"] = 3 } },
+            ["messages"] = new JArray { new JObject { ["role"] = "user", ["content"] = prompt } },
+        };
+
+        try
+        {
+            var answer = await AnthropicProxyClient.SendAsync(body, ct);
+            var text = string.IsNullOrWhiteSpace(answer)
+                ? "I opened the results in your browser — take a look."
+                : $"{answer.Trim()}\n\n_Opened the full results in your browser._";
+            return new RouteResult(RouteResultKind.Reply, text, MiraRoute.WebSearch);
+        }
+        catch
+        {
+            return new RouteResult(RouteResultKind.Reply, "I opened the results in your browser — take a look.", MiraRoute.WebSearch);
+        }
+    }
+
+    /// <summary>Pure — strips leading filler so the browser query is clean, extracted for direct unit-testing. Mirrors <c>RouterService.searchQuery(from:)</c>.</summary>
+    public static string ExtractSearchQuery(string prompt)
+    {
+        var q = prompt.Trim();
+        string[] prefixes = ["search the web for ", "search online for ", "search for ", "look up ", "look it up ", "google ", "search "];
+        foreach (var prefix in prefixes)
+        {
+            if (q.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                q = q[prefix.Length..];
+                break;
+            }
+        }
+        return q.Length == 0 ? prompt : q;
     }
 
     /// <summary>
