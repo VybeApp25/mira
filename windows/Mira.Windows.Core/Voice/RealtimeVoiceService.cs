@@ -18,13 +18,22 @@ namespace Mira.Windows.Core.Voice;
 /// Mac one), and reports session duration through the existing
 /// <c>report-voice-usage</c> function on teardown.
 ///
-/// Deliberately narrower than the Swift original, matching
-/// docs/windows/IMPLEMENTATION_PLAN.md Phase 4's scope:
+/// Uses <c>server_vad</c> turn detection (threshold 0.65, prefix_padding_ms 300,
+/// silence_duration_ms 400 — the exact values from the Swift original's
+/// <c>buildSessionUpdate</c>) for every session, not only an "always-on" mode:
+/// Mac only enables server_vad when <c>isAlwaysOn</c> is true, and otherwise
+/// requires holding a push-to-talk key to define the turn. This port
+/// deliberately generalizes that — every Windows voice session (wake-word,
+/// mic-button, or the persistent Always-On toggle) is turn-detected
+/// automatically, since Windows has no literal hold-a-key PTT gesture and the
+/// explicit ask this session was to never require a manual tap to end a turn.
+/// <see cref="IsAlwaysOnActive"/> only controls whether a session is started
+/// persistently (mirroring <c>connectAlwaysOn()</c>) rather than only on
+/// trigger — it does not change the turn-detection mechanism.
+///
+/// Also deliberately narrower than the Swift original, matching
+/// docs/windows/IMPLEMENTATION_PLAN.md Phase 4's original scope:
 /// <list type="bullet">
-/// <item><b>Push-to-talk only</b> — no always-on/server_vad mode, and no wake
-/// phrase (macOS's wake word depends on Apple's on-device Speech framework,
-/// which has no Windows equivalent — see docs/windows/SECURITY_AND_PRIVACY.md
-/// and the Phase 0 audit; it needs its own design spike, not a port).</item>
 /// <item><b>No tool-calling.</b> The Swift session.update declares
 /// <c>MiraToolService.definitions</c> so the model can invoke Mira's ~35 tools
 /// mid-conversation; no such tool surface exists on Windows yet, so this port's
@@ -38,6 +47,12 @@ namespace Mira.Windows.Core.Voice;
 /// schedules a silent "sentinel" audio buffer and gets an exact completion
 /// callback when it plays; this port polls <see cref="RealtimePlaybackSink.IsDrained"/>
 /// instead — see that class's doc comment.</item>
+/// <item><b>No output-route-aware barge-in.</b> The Swift original only keeps
+/// streaming the mic while Mira is speaking on external output (headphones),
+/// since on built-in speakers her own voice would echo back and self-interrupt.
+/// This port has no equivalent output-route detection, so it simplifies to
+/// always suppressing the mic while <see cref="VoiceSessionState.Speaking"/> —
+/// safe on any output device, at the cost of not supporting barge-in.</item>
 /// </list>
 /// </summary>
 public sealed class RealtimeVoiceService : IDisposable
@@ -48,14 +63,27 @@ public sealed class RealtimeVoiceService : IDisposable
     private const string SystemInstructions =
         "You are Mira, a helpful voice assistant running on Windows. Keep responses concise and conversational.";
 
+    // Mirrors RealtimeVoiceService.swift's buildSessionUpdate turn_detection block exactly.
+    private const decimal VadThreshold = 0.65m;
+    private const int VadPrefixPaddingMs = 300;
+    private const int VadSilenceDurationMs = 400;
+
+    // Mirrors the Swift original's 0.8s suppressMicUntil settle window after
+    // playback drains, so speaker bleed can't immediately re-trigger the VAD.
+    private static readonly TimeSpan PostSpeechSettle = TimeSpan.FromMilliseconds(800);
+
     private ClientWebSocket? _ws;
     private RealtimeMicCapture? _mic;
     private RealtimePlaybackSink? _playback;
     private CancellationTokenSource? _receiveLoopCts;
+    private CancellationTokenSource? _drainWaitCts;
     private DateTimeOffset _sessionStartedAt;
-    private bool _sessionReady;
+    private DateTimeOffset _suppressMicUntil = DateTimeOffset.MinValue;
 
     public VoiceSessionState State { get; private set; } = VoiceSessionState.Idle;
+
+    /// <summary>Mirrors <c>isAlwaysOnActive</c> — true while a persistent (Settings-toggle-driven) session is meant to stay open, as opposed to a one-off wake-word/mic-button-triggered session.</summary>
+    public bool IsAlwaysOnActive { get; private set; }
 
     public event Action<VoiceSessionState>? StateChanged;
     public event Action<string>? AssistantTranscriptDelta;
@@ -84,9 +112,28 @@ public sealed class RealtimeVoiceService : IDisposable
 
     // ---- Session lifecycle ----------------------------------------------------
 
+    /// <summary>Opens a one-off voice session (wake word or the mic button) — ends when the user closes it.</summary>
     public async Task ConnectAsync(CancellationToken ct = default)
     {
         if (State != VoiceSessionState.Idle) return;
+        await OpenConnectionAsync(ct);
+    }
+
+    /// <summary>
+    /// Opens a persistent session mirroring the Swift original's <c>connectAlwaysOn()</c> —
+    /// used by the Always-On Settings toggle, both at app launch (if already enabled)
+    /// and when the user flips the toggle on live.
+    /// </summary>
+    public async Task ConnectAlwaysOnAsync(CancellationToken ct = default)
+    {
+        if (IsAlwaysOnActive) return;
+        if (State != VoiceSessionState.Idle) Teardown(); // close any existing one-off session first
+        IsAlwaysOnActive = true;
+        await OpenConnectionAsync(ct);
+    }
+
+    private async Task OpenConnectionAsync(CancellationToken ct)
+    {
         SetState(VoiceSessionState.Connecting);
 
         try
@@ -103,6 +150,7 @@ public sealed class RealtimeVoiceService : IDisposable
         }
         catch (Exception ex)
         {
+            IsAlwaysOnActive = false;
             ErrorOccurred?.Invoke(ex.Message);
             SetState(VoiceSessionState.Idle);
         }
@@ -111,6 +159,7 @@ public sealed class RealtimeVoiceService : IDisposable
     public async Task DisconnectAsync()
     {
         var seconds = _sessionStartedAt == default ? 0 : (int)(DateTimeOffset.UtcNow - _sessionStartedAt).TotalSeconds;
+        IsAlwaysOnActive = false;
         Teardown();
         if (seconds > 0) await ReportVoiceUsageAsync(seconds);
         SetState(VoiceSessionState.Idle);
@@ -118,6 +167,8 @@ public sealed class RealtimeVoiceService : IDisposable
 
     private void Teardown()
     {
+        _drainWaitCts?.Cancel();
+        _drainWaitCts = null;
         _mic?.Dispose();
         _mic = null;
         _playback?.Dispose();
@@ -127,60 +178,44 @@ public sealed class RealtimeVoiceService : IDisposable
         try { _ws?.Abort(); } catch { /* already closed */ }
         _ws?.Dispose();
         _ws = null;
-        _sessionReady = false;
         _sessionStartedAt = default;
+        _suppressMicUntil = DateTimeOffset.MinValue;
     }
 
-    // ---- Push-to-talk ----------------------------------------------------------
+    // ---- Continuous mic capture (server_vad decides turn boundaries) ----------
 
     /// <summary>
-    /// Call on push-to-talk key/button DOWN. Builds and starts
-    /// <see cref="RealtimeMicCapture"/> on a ThreadPool thread rather than
-    /// whatever thread calls this — WPF's UI thread is STA, and WASAPI's
-    /// <c>IAudioClient</c> COM object gets apartment-bound to whichever thread
-    /// constructs it; NAudio then drives it from its own internal capture
-    /// thread, which throws <c>RPC_E_WRONG_THREAD</c> the moment real capture
-    /// starts if that object was created on an STA thread. This is invisible in
-    /// a console/test host (default MTA) — confirmed both an isolated capture
-    /// test and a full connect-record-reply test pass cleanly there — and only
-    /// bites when this is called directly from a WPF button handler, which is
-    /// exactly the reported crash ("connect then hold to talk and it
-    /// crashed"). <see cref="RealtimePlaybackSink"/> doesn't need the same
-    /// treatment: it's already constructed from the WebSocket receive loop's
-    /// background <c>Task.Run</c>, never the UI thread.
+    /// Starts the mic once, right after the session reports ready — mirrors the
+    /// Swift original's <c>startCapture()</c> call from <c>session.updated</c>.
+    /// Runs continuously for the life of the session; server-side VAD (not a
+    /// manual begin/end gesture) decides when a user utterance starts and ends.
+    /// Constructing <see cref="RealtimeMicCapture"/> here (inside the WebSocket
+    /// receive loop's background <c>Task.Run</c>, never the WPF UI thread) avoids
+    /// the STA/MTA WASAPI apartment mismatch documented on <see cref="RealtimeMicCapture"/>
+    /// itself.
     /// </summary>
-    public async Task BeginRecordingAsync()
+    private void StartContinuousMicCapture()
     {
-        if (!_sessionReady || State != VoiceSessionState.Idle || _mic is not null) return;
-        SetState(VoiceSessionState.Listening);
-        _chunksSentThisTurn = 0;
-        _mic = await Task.Run(() =>
+        if (_mic is not null) return;
+        var mic = new RealtimeMicCapture(AudioDeviceSettings.PreferredInputDeviceId);
+        mic.OnPcm16Chunk += (buf, count) =>
         {
-            var mic = new RealtimeMicCapture(AudioDeviceSettings.PreferredInputDeviceId);
-            mic.OnPcm16Chunk += (buf, count) =>
-            {
-                var b64 = Convert.ToBase64String(buf, 0, count);
-                _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 })
-                    .ContinueWith(t =>
-                    {
-                        if (t.Result) ChunkSent?.Invoke(++_chunksSentThisTurn);
-                    }, TaskScheduler.Default);
-            };
-            mic.Start();
-            return mic;
-        });
-    }
+            // Mirrors the Swift original's "don't feed the mic back into itself while
+            // Mira is speaking" guard, simplified to always-suppress (see this class's
+            // own doc comment on why output-route-aware barge-in isn't ported), plus
+            // the post-speech settle window that absorbs any trailing speaker bleed.
+            if (State == VoiceSessionState.Speaking) return;
+            if (DateTimeOffset.UtcNow < _suppressMicUntil) return;
 
-    /// <summary>Call on push-to-talk key/button UP — commits the turn and requests a response.</summary>
-    public async Task EndRecordingAndCommitAsync()
-    {
-        if (_mic is null) return;
-        _mic.Stop();
-        _mic.Dispose();
-        _mic = null;
-
-        await EmitAsync(new JObject { ["type"] = "input_audio_buffer.commit" });
-        await EmitAsync(new JObject { ["type"] = "response.create" });
+            var b64 = Convert.ToBase64String(buf, 0, count);
+            _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 })
+                .ContinueWith(t =>
+                {
+                    if (t.Result) ChunkSent?.Invoke(++_chunksSentThisTurn);
+                }, TaskScheduler.Default);
+        };
+        mic.Start();
+        _mic = mic;
     }
 
     // ---- Ephemeral token mint --------------------------------------------------
@@ -291,8 +326,28 @@ public sealed class RealtimeVoiceService : IDisposable
                 break;
 
             case "session.updated":
-                _sessionReady = true;
-                SetState(VoiceSessionState.Idle);
+                StartContinuousMicCapture();
+                SetState(VoiceSessionState.Listening);
+                break;
+
+            // ── Server VAD: user speech detected ─────────────────────────────────
+            case "input_audio_buffer.speech_started":
+                _chunksSentThisTurn = 0;
+                if (State == VoiceSessionState.Speaking)
+                {
+                    // Barge-in: discard whatever's still queued for playback and cancel
+                    // the in-flight response. Mirrors the Swift original's interrupt path,
+                    // simplified since this port doesn't stream the mic during Speaking
+                    // (see this class's doc comment) -- kept defensively in case any
+                    // trailing audio still slips through.
+                    _playback?.ClearPending();
+                    _ = EmitAsync(new JObject { ["type"] = "response.cancel" });
+                }
+                SetState(VoiceSessionState.Listening);
+                break;
+
+            // ── Server VAD: user stopped speaking — server auto-commits, no client action needed ──
+            case "input_audio_buffer.speech_stopped":
                 break;
 
             case "response.created":
@@ -314,6 +369,14 @@ public sealed class RealtimeVoiceService : IDisposable
                 AssistantTranscriptDelta?.Invoke((string?)evt["delta"] ?? "");
                 break;
 
+            // Audio stream for this response finished — wait for local playback to
+            // actually drain (mirrors the Swift original's sentinel-buffer completion
+            // callback, via RealtimePlaybackSink.IsDrained polling) before re-arming
+            // the mic, so Mira's own trailing audio can't immediately retrigger VAD.
+            case "response.output_audio.done":
+                _ = WaitForPlaybackDrainThenListenAsync();
+                break;
+
             case "response.done":
                 // Diagnostic added after a user report of "connects fine, but
                 // holding to talk does nothing, no reply audio" -- previously
@@ -325,13 +388,49 @@ public sealed class RealtimeVoiceService : IDisposable
                     Warning?.Invoke($"Sent {_chunksSentThisTurn} audio chunk(s) but got no audio reply back — the mic may have captured only silence. Check Windows' microphone privacy settings and default input device.");
                 else if (_chunksSentThisTurn == 0)
                     Warning?.Invoke("No audio was captured to send — check that a microphone is connected and Windows' \"Let desktop apps access your microphone\" setting is on.");
-                SetState(VoiceSessionState.Idle);
+                // A response with no audio at all (tool-only, or an empty turn) never
+                // fires response.output_audio.done, so there's nothing to drain --
+                // return straight to listening rather than waiting on an event that
+                // will never arrive.
+                if (!_receivedAudioThisTurn) SetState(VoiceSessionState.Listening);
                 break;
 
             case "error":
-                ErrorOccurred?.Invoke((string?)evt["error"]?["message"] ?? "Realtime API error");
+                // Mirrors the Swift original's benign-error filtering exactly -- these
+                // are ordinary races (cancelling a response that already finished,
+                // committing an empty buffer) that server_vad's own automatic
+                // commit/cancel timing can produce under normal use, not real failures.
+                // Treating them as errors would needlessly kill always-on listening.
+                var code = (string?)evt["error"]?["code"] ?? "?";
+                var msg = (string?)evt["error"]?["message"] ?? "Realtime API error";
+                var benign = code == "response_cancel_not_active"
+                          || code == "input_audio_buffer_commit_empty"
+                          || msg.Contains("no active response")
+                          || msg.Contains("buffer too small");
+                if (!benign) ErrorOccurred?.Invoke(msg);
                 break;
         }
+    }
+
+    private async Task WaitForPlaybackDrainThenListenAsync()
+    {
+        _drainWaitCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _drainWaitCts = cts;
+
+        try
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (_playback is not null && !_playback.IsDrained && DateTimeOffset.UtcNow < deadline)
+                await Task.Delay(50, cts.Token);
+
+            if (cts.Token.IsCancellationRequested) return;
+            if (State != VoiceSessionState.Speaking) return; // superseded by a newer turn, error, or teardown
+
+            _suppressMicUntil = DateTimeOffset.UtcNow + PostSpeechSettle;
+            SetState(VoiceSessionState.Listening);
+        }
+        catch (TaskCanceledException) { /* superseded by a newer turn or teardown */ }
     }
 
     private Task SendSessionUpdateAsync()
@@ -346,10 +445,7 @@ public sealed class RealtimeVoiceService : IDisposable
                 ["input"] = new JObject
                 {
                     ["format"] = new JObject { ["type"] = "audio/pcm", ["rate"] = RealtimeAudioFormat.SampleRate },
-                    // Push-to-talk: the button hold/release defines the turn, so
-                    // server VAD must be off (null) — matches the Swift original's
-                    // exact rationale (see buildSessionUpdate's comment).
-                    ["turn_detection"] = JValue.CreateNull(),
+                    ["turn_detection"] = BuildTurnDetectionConfig(),
                 },
                 ["output"] = new JObject
                 {
@@ -360,6 +456,21 @@ public sealed class RealtimeVoiceService : IDisposable
         };
         return EmitAsync(new JObject { ["type"] = "session.update", ["session"] = session });
     }
+
+    /// <summary>
+    /// Mirrors RealtimeVoiceService.swift's buildSessionUpdate turn_detection block
+    /// exactly (threshold/prefix_padding_ms/silence_duration_ms values included) --
+    /// pulled into its own pure method so the exact config shape is directly
+    /// testable without a live connection. Unlike the Swift original, this is
+    /// unconditional (see this class's doc comment for why).
+    /// </summary>
+    public static JObject BuildTurnDetectionConfig() => new()
+    {
+        ["type"] = "server_vad",
+        ["threshold"] = VadThreshold,
+        ["prefix_padding_ms"] = VadPrefixPaddingMs,
+        ["silence_duration_ms"] = VadSilenceDurationMs,
+    };
 
     /// <returns><c>false</c> if the socket wasn't open to send on (a silent no-op previously — the caller now surfaces this instead of leaving it invisible).</returns>
     private async Task<bool> EmitAsync(JObject evt)
@@ -376,5 +487,9 @@ public sealed class RealtimeVoiceService : IDisposable
         StateChanged?.Invoke(state);
     }
 
-    public void Dispose() => Teardown();
+    public void Dispose()
+    {
+        IsAlwaysOnActive = false;
+        Teardown();
+    }
 }

@@ -108,7 +108,6 @@ public partial class IslandWindow : Window
     private DispatcherTimer? _eyesTimer;
 
     private bool _voiceSessionActive;
-    private bool _autoRecordOnReady;
     private ChatBubbleViewModel? _voiceAssistantBubble;
 
     public IslandWindow()
@@ -186,6 +185,7 @@ public partial class IslandWindow : Window
         PopulateInputDeviceCombo();
         PopulateOutputDeviceCombo();
         WakeWordDeviceText.Text = AudioDevices.DefaultWakeWordInputDeviceName() ?? "Could not detect a default microphone.";
+        AlwaysOnCheckBox.IsChecked = VoiceAlwaysOnSettings.IsEnabled;
         RenderForAuthState(AccountService.Shared.State);
 
         // Home tab is the default landing tab, matching NotchHomeIdleView's
@@ -244,6 +244,10 @@ public partial class IslandWindow : Window
         RealtimeVoiceService.Shared.AssistantTranscriptDelta += OnVoiceTranscriptDelta;
         RealtimeVoiceService.Shared.ErrorOccurred += OnVoiceError;
         RealtimeVoiceService.Shared.Warning += OnVoiceWarning;
+
+        // Mirrors the Swift original's connectAlwaysOn() being called "on app
+        // launch" when already enabled -- no wake word or button click needed.
+        if (VoiceAlwaysOnSettings.IsEnabled) StartAlwaysOnListening();
 
         SelectTab(IslandTab.Home);
     }
@@ -2082,6 +2086,13 @@ public partial class IslandWindow : Window
     }
 
     // ---- Voice (embedded in this tab, not a separate window -- mirrors IslandChatView.swift) ----
+    //
+    // Conversational, no manual tap needed: once connected, RealtimeVoiceService
+    // streams the mic continuously and server-side VAD (not a begin/end button)
+    // decides when the user starts and stops talking, mirrors the Swift
+    // original's server_vad turn detection exactly -- see that class's own doc
+    // comment for the values ported and the one deliberate generalization
+    // (applied to every session, not gated behind an isAlwaysOn flag).
 
     /// <summary>
     /// Expands the island to the Chat tab, then starts voice -- used by the Home
@@ -2097,60 +2108,76 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
-    /// Connects and auto-begins recording the moment the session is ready, with
-    /// no window/tab navigation of its own. Mirrors NotchManager.swift's
-    /// <c>.miraActivateVoice</c> handling verbatim: "intentionally no-op --
-    /// mic capture is driven by [voice starting]; island stays closed" -- on
-    /// Mac, wake word and the PTT shortcut both start a session while the pill
-    /// stays fully collapsed, showing only the collapsed pill's own Idle/
-    /// Listening/Speaking eyes+waveform; the expanded panel only appears if the
-    /// user separately hovers to open it. Called directly by wake-word
-    /// detection for that reason -- <see cref="EnterVoiceModeAsync"/> (which
-    /// does force-expand) is only for the two manual mic-button clicks.
+    /// Connects a one-off session with no window/tab navigation of its own.
+    /// Mirrors NotchManager.swift's <c>.miraActivateVoice</c> handling verbatim:
+    /// "intentionally no-op -- mic capture is driven by [voice starting]; island
+    /// stays closed" -- on Mac, wake word and the PTT shortcut both start a
+    /// session while the pill stays fully collapsed, showing only the collapsed
+    /// pill's own Idle/Listening/Speaking eyes+waveform; the expanded panel only
+    /// appears if the user separately hovers to open it. Called directly by
+    /// wake-word detection for that reason -- <see cref="EnterVoiceModeAsync"/>
+    /// (which does force-expand) is only for the two manual mic-button clicks.
     /// </summary>
     private async Task StartVoiceSessionAsync()
     {
         if (_voiceSessionActive) return;
 
         _voiceSessionActive = true;
-        _autoRecordOnReady = true;
         RenderVoiceComposer(VoiceSessionState.Connecting);
         await RealtimeVoiceService.Shared.ConnectAsync();
     }
 
-    private void VoiceMicButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
-
-    private async void VoiceToggleButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>Starts the persistent Always-On session -- called at launch (if already enabled) and from the Settings checkbox.</summary>
+    private void StartAlwaysOnListening()
     {
-        var state = RealtimeVoiceService.Shared.State;
-        if (state == VoiceSessionState.Listening) await RealtimeVoiceService.Shared.EndRecordingAndCommitAsync();
-        else if (state == VoiceSessionState.Idle) await RealtimeVoiceService.Shared.BeginRecordingAsync();
+        if (_voiceSessionActive) return;
+
+        WakeWordService.Shared.Pause(); // the always-on session already hears everything; no need for a separate wake phrase
+        _voiceSessionActive = true;
+        RenderVoiceComposer(VoiceSessionState.Connecting);
+        _ = RealtimeVoiceService.Shared.ConnectAlwaysOnAsync();
     }
+
+    private void VoiceMicButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
 
     private async void VoiceCloseButton_Click(object sender, RoutedEventArgs e)
     {
+        var wasAlwaysOn = RealtimeVoiceService.Shared.IsAlwaysOnActive;
         _voiceSessionActive = false;
-        _autoRecordOnReady = false;
         RenderVoiceComposer(VoiceSessionState.Idle);
         await RealtimeVoiceService.Shared.DisconnectAsync();
+
+        // Manually closing an Always-On session is treated as the user turning
+        // the mode off, not a momentary pause -- otherwise it would silently
+        // reconnect on the next launch despite the user just having ended it.
+        if (wasAlwaysOn)
+        {
+            VoiceAlwaysOnSettings.IsEnabled = false;
+            AlwaysOnCheckBox.IsChecked = false;
+            WakeWordService.Shared.Start();
+        }
+    }
+
+    private void AlwaysOnCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        var enabled = AlwaysOnCheckBox.IsChecked == true;
+        VoiceAlwaysOnSettings.IsEnabled = enabled;
+        if (enabled)
+        {
+            StartAlwaysOnListening();
+        }
+        else if (RealtimeVoiceService.Shared.IsAlwaysOnActive)
+        {
+            _voiceSessionActive = false;
+            RenderVoiceComposer(VoiceSessionState.Idle);
+            _ = RealtimeVoiceService.Shared.DisconnectAsync();
+            WakeWordService.Shared.Start();
+        }
     }
 
     private void OnVoiceStateChanged(VoiceSessionState state) => Dispatcher.Invoke(() =>
     {
         RenderVoiceComposer(state);
-
-        // The session reaches Idle both once right after connecting (ready for the
-        // first turn) and again after every completed turn -- _autoRecordOnReady
-        // distinguishes "just connected, start listening automatically" (wake word
-        // and the mic buttons both want hands-free start) from "turn finished,
-        // wait for the next explicit tap." BeginRecordingAsync itself no-ops if the
-        // connection actually failed (session never became ready), so this is safe
-        // to call even on the failure path.
-        if (state == VoiceSessionState.Idle && _autoRecordOnReady)
-        {
-            _autoRecordOnReady = false;
-            _ = RealtimeVoiceService.Shared.BeginRecordingAsync();
-        }
 
         if (state == VoiceSessionState.Thinking && _voiceAssistantBubble is null)
         {
@@ -2158,8 +2185,11 @@ public partial class IslandWindow : Window
             _bubbles.Add(_voiceAssistantBubble);
             Scroller.ScrollToBottom();
         }
-        else if (state == VoiceSessionState.Idle && _voiceAssistantBubble is not null)
+        else if (state == VoiceSessionState.Listening && _voiceAssistantBubble is not null)
         {
+            // A turn just finished (the session returns to Listening automatically,
+            // never Idle, once playback drains or a no-audio response completes) --
+            // commit the finished reply to history, same as text chat does.
             _history.Add(new ChatMessage { Role = ChatRole.Assistant, Content = _voiceAssistantBubble.Text });
             _voiceAssistantBubble = null;
         }
@@ -2174,11 +2204,16 @@ public partial class IslandWindow : Window
 
     private void OnVoiceError(string message) => Dispatcher.Invoke(() =>
     {
+        var wasAlwaysOn = RealtimeVoiceService.Shared.IsAlwaysOnActive;
         _voiceSessionActive = false;
-        _autoRecordOnReady = false;
         _bubbles.Add(new ChatBubbleViewModel(ChatRole.Assistant, $"Voice error: {message}"));
         Scroller.ScrollToBottom();
         RenderVoiceComposer(VoiceSessionState.Idle);
+        if (wasAlwaysOn)
+        {
+            AlwaysOnCheckBox.IsChecked = false;
+            WakeWordService.Shared.Start();
+        }
     });
 
     private void OnVoiceWarning(string message) => Dispatcher.Invoke(() => VoiceStatusText.Text = message);
@@ -2192,15 +2227,12 @@ public partial class IslandWindow : Window
         VoiceStatusText.Text = state switch
         {
             VoiceSessionState.Connecting => "Connecting…",
-            VoiceSessionState.Idle => "Tap the mic to talk",
-            VoiceSessionState.Listening => "Listening… tap to send",
+            VoiceSessionState.Listening => "Listening…",
             VoiceSessionState.Thinking => "Thinking…",
             VoiceSessionState.Speaking => "Speaking…",
             VoiceSessionState.Error => "Error",
             _ => VoiceStatusText.Text,
         };
-        VoiceToggleButton.Content = state == VoiceSessionState.Listening ? "⏹" : "🎙";
-        VoiceToggleButton.IsEnabled = state is VoiceSessionState.Idle or VoiceSessionState.Listening;
     }
 
     private void SetThinking(bool thinking)
