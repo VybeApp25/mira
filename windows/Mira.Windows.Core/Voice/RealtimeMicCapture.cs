@@ -38,9 +38,14 @@ public sealed class RealtimeMicCapture : IDisposable
     /// <summary>Fires with resampled 24kHz mono 16-bit PCM bytes as they become available.</summary>
     public event Action<byte[], int>? OnPcm16Chunk;
 
-    public RealtimeMicCapture()
+    /// <param name="deviceId">
+    /// An <see cref="NAudio.CoreAudioApi.MMDevice.ID"/> from <see cref="AudioDevices.ListInputDevices"/>
+    /// (persisted as <see cref="AudioDeviceSettings.PreferredInputDeviceId"/>), or null/invalid to fall
+    /// back to WASAPI's implicit default communications-preferred input device.
+    /// </param>
+    public RealtimeMicCapture(string? deviceId = null)
     {
-        _capture = new WasapiCapture(); // default communications-preferred input device, shared mode
+        _capture = ResolveDevice(deviceId);
         _sourceBuffer = new BufferedWaveProvider(_capture.WaveFormat)
         {
             // ReadFully defaults to true, which pads reads with silence forever
@@ -62,6 +67,22 @@ public sealed class RealtimeMicCapture : IDisposable
             : new WdlResamplingSampleProvider(samples, RealtimeAudioFormat.SampleRate);
 
         _capture.DataAvailable += OnDataAvailable;
+    }
+
+    private static WasapiCapture ResolveDevice(string? deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId)) return new WasapiCapture();
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            return new WasapiCapture(enumerator.GetDevice(deviceId));
+        }
+        catch
+        {
+            // Device unplugged/renamed since the preference was saved -- same
+            // "fall back to system default rather than fail" as an unset preference.
+            return new WasapiCapture();
+        }
     }
 
     public void Start() => _capture.StartRecording();

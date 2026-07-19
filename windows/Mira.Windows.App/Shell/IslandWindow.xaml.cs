@@ -23,6 +23,7 @@ using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Shelf;
 using Mira.Windows.Core.Skills;
 using Mira.Windows.Core.Vision;
+using Mira.Windows.Core.Voice;
 using ClipboardWatcher = Mira.Windows.App.Clipboard.ClipboardWatcher;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
@@ -173,6 +174,9 @@ public partial class IslandWindow : Window
         CatModeCheckBox.IsChecked = PersonalitySettings.CatModeEnabled;
         ShowInCaptureCheckBox.IsChecked = AppearanceSettings.ShowInScreenCaptures;
         PopulateBrowserPreferenceCombo();
+        PopulateInputDeviceCombo();
+        PopulateOutputDeviceCombo();
+        WakeWordDeviceText.Text = AudioDevices.DefaultWakeWordInputDeviceName() ?? "Could not detect a default microphone.";
         RenderForAuthState(AccountService.Shared.State);
 
         // Home tab is the default landing tab, matching NotchHomeIdleView's
@@ -1801,6 +1805,70 @@ public partial class IslandWindow : Window
 
     private void TermsButton_Click(object sender, RoutedEventArgs e) =>
         BrowserLauncher.Open("https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html");
+
+    // ---- Voice & Audio ----
+
+    private void PopulateInputDeviceCombo()
+    {
+        InputDeviceCombo.Items.Clear();
+        InputDeviceCombo.Items.Add("System default");
+
+        var preferred = AudioDeviceSettings.PreferredInputDeviceId;
+        var selectedIndex = 0;
+        var devices = AudioDevices.ListInputDevices();
+        for (var i = 0; i < devices.Count; i++)
+        {
+            InputDeviceCombo.Items.Add(devices[i].Name);
+            if (string.Equals(devices[i].Id, preferred, StringComparison.OrdinalIgnoreCase))
+                selectedIndex = i + 1;
+        }
+
+        InputDeviceCombo.SelectedIndex = selectedIndex;
+    }
+
+    private void InputDeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var index = InputDeviceCombo.SelectedIndex;
+        if (index <= 0)
+        {
+            AudioDeviceSettings.PreferredInputDeviceId = null;
+            return;
+        }
+
+        var devices = AudioDevices.ListInputDevices();
+        if (index - 1 < devices.Count) AudioDeviceSettings.PreferredInputDeviceId = devices[index - 1].Id;
+    }
+
+    private void PopulateOutputDeviceCombo()
+    {
+        OutputDeviceCombo.Items.Clear();
+        OutputDeviceCombo.Items.Add("System default");
+
+        var preferred = AudioDeviceSettings.PreferredOutputDeviceId;
+        var selectedIndex = 0;
+        var devices = AudioDevices.ListOutputDevices();
+        for (var i = 0; i < devices.Count; i++)
+        {
+            OutputDeviceCombo.Items.Add(devices[i].Name);
+            if (string.Equals(devices[i].Id, preferred, StringComparison.OrdinalIgnoreCase))
+                selectedIndex = i + 1;
+        }
+
+        OutputDeviceCombo.SelectedIndex = selectedIndex;
+    }
+
+    private void OutputDeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var index = OutputDeviceCombo.SelectedIndex;
+        if (index <= 0)
+        {
+            AudioDeviceSettings.PreferredOutputDeviceId = null;
+            return;
+        }
+
+        var devices = AudioDevices.ListOutputDevices();
+        if (index - 1 < devices.Count) AudioDeviceSettings.PreferredOutputDeviceId = devices[index - 1].Id;
+    }
 
     // ---- Memory ----
 

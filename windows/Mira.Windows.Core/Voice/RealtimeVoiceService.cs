@@ -156,7 +156,7 @@ public sealed class RealtimeVoiceService : IDisposable
         _chunksSentThisTurn = 0;
         _mic = await Task.Run(() =>
         {
-            var mic = new RealtimeMicCapture();
+            var mic = new RealtimeMicCapture(AudioDeviceSettings.PreferredInputDeviceId);
             mic.OnPcm16Chunk += (buf, count) =>
             {
                 var b64 = Convert.ToBase64String(buf, 0, count);
@@ -258,7 +258,7 @@ public sealed class RealtimeVoiceService : IDisposable
         switch ((string?)evt["type"])
         {
             case "session.created":
-                _playback = new RealtimePlaybackSink();
+                _playback = new RealtimePlaybackSink(AudioDeviceSettings.PreferredOutputDeviceId);
                 _ = SendSessionUpdateAsync();
                 break;
 
