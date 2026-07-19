@@ -44,9 +44,10 @@ public sealed class EntitlementService
     public static bool CanForPlan(ProfilePlan plan, Entitlement entitlement) => entitlement switch
     {
         Entitlement.UseVoiceMode => true,
-        Entitlement.BuildApps => plan == ProfilePlan.Ultra,
+        Entitlement.BuildApps or Entitlement.CreateSkills => plan == ProfilePlan.Ultra,
         Entitlement.RunAgents or Entitlement.BuildWebsites or Entitlement.UseScreenGuidance
             or Entitlement.DeepResearch or Entitlement.ContentGeneration or Entitlement.UnlimitedChat
+            or Entitlement.ViewSkills
             => plan is ProfilePlan.Pro or ProfilePlan.Ultra,
         _ => false,
     };

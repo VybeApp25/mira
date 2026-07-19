@@ -14,6 +14,7 @@ using Mira.Windows.Core.Agents;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Entitlements;
+using Mira.Windows.Core.Skills;
 using Mira.Windows.Core.Vision;
 using ClipboardWatcher = Mira.Windows.App.Clipboard.ClipboardWatcher;
 using Button = System.Windows.Controls.Button;
@@ -57,8 +58,7 @@ public partial class IslandWindow : Window
 
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
-        (IslandTab.Shelf, "Shelf"),
-        (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+        (IslandTab.Shelf, "Shelf"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
     ];
 
     /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — only Clipboard is real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
@@ -87,6 +87,7 @@ public partial class IslandWindow : Window
     private readonly ClipboardWatcher _clipboardWatcher = new();
     private LabsSubTab _activeLabsSubTab = LabsSubTab.Clipboard;
     private string _clipboardSearchQuery = "";
+    private string? _pendingSkillMarkdown;
 
     public IslandWindow()
     {
@@ -127,6 +128,7 @@ public partial class IslandWindow : Window
             CameraPreviewService.Shared.Stop();
             ClipboardHistoryStore.Shared.Changed -= OnClipboardHistoryChanged;
             AgentJobStore.Shared.Changed -= OnAgentJobsChanged;
+            SkillStore.Shared.Changed -= OnSkillsChanged;
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -153,6 +155,8 @@ public partial class IslandWindow : Window
 
         AgentJobStore.Shared.Changed += OnAgentJobsChanged;
         RenderAgentJobList();
+
+        SkillStore.Shared.Changed += OnSkillsChanged;
 
         SelectTab(IslandTab.Home);
     }
@@ -261,7 +265,10 @@ public partial class IslandWindow : Window
         CameraPanel.Visibility = tab == IslandTab.Camera ? Visibility.Visible : Visibility.Collapsed;
         LabsPanel.Visibility = tab == IslandTab.Labs ? Visibility.Visible : Visibility.Collapsed;
         AgentsPanel.Visibility = tab == IslandTab.Agents ? Visibility.Visible : Visibility.Collapsed;
+        SkillsPanel.Visibility = tab == IslandTab.Skills ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
+
+        if (tab == IslandTab.Skills) RenderSkillsList();
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
         if (placeholder.Name is not null)
@@ -819,6 +826,184 @@ public partial class IslandWindow : Window
             Margin = new Thickness(0, 0, 0, 6),
             Padding = new Thickness(8),
         };
+    }
+
+    // ---- Skills ----
+
+    private void OnSkillsChanged() => Dispatcher.Invoke(RenderSkillsList);
+
+    private void RenderSkillsList()
+    {
+        var canView = EntitlementService.Shared.Can(Entitlement.ViewSkills);
+        SkillsUpsellPanel.Visibility = canView ? Visibility.Collapsed : Visibility.Visible;
+        SkillsScroller.Visibility = canView ? Visibility.Visible : Visibility.Collapsed;
+
+        var canCreate = EntitlementService.Shared.Can(Entitlement.CreateSkills);
+        SkillCreateButton.Style = (Style)FindResource(canCreate ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+        SkillImportButton.Style = (Style)FindResource(canCreate ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+
+        if (!canView) return;
+
+        SkillsList.Children.Clear();
+        foreach (var skill in SkillStore.Shared.All) SkillsList.Children.Add(BuildSkillRow(skill));
+    }
+
+    private UIElement BuildSkillRow(MiraSkill skill)
+    {
+        var isActive = SkillStore.Shared.IsActive(skill.Id);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new TextBlock { Text = skill.Icon, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        Grid.SetColumn(icon, 0);
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(new TextBlock { Text = skill.Name, Foreground = System.Windows.Media.Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold });
+        if (!string.IsNullOrEmpty(skill.Tagline))
+        {
+            textStack.Children.Add(new TextBlock
+            {
+                Text = skill.Tagline,
+                Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                FontSize = 10,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
+        Grid.SetColumn(textStack, 1);
+
+        var toggleButton = new Button
+        {
+            Content = isActive ? "On" : "Off",
+            Width = 46,
+            Height = 24,
+            FontSize = 10,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Foreground = System.Windows.Media.Brushes.White,
+            Background = isActive
+                ? new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB))
+                : new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
+        };
+        toggleButton.Click += (_, e) => { e.Handled = true; SkillStore.Shared.Toggle(skill.Id); RenderSkillsList(); };
+        Grid.SetColumn(toggleButton, 2);
+
+        if (skill.Origin == MiraSkillOrigin.User)
+        {
+            var deleteButton = new Button
+            {
+                Content = "✕",
+                FontSize = 11,
+                Width = 20,
+                Height = 20,
+                Margin = new Thickness(6, 0, 0, 0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = "Remove",
+            };
+            deleteButton.Click += (_, e) => { e.Handled = true; SkillStore.Shared.RemoveUserSkill(skill.Id); RenderSkillsList(); };
+            Grid.SetColumn(deleteButton, 3);
+            grid.Children.Add(deleteButton);
+        }
+
+        grid.Children.Add(icon);
+        grid.Children.Add(textStack);
+        grid.Children.Add(toggleButton);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 8, 8),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = grid,
+        };
+    }
+
+    private void SkillCreateButton_Click(object sender, RoutedEventArgs e)
+    {
+        SkillDescriptionBox.Text = "";
+        SkillPreviewBorder.Visibility = Visibility.Collapsed;
+        _pendingSkillMarkdown = null;
+        SkillGenerateStatusText.Text = EntitlementService.Shared.Can(Entitlement.CreateSkills)
+            ? "" : "Creating skills needs an Ultra plan.";
+        SkillCreatePanel.Visibility = Visibility.Visible;
+    }
+
+    private void SkillCreateCancelButton_Click(object sender, RoutedEventArgs e) => SkillCreatePanel.Visibility = Visibility.Collapsed;
+
+    private async void SkillGenerateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EntitlementService.Shared.Can(Entitlement.CreateSkills))
+        {
+            SkillGenerateStatusText.Text = "Creating skills needs an Ultra plan.";
+            return;
+        }
+
+        var description = SkillDescriptionBox.Text.Trim();
+        if (string.IsNullOrEmpty(description)) return;
+
+        SkillGenerateStatusText.Text = "Generating…";
+        SkillPreviewBorder.Visibility = Visibility.Collapsed;
+        try
+        {
+            var markdown = await SkillAuthor.GenerateAsync(description);
+            _pendingSkillMarkdown = markdown;
+            SkillPreviewText.Text = markdown;
+            SkillPreviewBorder.Visibility = Visibility.Visible;
+            SkillGenerateStatusText.Text = "";
+        }
+        catch (Exception ex)
+        {
+            SkillGenerateStatusText.Text = $"Couldn't generate a skill: {ex.Message}";
+        }
+    }
+
+    private void SkillSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingSkillMarkdown is null) return;
+
+        var (ok, error) = SkillStore.Shared.CreateSkill(_pendingSkillMarkdown);
+        if (!ok)
+        {
+            SkillGenerateStatusText.Text = error;
+            return;
+        }
+
+        SkillCreatePanel.Visibility = Visibility.Collapsed;
+        RenderSkillsList();
+    }
+
+    private void SkillImportButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!EntitlementService.Shared.Can(Entitlement.CreateSkills))
+        {
+            SkillGenerateStatusText.Text = "Importing a skill needs an Ultra plan.";
+            SkillCreatePanel.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "SKILL.md files (*.md)|*.md|All files (*.*)|*.*",
+            Title = "Import a SKILL.md file",
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        var (ok, error) = SkillStore.Shared.ImportSkill(dialog.FileName);
+        if (!ok)
+        {
+            SkillGenerateStatusText.Text = error;
+            SkillCreatePanel.Visibility = Visibility.Visible;
+            return;
+        }
+
+        RenderSkillsList();
     }
 
     // ---- Settings (folded in from the old MainWindow) ----

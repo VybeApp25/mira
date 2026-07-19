@@ -1,5 +1,6 @@
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
+using Mira.Windows.Core.Skills;
 using Mira.Windows.Core.Vision;
 using Newtonsoft.Json.Linq;
 
@@ -161,16 +162,30 @@ public static class RouterHandler
         return string.IsNullOrEmpty(reply) ? "GPT-4o returned no response." : reply;
     }
 
-    private static JObject BuildClaudeBody(IReadOnlyList<ChatMessage> history) => new()
+    /// <summary>
+    /// Splices every currently-active skill's context text into the system
+    /// prompt (see <see cref="SkillStore.BuildContext"/>) — the one and only
+    /// effect a "skill" has on Windows, mirroring the Mac original's own
+    /// design exactly: a skill is text, not code, and toggling it on just
+    /// biases what the model writes back, nothing else.
+    /// </summary>
+    private static JObject BuildClaudeBody(IReadOnlyList<ChatMessage> history)
     {
-        ["model"] = ClaudeChatModel,
-        ["max_tokens"] = 2048,
-        ["messages"] = new JArray(history.Select(m => new JObject
+        var body = new JObject
         {
-            ["role"] = m.Role == ChatRole.User ? "user" : "assistant",
-            ["content"] = m.Content,
-        })),
-    };
+            ["model"] = ClaudeChatModel,
+            ["max_tokens"] = 2048,
+            ["messages"] = new JArray(history.Select(m => new JObject
+            {
+                ["role"] = m.Role == ChatRole.User ? "user" : "assistant",
+                ["content"] = m.Content,
+            })),
+        };
+
+        var skillContext = SkillStore.Shared.BuildContext();
+        if (!string.IsNullOrEmpty(skillContext)) body["system"] = skillContext;
+        return body;
+    }
 
     /// <summary>Condensed transcript for the classifier's context, mirroring the shape <c>RouterContext.recentTranscript</c> carries on macOS — last few turns only.</summary>
     private static string? BuildTranscript(IEnumerable<ChatMessage> priorMessages)

@@ -122,7 +122,7 @@
                         <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
-                        <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                     </StackPanel>
@@ -295,6 +295,51 @@
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="AgentJobList" />
                         </ScrollViewer>
+                    </Grid>
+
+                    <!-- Skills: toggle prompt-injection text that biases how Mira responds, see
+                         IMPLEMENTATION_PLAN.md for why this is safe on Windows today (no unsandboxed
+                         tool surface for a skill's text to steer toward, unlike the Mac original). -->
+                    <Grid x:Name="SkillsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="SkillCreateButton" Content="✨ Create Skill" Click="SkillCreateButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            <Button x:Name="SkillImportButton" Content="📂 Import" Click="SkillImportButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer x:Name="SkillsScroller" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="SkillsList" />
+                            </ScrollViewer>
+
+                            <StackPanel x:Name="SkillsUpsellPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="⭐" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"
+                                           Text="Skills need a Pro or Ultra plan. Upgrade in Settings to bias how Mira responds." />
+                            </StackPanel>
+
+                            <Grid x:Name="SkillCreatePanel" Visibility="Collapsed" Background="#EE101216">
+                                <StackPanel MaxWidth="420" VerticalAlignment="Top" Margin="0,10,0,0">
+                                    <TextBlock Text="Describe the skill you want" Foreground="White" FontSize="12" Margin="0,0,0,6" />
+                                    <TextBox x:Name="SkillDescriptionBox" Height="28" Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <Button Content="Generate" Height="26" Width="80" Click="SkillGenerateButton_Click" />
+                                        <Button Content="Cancel" Height="26" Width="70" Margin="8,0,0,0" Click="SkillCreateCancelButton_Click" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="SkillGenerateStatusText" Foreground="#8CFFFFFF" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                    <Border x:Name="SkillPreviewBorder" Visibility="Collapsed" Background="#0DFFFFFF" CornerRadius="6" Padding="8" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <TextBlock x:Name="SkillPreviewText" Foreground="#CCFFFFFF" FontSize="11" TextWrapping="Wrap" />
+                                            <Button Content="Save Skill" Height="26" Width="90" HorizontalAlignment="Left" Margin="0,8,0,0" Click="SkillSaveButton_Click" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
                     </Grid>
 
                     <!-- Chat -->
