@@ -159,6 +159,8 @@ public partial class IslandWindow : Window
             LessonRunner.Shared.Changed -= OnLearnChanged;
             LessonRunner.Shared.Stop();
             MemoryStore.Shared.Changed -= OnMemoryChanged;
+            WakeWordService.Shared.Detected -= OnWakeWordDetected;
+            WakeWordService.Shared.Pause();
             _eyesTimer?.Stop();
         };
 
@@ -214,6 +216,14 @@ public partial class IslandWindow : Window
         LessonProgressStore.Shared.Changed += OnLearnChanged;
         LessonRunner.Shared.Changed += OnLearnChanged;
 
+        // Mirrors NotchManager.swift's wakeWord.start() at launch -- wake word
+        // self-gates on WakeWordSettings.IsEnabled, so this is a no-op when
+        // the user has the toggle off.
+        WakeWordBridge.Current = WakeWordService.Shared;
+        WakeWordCheckBox.IsChecked = WakeWordSettings.IsEnabled;
+        WakeWordService.Shared.Detected += OnWakeWordDetected;
+        WakeWordService.Shared.Start();
+
         SelectTab(IslandTab.Home);
     }
 
@@ -265,6 +275,13 @@ public partial class IslandWindow : Window
         BeginAnimation(HeightProperty, new DoubleAnimation(Height, targetHeight, duration) { EasingFunction = ease });
         ApplyCornerRadius(targetRadius, duration, ease);
         CrossfadeContent(expanded);
+
+        // Mirrors NotchManager.swift's expandForShortcut() pausing the wake
+        // word while expanded (so it doesn't also react to the user's own
+        // typed/spoken input) and performCollapseIfIdle's restart once
+        // collapsed back to idle.
+        if (expanded) WakeWordService.Shared.Pause();
+        else WakeWordService.Shared.Start();
 
         if (expanded && _activeTab == IslandTab.Chat) InputBox.Focus();
     }
@@ -393,6 +410,10 @@ public partial class IslandWindow : Window
     // ---- Home: Now Playing media panel ----
 
     private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => new VoiceWindow().Show();
+
+    // Mirrors IslandChatView.swift's .onReceive(.miraActivateVoice) { startVoice() } --
+    // fires from a WinRT callback thread, so marshal to the UI thread before touching any window.
+    private void OnWakeWordDetected(object? sender, EventArgs e) => Dispatcher.Invoke(() => new VoiceWindow().Show());
 
     private void OnNowPlayingChanged() => Dispatcher.Invoke(RenderNowPlaying);
 
@@ -1726,6 +1747,14 @@ public partial class IslandWindow : Window
     private void AutonomyCheckBox_Changed(object sender, RoutedEventArgs e) => AutonomySettings.ComputerUseEnabled = AutonomyCheckBox.IsChecked == true;
 
     private void ConfirmRiskyCheckBox_Changed(object sender, RoutedEventArgs e) => AutonomySettings.ConfirmRiskyActions = ConfirmRiskyCheckBox.IsChecked == true;
+
+    private void WakeWordCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        var enabled = WakeWordCheckBox.IsChecked == true;
+        WakeWordSettings.IsEnabled = enabled;
+        if (enabled) WakeWordService.Shared.Start();
+        else WakeWordService.Shared.Pause();
+    }
 
     private void CatModeCheckBox_Changed(object sender, RoutedEventArgs e) => PersonalitySettings.CatModeEnabled = CatModeCheckBox.IsChecked == true;
 

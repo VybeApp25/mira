@@ -739,6 +739,12 @@
                                     <TextBlock Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap"
                                                Text="Expand for text: Ctrl+Alt+T (not yet customizable on Windows)." />
 
+                                    <TextBlock Text="Voice" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <CheckBox x:Name="WakeWordCheckBox" Content="&quot;Hey Mira&quot; wake word"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="WakeWordCheckBox_Changed" Unchecked="WakeWordCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,16"
+                                               Text="Always-on, on-device listening for &quot;hey mira&quot; (and close mishearings) to start a voice session hands-free." />
+
                                     <TextBlock Text="Web Browser" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
                                     <ComboBox x:Name="BrowserPreferenceCombo" Height="26" SelectionChanged="BrowserPreferenceCombo_SelectionChanged" />
                                     <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"
