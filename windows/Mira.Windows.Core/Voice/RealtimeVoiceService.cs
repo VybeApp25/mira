@@ -61,6 +61,25 @@ public sealed class RealtimeVoiceService : IDisposable
     public event Action<string>? AssistantTranscriptDelta;
     public event Action<string>? ErrorOccurred;
 
+    /// <summary>
+    /// Fires with a running count of raw mic chunks actually sent this turn —
+    /// added as a diagnostic after a user report of "connects fine, but
+    /// holding to talk does nothing": there was previously no visible signal
+    /// distinguishing "the mic captured nothing" from "audio was sent but the
+    /// model's reply was empty" from "the round trip never happened at all."
+    /// </summary>
+    public event Action<int>? ChunkSent;
+
+    /// <summary>
+    /// A non-fatal diagnostic message, separate from <see cref="ErrorOccurred"/>
+    /// (which the UI treats as session-ending) — e.g. "no audio captured this
+    /// turn." The session stays connected; this is purely informational.
+    /// </summary>
+    public event Action<string>? Warning;
+
+    private int _chunksSentThisTurn;
+    private bool _receivedAudioThisTurn;
+
     private RealtimeVoiceService() { }
 
     // ---- Session lifecycle ----------------------------------------------------
@@ -134,13 +153,18 @@ public sealed class RealtimeVoiceService : IDisposable
     {
         if (!_sessionReady || State != VoiceSessionState.Idle || _mic is not null) return;
         SetState(VoiceSessionState.Listening);
+        _chunksSentThisTurn = 0;
         _mic = await Task.Run(() =>
         {
             var mic = new RealtimeMicCapture();
             mic.OnPcm16Chunk += (buf, count) =>
             {
                 var b64 = Convert.ToBase64String(buf, 0, count);
-                _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 });
+                _ = EmitAsync(new JObject { ["type"] = "input_audio_buffer.append", ["audio"] = b64 })
+                    .ContinueWith(t =>
+                    {
+                        if (t.Result) ChunkSent?.Invoke(++_chunksSentThisTurn);
+                    }, TaskScheduler.Default);
             };
             mic.Start();
             return mic;
@@ -244,12 +268,14 @@ public sealed class RealtimeVoiceService : IDisposable
                 break;
 
             case "response.created":
+                _receivedAudioThisTurn = false;
                 SetState(VoiceSessionState.Thinking);
                 break;
 
             case "response.output_audio.delta":
                 if ((string?)evt["delta"] is { } b64 && b64.Length > 0)
                 {
+                    _receivedAudioThisTurn = true;
                     var bytes = Convert.FromBase64String(b64);
                     _playback?.Enqueue(bytes, bytes.Length);
                     if (State == VoiceSessionState.Thinking) SetState(VoiceSessionState.Speaking);
@@ -261,6 +287,16 @@ public sealed class RealtimeVoiceService : IDisposable
                 break;
 
             case "response.done":
+                // Diagnostic added after a user report of "connects fine, but
+                // holding to talk does nothing, no reply audio" -- previously
+                // this looked identical whether the mic captured real speech,
+                // captured silence, or the turn was empty for some other
+                // reason. Now at least the empty case says so explicitly
+                // instead of just quietly going back to "Ready."
+                if (!_receivedAudioThisTurn && _chunksSentThisTurn > 0)
+                    Warning?.Invoke($"Sent {_chunksSentThisTurn} audio chunk(s) but got no audio reply back — the mic may have captured only silence. Check Windows' microphone privacy settings and default input device.");
+                else if (_chunksSentThisTurn == 0)
+                    Warning?.Invoke("No audio was captured to send — check that a microphone is connected and Windows' \"Let desktop apps access your microphone\" setting is on.");
                 SetState(VoiceSessionState.Idle);
                 break;
 
@@ -297,11 +333,13 @@ public sealed class RealtimeVoiceService : IDisposable
         return EmitAsync(new JObject { ["type"] = "session.update", ["session"] = session });
     }
 
-    private async Task EmitAsync(JObject evt)
+    /// <returns><c>false</c> if the socket wasn't open to send on (a silent no-op previously — the caller now surfaces this instead of leaving it invisible).</returns>
+    private async Task<bool> EmitAsync(JObject evt)
     {
-        if (_ws is not { State: WebSocketState.Open }) return;
+        if (_ws is not { State: WebSocketState.Open }) return false;
         var bytes = Encoding.UTF8.GetBytes(evt.ToString(Newtonsoft.Json.Formatting.None));
         await _ws.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        return true;
     }
 
     private void SetState(VoiceSessionState state)

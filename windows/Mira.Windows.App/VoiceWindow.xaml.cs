@@ -19,6 +19,8 @@ public partial class VoiceWindow : Window
         RealtimeVoiceService.Shared.StateChanged += OnStateChanged;
         RealtimeVoiceService.Shared.AssistantTranscriptDelta += OnTranscriptDelta;
         RealtimeVoiceService.Shared.ErrorOccurred += OnError;
+        RealtimeVoiceService.Shared.ChunkSent += OnChunkSent;
+        RealtimeVoiceService.Shared.Warning += OnWarning;
     }
 
     private void OnStateChanged(VoiceSessionState state) => Dispatcher.Invoke(() =>
@@ -27,7 +29,7 @@ public partial class VoiceWindow : Window
         {
             VoiceSessionState.Idle => _connected ? "Ready — hold the button and speak" : "Not connected",
             VoiceSessionState.Connecting => "Connecting…",
-            VoiceSessionState.Listening => "Listening…",
+            VoiceSessionState.Listening => "Listening… (0 chunks sent)",
             VoiceSessionState.Thinking => "Thinking…",
             VoiceSessionState.Speaking => "Speaking…",
             VoiceSessionState.Error => "Error",
@@ -36,6 +38,19 @@ public partial class VoiceWindow : Window
         PttButton.IsEnabled = _connected && state == VoiceSessionState.Idle;
         if (state == VoiceSessionState.Thinking) TranscriptText.Text = "";
     });
+
+    // Visible proof the mic->websocket pipeline is actually alive while
+    // holding the button — added after a user report of "connects fine, but
+    // holding to talk does nothing." If this count never climbs above 0, the
+    // mic itself isn't capturing (device/permission issue); if it does but
+    // there's still no reply, see the Warning handler below.
+    private void OnChunkSent(int count) => Dispatcher.Invoke(() =>
+    {
+        if (RealtimeVoiceService.Shared.State == VoiceSessionState.Listening)
+            StatusText.Text = $"Listening… ({count} chunks sent)";
+    });
+
+    private void OnWarning(string message) => Dispatcher.Invoke(() => TranscriptText.Text = $"⚠ {message}");
 
     private void OnTranscriptDelta(string delta) => Dispatcher.Invoke(() => TranscriptText.Text += delta);
 
@@ -80,6 +95,8 @@ public partial class VoiceWindow : Window
         RealtimeVoiceService.Shared.StateChanged -= OnStateChanged;
         RealtimeVoiceService.Shared.AssistantTranscriptDelta -= OnTranscriptDelta;
         RealtimeVoiceService.Shared.ErrorOccurred -= OnError;
+        RealtimeVoiceService.Shared.ChunkSent -= OnChunkSent;
+        RealtimeVoiceService.Shared.Warning -= OnWarning;
         if (_connected) await RealtimeVoiceService.Shared.DisconnectAsync();
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -9,25 +10,37 @@ using Mira.Windows.Core.Chat;
 namespace Mira.Windows.App.Shell;
 
 /// <summary>
-/// Windows' first pass at the notch/island shell (see
-/// docs/windows/IMPLEMENTATION_PLAN.md Phase 6) — deliberately just the core
-/// shell for this milestone: a collapse/expand pill anchored top-center of the
-/// primary screen (there's no physical notch on Windows to fuse with, so
-/// top-center was chosen as the closest visual analog rather than porting the
-/// Mac's per-notch geometry), a Chat tab reusing the same
-/// <see cref="ChatBubbleViewModel"/>/<see cref="RouterHandler"/> pipeline
-/// <see cref="ChatWindow"/> already uses, and a pulsing accent glow while a
-/// reply is in flight (the Windows analog of the Mac pill's
-/// listening/thinking/speaking states — narrower, since voice stays in its own
-/// <see cref="VoiceWindow"/> for this pass rather than being folded into the
-/// pill the way it is on macOS). Floating agent chips, the cursor-following
-/// companion, and in-panel toasts are all separate macOS subsystems
-/// deliberately deferred to a later pass — see the Phase 6 write-up for why.
+/// Windows' notch/island shell (see docs/windows/IMPLEMENTATION_PLAN.md Phase
+/// 6) — a collapse/expand pill anchored top-center of the primary screen,
+/// with a Chat tab reusing the same <see cref="ChatBubbleViewModel"/>/
+/// <see cref="RouterHandler"/> pipeline <see cref="ChatWindow"/> already uses.
+///
+/// The motion/shape details below are a deliberate second pass at visual
+/// fidelity with the Mac original (Mira/Managers/AnimationController.swift,
+/// Mira/Views/MiraIslandView.swift), after the first pass's plain size
+/// animation + instant Visibility swap read as noticeably less polished:
+/// - Corner radius animates via <see cref="CornerRadiusAnimation"/> (WPF has
+///   no built-in one) instead of snapping, matching the Mac shape's
+///   independently-animatable top/bottom radii.
+/// - <see cref="BackEase"/> gives a slight overshoot-then-settle feel, the
+///   closest built-in WPF stand-in for SwiftUI's
+///   <c>.spring(response:dampingFraction:)</c> (0.40s/0.74 expanding,
+///   0.30s/0.82 collapsing on macOS) without hand-building a full damped-
+///   harmonic-oscillator easing function for a fairly subtle perceptual gain.
+/// - Content crossfades (collapsed label vs. expanded panel) instead of an
+///   instant Visibility toggle, mirroring the Mac panel's 140ms-in/100ms-out
+///   staggered content fade.
+/// - A real drop shadow, which needs the window itself padded beyond the
+///   visible pill (see <see cref="SidePad"/>/<see cref="BottomPad"/>) since
+///   WPF clips rendering to window bounds — no padding at the top, since the
+///   pill sits flush with the screen edge exactly like the Mac original
+///   fusing with the physical notch.
 /// </summary>
 public partial class IslandWindow : Window
 {
-    private const double CollapsedWidth = 200, CollapsedHeight = 40;
-    private const double ExpandedWidth = 420, ExpandedHeight = 520;
+    private const double SidePad = 24, BottomPad = 24;
+    private const double CollapsedPillWidth = 200, CollapsedPillHeight = 40;
+    private const double ExpandedPillWidth = 420, ExpandedPillHeight = 520;
     private const int CollapseGraceMs = 600;
 
     private readonly ObservableCollection<ChatBubbleViewModel> _bubbles = new();
@@ -42,9 +55,9 @@ public partial class IslandWindow : Window
         InitializeComponent();
         MessagesList.ItemsSource = _bubbles;
 
-        Width = CollapsedWidth;
-        Height = CollapsedHeight;
-        Top = 8;
+        Width = CollapsedPillWidth + SidePad * 2;
+        Height = CollapsedPillHeight + BottomPad;
+        Top = 0; // flush with the screen's top edge -- no gap, matches the Mac pill fusing with the notch
         SizeChanged += (_, _) => RecenterHorizontally();
         RecenterHorizontally();
 
@@ -63,7 +76,7 @@ public partial class IslandWindow : Window
         };
         Closed += (_, _) => _hotkey?.Dispose();
 
-        ApplyCornerRadius(expanded: false);
+        ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
     }
 
     private void RecenterHorizontally() => Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
@@ -99,24 +112,57 @@ public partial class IslandWindow : Window
         if (_isExpanded == expanded) return;
         _isExpanded = expanded;
 
-        var targetWidth = expanded ? ExpandedWidth : CollapsedWidth;
-        var targetHeight = expanded ? ExpandedHeight : CollapsedHeight;
-        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-        BeginAnimation(WidthProperty, new DoubleAnimation(Width, targetWidth, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
-        BeginAnimation(HeightProperty, new DoubleAnimation(Height, targetHeight, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        var targetWidth = (expanded ? ExpandedPillWidth : CollapsedPillWidth) + SidePad * 2;
+        var targetHeight = (expanded ? ExpandedPillHeight : CollapsedPillHeight) + BottomPad;
+        var targetRadius = new CornerRadius(0, 0, expanded ? 20 : 10, expanded ? 20 : 10);
 
-        ApplyCornerRadius(expanded);
-        CollapsedLabel.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
-        ExpandedContent.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        // BackEase's slight overshoot-then-settle is the closest built-in WPF
+        // stand-in for SwiftUI's damped spring -- expanding uses a touch more
+        // amplitude (lower damping on macOS, 0.74) than collapsing (0.82,
+        // snappier/less bounce).
+        var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = expanded ? 0.25 : 0.12 };
+        var duration = TimeSpan.FromMilliseconds(expanded ? 360 : 260);
+
+        BeginAnimation(WidthProperty, new DoubleAnimation(Width, targetWidth, duration) { EasingFunction = ease });
+        BeginAnimation(HeightProperty, new DoubleAnimation(Height, targetHeight, duration) { EasingFunction = ease });
+        ApplyCornerRadius(targetRadius, duration, ease);
+        CrossfadeContent(expanded);
 
         if (expanded) InputBox.Focus();
     }
 
-    private void ApplyCornerRadius(bool expanded)
+    private void ApplyCornerRadius(CornerRadius target, TimeSpan? duration = null, BackEase? ease = null)
     {
-        var radius = expanded ? 20 : 10;
-        Shell.CornerRadius = new CornerRadius(0, 0, radius, radius);
-        ThinkingGlow.CornerRadius = Shell.CornerRadius;
+        if (duration is null)
+        {
+            Shell.CornerRadius = target;
+            ThinkingGlow.CornerRadius = target;
+            return;
+        }
+
+        var anim = new CornerRadiusAnimation { From = Shell.CornerRadius, To = target, Duration = duration.Value, EasingFunction = ease };
+        Shell.BeginAnimation(Border.CornerRadiusProperty, anim);
+        ThinkingGlow.BeginAnimation(Border.CornerRadiusProperty, anim);
+    }
+
+    /// <summary>Fades the outgoing content out fast while the incoming content fades in slightly after — mirrors the Mac panel's own staggered 140ms-in/100ms-out content fade rather than an instant Visibility swap.</summary>
+    private void CrossfadeContent(bool expanded)
+    {
+        UIElement outgoing = expanded ? CollapsedLabel : ExpandedContent;
+        UIElement incoming = expanded ? ExpandedContent : CollapsedLabel;
+
+        outgoing.BeginAnimation(OpacityProperty, null);
+        incoming.BeginAnimation(OpacityProperty, null);
+
+        incoming.Visibility = Visibility.Visible;
+        incoming.Opacity = 0;
+
+        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100));
+        fadeOut.Completed += (_, _) => outgoing.Visibility = Visibility.Collapsed;
+        outgoing.BeginAnimation(OpacityProperty, fadeOut);
+
+        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { BeginTime = TimeSpan.FromMilliseconds(60) };
+        incoming.BeginAnimation(OpacityProperty, fadeIn);
     }
 
     // ---- Chat (identical pipeline to ChatWindow — same RouterHandler call, same streaming) ----
