@@ -124,7 +124,7 @@
                         <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
-                        <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button x:Name="TabSettings" Tag="Settings" Content="⚙" ToolTip="Settings" Click="TabButton_Click"
@@ -382,6 +382,85 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Crons: recurring background tasks that fire a prompt into Claude on a
+                         schedule, mirroring CronsTabView.swift/CronScheduler.swift. No plan
+                         gating (confirmed the real Mac source never checks EntitlementService
+                         for this feature, unlike Agents/Skills). -->
+                    <Grid x:Name="CronsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Scheduled Tasks" Foreground="White" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" />
+                            <Button Content="+ New" HorizontalAlignment="Right" Click="CronCreateButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="CronList" />
+                            </ScrollViewer>
+
+                            <StackPanel x:Name="CronEmptyPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="⏰" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"
+                                           Text="No scheduled tasks. Tap + New to schedule a recurring Mira task." />
+                            </StackPanel>
+
+                            <!-- Create/edit overlay -->
+                            <Grid x:Name="CronEditorPanel" Visibility="Collapsed" Background="#EE101216">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel MaxWidth="420" Margin="0,4,0,0">
+                                        <TextBlock x:Name="CronEditorTitleText" Text="New Scheduled Task" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Task name" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBox x:Name="CronNameBox" Height="26" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Prompt" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBox x:Name="CronPromptBox" Height="70" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Schedule" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button x:Name="CronKindHourlyButton" Content="Hourly" Tag="Hourly" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                                            <Button x:Name="CronKindDailyButton" Content="Daily" Tag="Daily" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                            <Button x:Name="CronKindWeeklyButton" Content="Weekly" Tag="Weekly" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                            <Button x:Name="CronKindCustomButton" Content="Custom" Tag="Custom" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="CronHourlyHintText" Text="Fires once per hour." Foreground="#59FFFFFF" FontSize="11" Visibility="Collapsed" Margin="0,0,0,10" />
+
+                                        <StackPanel x:Name="CronWeekdayRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,8">
+                                            <TextBlock Text="Day" Foreground="#73FFFFFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="CronWeekdayCombo" Width="90" />
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="CronTimeRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,10">
+                                            <TextBlock Text="Time" Foreground="#73FFFFFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="CronHourCombo" Width="60" />
+                                            <TextBlock Text=":" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="4,0" />
+                                            <ComboBox x:Name="CronMinuteCombo" Width="60" />
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="CronIntervalRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,10">
+                                            <TextBlock Text="Every" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBox x:Name="CronIntervalBox" Width="50" Text="30" />
+                                            <TextBlock Text="minutes" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="CronEditorErrorText" Foreground="#F87171" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed" />
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="CronSaveButton" Content="Save" Height="28" Width="80" Click="CronSaveButton_Click" />
+                                            <Button Content="Cancel" Height="28" Width="70" Margin="8,0,0,0" Click="CronCancelButton_Click" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
                             </Grid>
                         </Grid>
                     </Grid>

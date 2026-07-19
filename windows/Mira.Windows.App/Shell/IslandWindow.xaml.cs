@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Interop;
 using System.Diagnostics;
@@ -15,6 +16,7 @@ using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Agents;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
+using Mira.Windows.Core.Crons;
 using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Shelf;
 using Mira.Windows.Core.Skills;
@@ -24,6 +26,8 @@ using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
+using Path = System.IO.Path;
+using FontFamily = System.Windows.Media.FontFamily;
 
 namespace Mira.Windows.App.Shell;
 
@@ -62,7 +66,7 @@ public partial class IslandWindow : Window
 
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
-        (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+        (IslandTab.Learn, "Learn"),
     ];
 
     /// <summary>Mirrors LabsTabView.swift's <c>SubTab</c> — Clipboard and Shelf are real, the rest render the same shared placeholder pattern as the top-level tabs.</summary>
@@ -91,6 +95,8 @@ public partial class IslandWindow : Window
     private LabsSubTab _activeLabsSubTab = LabsSubTab.Clipboard;
     private string _clipboardSearchQuery = "";
     private string? _pendingSkillMarkdown;
+    private Guid? _editingCronId;
+    private CronScheduleKind _cronEditorKind = CronScheduleKind.Daily;
 
     public IslandWindow()
     {
@@ -133,6 +139,8 @@ public partial class IslandWindow : Window
             AgentJobStore.Shared.Changed -= OnAgentJobsChanged;
             SkillStore.Shared.Changed -= OnSkillsChanged;
             FileShelfStore.Shared.Changed -= OnShelfChanged;
+            CronStore.Shared.Changed -= OnCronsChanged;
+            CronScheduler.Shared.Stop();
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -163,6 +171,10 @@ public partial class IslandWindow : Window
         SkillStore.Shared.Changed += OnSkillsChanged;
 
         FileShelfStore.Shared.Changed += OnShelfChanged;
+
+        CronStore.Shared.Changed += OnCronsChanged;
+        CronScheduler.Shared.Start();
+        PopulateCronCombos();
 
         SelectTab(IslandTab.Home);
     }
@@ -273,10 +285,12 @@ public partial class IslandWindow : Window
         LabsPanel.Visibility = tab == IslandTab.Labs ? Visibility.Visible : Visibility.Collapsed;
         AgentsPanel.Visibility = tab == IslandTab.Agents ? Visibility.Visible : Visibility.Collapsed;
         SkillsPanel.Visibility = tab == IslandTab.Skills ? Visibility.Visible : Visibility.Collapsed;
+        CronsPanel.Visibility = tab == IslandTab.Crons ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         if (tab == IslandTab.Skills) RenderSkillsList();
         if (tab == IslandTab.Shelf) RenderShelfList();
+        if (tab == IslandTab.Crons) RenderCronList();
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
         if (placeholder.Name is not null)
@@ -1138,6 +1152,229 @@ public partial class IslandWindow : Window
 
         RenderSkillsList();
     }
+
+    // ---- Crons ----
+
+    private void OnCronsChanged() => Dispatcher.Invoke(RenderCronList);
+
+    private void PopulateCronCombos()
+    {
+        for (var h = 0; h < 24; h++) CronHourCombo.Items.Add(h.ToString("D2"));
+        for (var m = 0; m < 60; m++) CronMinuteCombo.Items.Add(m.ToString("D2"));
+        string[] weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        foreach (var name in weekdayNames) CronWeekdayCombo.Items.Add(name);
+    }
+
+    private void RenderCronList()
+    {
+        var crons = CronStore.Shared.Crons;
+        CronEmptyPanel.Visibility = crons.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        CronList.Children.Clear();
+        foreach (var cron in crons) CronList.Children.Add(BuildCronRow(cron));
+    }
+
+    private UIElement BuildCronRow(MiraCron cron)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var dot = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = new SolidColorBrush(cron.Enabled ? Color.FromRgb(0x33, 0xD6, 0x4A) : Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        };
+        Grid.SetColumn(dot, 0);
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(new TextBlock
+        {
+            Text = cron.Name,
+            Foreground = cron.Enabled ? System.Windows.Media.Brushes.White : new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        var subtitle = cron.LastRunAt is { } last
+            ? $"{cron.Schedule.DisplayName} · last {FormatRelativeShort(last)}"
+            : cron.Schedule.DisplayName;
+        textStack.Children.Add(new TextBlock
+        {
+            Text = subtitle,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)),
+            FontSize = 10,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        Grid.SetColumn(textStack, 1);
+        if (!string.IsNullOrEmpty(cron.LastRunResult)) textStack.ToolTip = cron.LastRunResult;
+
+        var nextFireText = new TextBlock
+        {
+            Text = FormatRelativeShort(cron.NextFireAt),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x4D, 0xFF, 0xFF, 0xFF)),
+            FontSize = 10,
+            FontFamily = new FontFamily("Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        Grid.SetColumn(nextFireText, 2);
+
+        var actions = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+
+        var editButton = new Button
+        {
+            Content = "✎", FontSize = 11, Width = 22, Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)), Cursor = System.Windows.Input.Cursors.Hand, ToolTip = "Edit",
+        };
+        editButton.Click += (_, e) => { e.Handled = true; OpenCronEditor(cron); };
+
+        var toggleButton = new Button
+        {
+            Content = cron.Enabled ? "⏸" : "▶", FontSize = 10, Width = 22, Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(cron.Enabled ? Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0xB3, 0x33, 0xD6, 0x4A)),
+            Cursor = System.Windows.Input.Cursors.Hand, ToolTip = cron.Enabled ? "Pause" : "Resume",
+        };
+        toggleButton.Click += (_, e) => { e.Handled = true; CronStore.Shared.Toggle(cron.Id); };
+
+        var deleteButton = new Button
+        {
+            Content = "✕", FontSize = 11, Width = 22, Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Cursor = System.Windows.Input.Cursors.Hand, ToolTip = "Delete",
+        };
+        deleteButton.Click += (_, e) => { e.Handled = true; CronStore.Shared.Delete(cron.Id); };
+
+        actions.Children.Add(editButton);
+        actions.Children.Add(toggleButton);
+        actions.Children.Add(deleteButton);
+        Grid.SetColumn(actions, 3);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(textStack);
+        grid.Children.Add(nextFireText);
+        grid.Children.Add(actions);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8, 6, 8),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = grid,
+        };
+    }
+
+    /// <summary>Mirrors CronsTabView.swift's <c>Date.relativeShort</c> -- handles both directions (a cron's next-fire is future, its last-run is past).</summary>
+    private static string FormatRelativeShort(DateTimeOffset target)
+    {
+        var diff = DateTimeOffset.UtcNow - target;
+        if (diff < TimeSpan.Zero)
+        {
+            var abs = -diff;
+            if (abs.TotalSeconds < 3600) return $"in {(int)abs.TotalMinutes}m";
+            if (abs.TotalSeconds < 86400) return $"in {(int)abs.TotalHours}h";
+            return $"in {(int)abs.TotalDays}d";
+        }
+        if (diff.TotalSeconds < 60) return "now";
+        if (diff.TotalSeconds < 3600) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalSeconds < 86400) return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
+    }
+
+    private void CronCreateButton_Click(object sender, RoutedEventArgs e) => OpenCronEditor(null);
+
+    private void OpenCronEditor(MiraCron? existing)
+    {
+        _editingCronId = existing?.Id;
+        CronEditorTitleText.Text = existing is null ? "New Scheduled Task" : "Edit Task";
+        CronEditorErrorText.Visibility = Visibility.Collapsed;
+
+        CronNameBox.Text = existing?.Name ?? "";
+        CronPromptBox.Text = existing?.Prompt ?? "";
+
+        var schedule = existing?.Schedule ?? CronSchedule.Daily(9, 0);
+        CronHourCombo.SelectedIndex = schedule.Hour;
+        CronMinuteCombo.SelectedIndex = schedule.Minute;
+        CronWeekdayCombo.SelectedIndex = Math.Clamp(schedule.Weekday, 1, 7) - 1;
+        CronIntervalBox.Text = schedule.IntervalMinutes.ToString();
+
+        SetCronEditorKind(schedule.Kind);
+        CronEditorPanel.Visibility = Visibility.Visible;
+    }
+
+    private void CronKindButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && Enum.TryParse<CronScheduleKind>(tag, out var kind))
+            SetCronEditorKind(kind);
+    }
+
+    private void SetCronEditorKind(CronScheduleKind kind)
+    {
+        _cronEditorKind = kind;
+
+        CronKindHourlyButton.Style = (Style)FindResource(kind == CronScheduleKind.Hourly ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+        CronKindDailyButton.Style = (Style)FindResource(kind == CronScheduleKind.Daily ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+        CronKindWeeklyButton.Style = (Style)FindResource(kind == CronScheduleKind.Weekly ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+        CronKindCustomButton.Style = (Style)FindResource(kind == CronScheduleKind.Custom ? "LabsSubTabButtonStyle" : "LabsSubTabButtonStyleDim");
+
+        CronHourlyHintText.Visibility = kind == CronScheduleKind.Hourly ? Visibility.Visible : Visibility.Collapsed;
+        CronWeekdayRow.Visibility = kind == CronScheduleKind.Weekly ? Visibility.Visible : Visibility.Collapsed;
+        CronTimeRow.Visibility = kind is CronScheduleKind.Daily or CronScheduleKind.Weekly ? Visibility.Visible : Visibility.Collapsed;
+        CronIntervalRow.Visibility = kind == CronScheduleKind.Custom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private CronSchedule BuildCronScheduleFromEditor() => _cronEditorKind switch
+    {
+        CronScheduleKind.Hourly => CronSchedule.Hourly(),
+        CronScheduleKind.Daily => CronSchedule.Daily(CronHourCombo.SelectedIndex, CronMinuteCombo.SelectedIndex),
+        CronScheduleKind.Weekly => CronSchedule.Weekly(CronWeekdayCombo.SelectedIndex + 1, CronHourCombo.SelectedIndex, CronMinuteCombo.SelectedIndex),
+        CronScheduleKind.Custom => CronSchedule.Custom(int.TryParse(CronIntervalBox.Text, out var m) ? m : 30),
+        _ => CronSchedule.Daily(9, 0),
+    };
+
+    private void CronSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var name = CronNameBox.Text.Trim();
+        var prompt = CronPromptBox.Text.Trim();
+        if (name.Length == 0 || prompt.Length == 0)
+        {
+            CronEditorErrorText.Text = "Both a task name and a prompt are required.";
+            CronEditorErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var schedule = BuildCronScheduleFromEditor();
+        var now = DateTimeOffset.UtcNow;
+
+        if (_editingCronId is { } id)
+        {
+            var existing = CronStore.Shared.Crons.FirstOrDefault(c => c.Id == id);
+            if (existing is not null)
+            {
+                existing.Name = name;
+                existing.Prompt = prompt;
+                existing.Schedule = schedule;
+                existing.NextFireAt = schedule.NextFire(now);
+                CronStore.Shared.Update(existing);
+            }
+        }
+        else
+        {
+            CronStore.Shared.Add(MiraCron.Create(name, prompt, schedule, now));
+        }
+
+        CronEditorPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void CronCancelButton_Click(object sender, RoutedEventArgs e) => CronEditorPanel.Visibility = Visibility.Collapsed;
 
     // ---- Settings (folded in from the old MainWindow) ----
 
