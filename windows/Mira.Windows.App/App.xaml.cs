@@ -1,12 +1,12 @@
 using System.Windows;
 using Mira.Windows.App.Shell;
-using Mira.Windows.Core.Account;
 
 namespace Mira.Windows.App;
 
 /// <summary>
 /// Interaction logic for App.xaml. Starts as a tray-icon-only process (no window)
-/// and opens <see cref="MainWindow"/> on demand — see App.xaml's ShutdownMode note.
+/// and opens <see cref="MainWindow"/> only on demand (from the tray) — see
+/// App.xaml's ShutdownMode note.
 /// </summary>
 public partial class App : System.Windows.Application
 {
@@ -42,32 +42,25 @@ public partial class App : System.Windows.Application
 
         _tray = new TrayIconManager(ShowMainWindow, ShowIsland);
 
-        // The island is the Windows equivalent of the Mac app's always-present
-        // notch shell (Phase 6) — it shows itself once signed in, same as
-        // NotchManager.setup() runs for the whole session on macOS, rather
-        // than needing to be opened like Chat/Voice do.
-        AccountService.Shared.StateChanged += OnAuthStateChanged;
-        if (AccountService.Shared.IsSignedIn) ShowIsland();
+        // The island is now the app's one always-shown surface at launch,
+        // regardless of sign-in state -- it no longer waits for sign-in or
+        // hides on sign-out the way it briefly did. Sign-in itself moved
+        // into the island's own Settings tab, matching the Mac app (whose
+        // notch is present for the whole session, with no separate
+        // sign-in window at all). MainWindow still exists and is still
+        // reachable from the tray as a manual fallback, but nothing about
+        // launch or sign-in depends on it anymore.
+        ShowIsland();
 
-        // Unlike the island, this doesn't need to gate on sign-in -- it stays
-        // hidden and inert until a computer-use run actually starts (which
-        // itself requires being signed in), so there's no harm creating it
+        // Inert until a computer-use run actually starts (which itself
+        // requires being signed in), so there's no harm creating it
         // unconditionally at launch.
         _agentActivity = new AgentActivityWindow();
 
         // Same reasoning as _agentActivity -- inert until screen_guidance
         // actually locates a target, so no need to gate on sign-in.
         _overlay = new OverlayWindow();
-
-        ShowMainWindow(); // first run: surface the sign-in UI immediately rather than
-                          // leaving a brand-new user staring at nothing but a tray icon
     }
-
-    private void OnAuthStateChanged(AuthState state) => Dispatcher.Invoke(() =>
-    {
-        if (state == AuthState.SignedIn) ShowIsland();
-        else if (state == AuthState.SignedOut) HideIsland();
-    });
 
     private void ShowMainWindow()
     {
@@ -90,15 +83,8 @@ public partial class App : System.Windows.Application
         _island.Show();
     }
 
-    private void HideIsland()
-    {
-        _island?.Close();
-        _island = null;
-    }
-
     protected override void OnExit(ExitEventArgs e)
     {
-        AccountService.Shared.StateChanged -= OnAuthStateChanged;
         _agentActivity?.Close();
         _overlay?.Close();
         _tray?.Dispose();

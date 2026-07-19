@@ -5,48 +5,59 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Chat;
+using Mira.Windows.Core.Entitlements;
+using Mira.Windows.Core.Vision;
+using Button = System.Windows.Controls.Button;
 
 namespace Mira.Windows.App.Shell;
 
+/// <summary>Which content pane the expanded island is currently showing — mirrors the Mac island's tab set (<c>MiraIslandView.swift</c>'s 9 nav icons + Settings pinned far right).</summary>
+public enum IslandTab { Home, Chat, Shelf, Camera, Agents, Labs, Skills, Learn, Crons, Settings }
+
 /// <summary>
 /// Windows' notch/island shell (see docs/windows/IMPLEMENTATION_PLAN.md Phase
-/// 6) — a collapse/expand pill anchored top-center of the primary screen,
-/// with a Chat tab reusing the same <see cref="ChatBubbleViewModel"/>/
-/// <see cref="RouterHandler"/> pipeline <see cref="ChatWindow"/> already uses.
+/// 6) — a collapse/expand pill anchored top-center of the primary screen that
+/// is now, as of this pass, the app's primary always-shown surface: it opens
+/// unconditionally at launch regardless of sign-in state (previously a
+/// separate <see cref="MainWindow"/> handled sign-in and only showed the
+/// island once already signed in — the Mac app has no such split, its notch
+/// is present for the whole session and its own tabs handle everything,
+/// which is what this pass moves Windows toward).
 ///
-/// The motion/shape details below are a deliberate second pass at visual
-/// fidelity with the Mac original (Mira/Managers/AnimationController.swift,
-/// Mira/Views/MiraIslandView.swift), after the first pass's plain size
-/// animation + instant Visibility swap read as noticeably less polished:
-/// - Corner radius animates via <see cref="CornerRadiusAnimation"/> (WPF has
-///   no built-in one) instead of snapping, matching the Mac shape's
-///   independently-animatable top/bottom radii.
-/// - <see cref="BackEase"/> gives a slight overshoot-then-settle feel, the
-///   closest built-in WPF stand-in for SwiftUI's
-///   <c>.spring(response:dampingFraction:)</c> (0.40s/0.74 expanding,
-///   0.30s/0.82 collapsing on macOS) without hand-building a full damped-
-///   harmonic-oscillator easing function for a fairly subtle perceptual gain.
-/// - Content crossfades (collapsed label vs. expanded panel) instead of an
-///   instant Visibility toggle, mirroring the Mac panel's 140ms-in/100ms-out
-///   staggered content fade.
-/// - A real drop shadow, which needs the window itself padded beyond the
-///   visible pill (see <see cref="SidePad"/>/<see cref="BottomPad"/>) since
-///   WPF clips rendering to window bounds — no padding at the top, since the
-///   pill sits flush with the screen edge exactly like the Mac original
-///   fusing with the physical notch.
+/// Tabs mirror the Mac nav bar: Home, Chat, Shelf, Camera, Agents, Labs,
+/// Skills, Learn, Crons, plus Settings pinned far right as a gear icon. Only
+/// Home/Chat/Settings have real content — the other six render a calm
+/// "not available yet" placeholder rather than pretending, the same
+/// "recognize but can't do it" philosophy <see cref="RouterHandler"/> already
+/// uses for unimplemented chat routes. Settings folds in what used to be
+/// <see cref="MainWindow"/>'s entire signed-out/signed-in UI (sign-in form,
+/// plan, autonomy toggle, sign out) — <see cref="MainWindow"/> itself still
+/// exists and is still reachable from the tray as a fallback, just no longer
+/// auto-shown or the primary way to sign in.
 /// </summary>
 public partial class IslandWindow : Window
 {
     private const double SidePad = 24, BottomPad = 24;
     private const double CollapsedPillWidth = 200, CollapsedPillHeight = 40;
-    private const double ExpandedPillWidth = 420, ExpandedPillHeight = 520;
+    // Wider, not taller, than the first pass -- matches the Mac panel's own
+    // landscape proportions (700x252-420) rather than a tall, narrow popup.
+    private const double ExpandedPillWidth = 700, ExpandedPillHeight = 460;
     private const int CollapseGraceMs = 600;
+
+    private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
+    [
+        (IslandTab.Shelf, "Shelf"), (IslandTab.Camera, "Camera"), (IslandTab.Agents, "Agents"),
+        (IslandTab.Labs, "Labs"), (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
+    ];
 
     private readonly ObservableCollection<ChatBubbleViewModel> _bubbles = new();
     private readonly List<ChatMessage> _history = new();
     private bool _isExpanded;
     private bool _isSending;
+    private bool _isSignUpMode;
+    private IslandTab _activeTab = IslandTab.Home;
     private DispatcherTimer? _collapseTimer;
     private GlobalHotkey? _hotkey;
 
@@ -74,9 +85,20 @@ public partial class IslandWindow : Window
                 SetExpanded(true);
             };
         };
-        Closed += (_, _) => _hotkey?.Dispose();
+        Closed += (_, _) =>
+        {
+            _hotkey?.Dispose();
+            AccountService.Shared.StateChanged -= OnAuthStateChanged;
+            EntitlementService.Shared.PlanChanged -= OnPlanChanged;
+        };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
+
+        AccountService.Shared.StateChanged += OnAuthStateChanged;
+        EntitlementService.Shared.PlanChanged += OnPlanChanged;
+        AutonomyCheckBox.IsChecked = AutonomySettings.ComputerUseEnabled;
+        RenderForAuthState(AccountService.Shared.State);
+        SelectTab(IslandTab.Home);
     }
 
     private void RecenterHorizontally() => Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
@@ -128,7 +150,7 @@ public partial class IslandWindow : Window
         ApplyCornerRadius(targetRadius, duration, ease);
         CrossfadeContent(expanded);
 
-        if (expanded) InputBox.Focus();
+        if (expanded && _activeTab == IslandTab.Chat) InputBox.Focus();
     }
 
     private void ApplyCornerRadius(CornerRadius target, TimeSpan? duration = null, BackEase? ease = null)
@@ -164,6 +186,139 @@ public partial class IslandWindow : Window
         var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { BeginTime = TimeSpan.FromMilliseconds(60) };
         incoming.BeginAnimation(OpacityProperty, fadeIn);
     }
+
+    // ---- Tabs ----
+
+    private void TabButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tagStr } && Enum.TryParse<IslandTab>(tagStr, out var tab))
+            SelectTab(tab);
+    }
+
+    private void SelectTab(IslandTab tab)
+    {
+        _activeTab = tab;
+
+        HomePanel.Visibility = tab == IslandTab.Home ? Visibility.Visible : Visibility.Collapsed;
+        ChatPanel.Visibility = tab == IslandTab.Chat ? Visibility.Visible : Visibility.Collapsed;
+        SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
+
+        var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
+        if (placeholder.Name is not null)
+        {
+            PlaceholderPanel.Visibility = Visibility.Visible;
+            PlaceholderText.Text = $"{placeholder.Name} isn't available on Windows yet — it's on the roadmap.";
+        }
+        else
+        {
+            PlaceholderPanel.Visibility = Visibility.Collapsed;
+        }
+
+        if (tab == IslandTab.Chat && _isExpanded) InputBox.Focus();
+    }
+
+    // ---- Home ----
+
+    private void OpenVoiceButton_Click(object sender, RoutedEventArgs e) => new VoiceWindow().Show();
+
+    // ---- Settings (folded in from the old MainWindow) ----
+
+    private void OnAuthStateChanged(AuthState state) => Dispatcher.Invoke(() => RenderForAuthState(state));
+
+    private void OnPlanChanged(Mira.Contracts.ProfileRow.ProfilePlan plan) => Dispatcher.Invoke(UpdatePlanAndHomeText);
+
+    private void RenderForAuthState(AuthState state)
+    {
+        switch (state)
+        {
+            case AuthState.SignedIn:
+                SettingsSignedOutPanel.Visibility = Visibility.Collapsed;
+                SettingsSignedInPanel.Visibility = Visibility.Visible;
+                var user = AccountService.Shared.CurrentUser;
+                SignedInAsText.Text = $"Signed in as {user?.Email ?? user?.DisplayName ?? "(unknown)"}";
+                UpdatePlanAndHomeText();
+                break;
+
+            case AuthState.SignedOut:
+                SettingsSignedOutPanel.Visibility = Visibility.Visible;
+                SettingsSignedInPanel.Visibility = Visibility.Collapsed;
+                PrimaryActionButton.IsEnabled = true;
+                HomeStatusText.Text = "Not signed in — open Settings (⚙) to sign in and get started.";
+                break;
+
+            case AuthState.Loading:
+                PrimaryActionButton.IsEnabled = false;
+                break;
+        }
+    }
+
+    private void UpdatePlanAndHomeText()
+    {
+        var planName = EntitlementService.Shared.Plan.DisplayName();
+        PlanText.Text = $"Plan: {planName}";
+        var user = AccountService.Shared.CurrentUser;
+        HomeStatusText.Text = $"Signed in as {user?.Email ?? user?.DisplayName ?? "(unknown)"} — Plan: {planName}";
+    }
+
+    private async void PrimaryActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        ErrorText.Text = "";
+        var email = EmailBox.Text.Trim();
+        var password = PasswordBox.Password;
+
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+        {
+            ErrorText.Text = "Enter an email and password.";
+            return;
+        }
+
+        try
+        {
+            if (_isSignUpMode)
+            {
+                var name = DisplayNameBox.Text.Trim();
+                await AccountService.Shared.SignUpAsync(email, password, name);
+                if (!AccountService.Shared.IsSignedIn)
+                {
+                    // SignUpAsync returned with no session and no exception = pending
+                    // email confirmation — not an error, mirrors AccountService.swift.
+                    ErrorText.Foreground = System.Windows.Media.Brushes.LightGreen;
+                    ErrorText.Text = "Check your email to confirm your account, then sign in.";
+                    _isSignUpMode = false;
+                    ApplyModeToUi();
+                }
+            }
+            else
+            {
+                await AccountService.Shared.SignInAsync(email, password);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorText.Foreground = System.Windows.Media.Brushes.OrangeRed;
+            ErrorText.Text = ex.Message;
+        }
+    }
+
+    private void ToggleModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _isSignUpMode = !_isSignUpMode;
+        ApplyModeToUi();
+    }
+
+    private void ApplyModeToUi()
+    {
+        ModeLabel.Text = _isSignUpMode ? "Create account" : "Sign in";
+        PrimaryActionButton.Content = _isSignUpMode ? "Create Account" : "Sign In";
+        ToggleModeButton.Content = _isSignUpMode ? "Already have an account? Sign in" : "Need an account? Create one";
+        DisplayNamePanel.Visibility = _isSignUpMode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void RefreshPlanButton_Click(object sender, RoutedEventArgs e) => await EntitlementService.Shared.FetchAndApplyPlanAsync();
+
+    private void SignOutButton_Click(object sender, RoutedEventArgs e) => AccountService.Shared.SignOut();
+
+    private void AutonomyCheckBox_Changed(object sender, RoutedEventArgs e) => AutonomySettings.ComputerUseEnabled = AutonomyCheckBox.IsChecked == true;
 
     // ---- Chat (identical pipeline to ChatWindow — same RouterHandler call, same streaming) ----
 

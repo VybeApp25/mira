@@ -17,70 +17,169 @@
         <local:BoolToAlignmentConverter x:Key="BoolToAlignmentConverter" />
         <local:BoolToBubbleBrushConverter x:Key="BoolToBubbleBrushConverter" />
         <local:BoolToBubbleForegroundConverter x:Key="BoolToBubbleForegroundConverter" />
+
+        <Style x:Key="IslandTabButtonBase" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IslandTabButtonStyle" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Opacity" Value="1.0" />
+        </Style>
+        <Style x:Key="IslandTabButtonStyleDim" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Opacity" Value="0.32" />
+        </Style>
     </Window.Resources>
 
-    <!--
-        The window itself is padded beyond the visible pill (see
-        IslandWindow.xaml.cs's SidePad/BottomPad) so the drop shadow below has
-        room to render instead of being clipped at the window edge. No top
-        padding: the pill sits flush with the very top of the screen, same as
-        the Mac original fusing with the physical notch.
-    -->
-    <Grid>
-        <Border x:Name="Shell" Background="Black" Margin="24,0,24,24" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
-            <Border.Effect>
-                <DropShadowEffect x:Name="ShellShadow" Color="Black" Opacity="0.55" BlurRadius="24" ShadowDepth="10" Direction="270" />
-            </Border.Effect>
-            <Grid x:Name="RootGrid">
-                <!-- Pulsing accent border shown only while a reply is in flight. -->
-                <Border x:Name="ThinkingGlow" BorderThickness="2" BorderBrush="#9E80EB" Opacity="0" IsHitTestVisible="False" />
+    <Border x:Name="Shell" Background="Black" Margin="24,0,24,24" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
+        <Grid x:Name="RootGrid">
+            <!-- Pulsing accent border shown only while a reply is in flight. -->
+            <Border x:Name="ThinkingGlow" BorderThickness="2" BorderBrush="#9E80EB" Opacity="0" IsHitTestVisible="False" />
 
-                <!-- Collapsed state: just a quiet label. -->
-                <TextBlock x:Name="CollapsedLabel" Text="Mira" Foreground="#ADB5B2" FontSize="13"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <!-- Collapsed state: just a quiet label. -->
+            <TextBlock x:Name="CollapsedLabel" Text="Mira" Foreground="#ADB5B2" FontSize="13"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
 
-                <!-- Expanded state: header + chat + input. -->
-                <Grid x:Name="ExpandedContent" Visibility="Collapsed" Opacity="0" Margin="14,12,14,12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+            <!-- Expanded state: tab bar + per-tab content. -->
+            <Grid x:Name="ExpandedContent" Visibility="Collapsed" Opacity="0" Margin="16,12,16,14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0" Margin="0,0,0,8">
-                        <TextBlock Text="Mira" Foreground="#ECEEED" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
-                        <Button x:Name="CollapseButton" Content="&#x2715;" HorizontalAlignment="Right" Width="22" Height="22"
+                <!-- Tab bar: 9 feature tabs left, Settings gear + collapse pinned right. -->
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="TabHome" Tag="Home" Content="🏠" ToolTip="Home" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabChat" Tag="Chat" Content="💬" ToolTip="Chat" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabShelf" Tag="Shelf" Content="🗂" ToolTip="Shelf" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="TabSettings" Tag="Settings" Content="⚙" ToolTip="Settings" Click="TabButton_Click"
+                                Style="{StaticResource IslandTabButtonStyle}" Margin="0,0,8,0" />
+                        <Button x:Name="CollapseButton" Content="&#x2715;" Width="22" Height="22"
                                 Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
                                 Click="CollapseButton_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Content area: exactly one panel visible at a time. -->
+                <Grid Grid.Row="1">
+                    <!-- Home -->
+                    <StackPanel x:Name="HomePanel" Visibility="Visible">
+                        <TextBlock Text="Hi! I'm Mira." Foreground="#ECEEED" FontSize="17" FontWeight="Bold" Margin="0,4,0,6" />
+                        <TextBlock x:Name="HomeStatusText" Foreground="#ADB5B2" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16" />
+                        <Button Content="Open Voice" Height="30" Width="140" HorizontalAlignment="Left" Click="OpenVoiceButton_Click" />
+                    </StackPanel>
+
+                    <!-- Chat -->
+                    <Grid x:Name="ChatPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer x:Name="Scroller" Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                            <ItemsControl x:Name="MessagesList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:ChatBubbleViewModel}">
+                                        <Border Margin="4" Padding="10,6" CornerRadius="10" MaxWidth="460"
+                                                HorizontalAlignment="{Binding IsUser, Converter={StaticResource BoolToAlignmentConverter}}"
+                                                Background="{Binding IsUser, Converter={StaticResource BoolToBubbleBrushConverter}}">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                       Foreground="{Binding IsUser, Converter={StaticResource BoolToBubbleForegroundConverter}}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="InputBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
+                                     KeyDown="InputBox_KeyDown" />
+                            <Button x:Name="SendButton" Grid.Column="1" Content="Send" Width="60" Height="30" Margin="8,0,0,0"
+                                    Click="SendButton_Click" />
+                        </Grid>
                     </Grid>
 
-                    <ScrollViewer x:Name="Scroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
-                        <ItemsControl x:Name="MessagesList">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type local:ChatBubbleViewModel}">
-                                    <Border Margin="4" Padding="10,6" CornerRadius="10" MaxWidth="300"
-                                            HorizontalAlignment="{Binding IsUser, Converter={StaticResource BoolToAlignmentConverter}}"
-                                            Background="{Binding IsUser, Converter={StaticResource BoolToBubbleBrushConverter}}">
-                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                   Foreground="{Binding IsUser, Converter={StaticResource BoolToBubbleForegroundConverter}}" />
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                    <!-- Settings -->
+                    <ScrollViewer x:Name="SettingsScroller" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="SettingsPanel" MaxWidth="420" HorizontalAlignment="Left">
+                            <StackPanel x:Name="SettingsSignedOutPanel">
+                                <TextBlock x:Name="ModeLabel" Text="Sign in" Foreground="#ECEEED" FontSize="14" Margin="0,0,0,10" />
+
+                                <TextBlock Text="Email" Foreground="#ADB5B2" FontSize="11" />
+                                <TextBox x:Name="EmailBox" Margin="0,2,0,10" />
+
+                                <TextBlock Text="Password" Foreground="#ADB5B2" FontSize="11" />
+                                <PasswordBox x:Name="PasswordBox" Margin="0,2,0,10" />
+
+                                <StackPanel x:Name="DisplayNamePanel" Visibility="Collapsed">
+                                    <TextBlock Text="Name" Foreground="#ADB5B2" FontSize="11" />
+                                    <TextBox x:Name="DisplayNameBox" Margin="0,2,0,10" />
+                                </StackPanel>
+
+                                <Button x:Name="PrimaryActionButton" Content="Sign In" Height="28" Click="PrimaryActionButton_Click" />
+
+                                <Button x:Name="ToggleModeButton" Content="Need an account? Create one"
+                                        Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
+                                        HorizontalAlignment="Left" Margin="0,8,0,0" Click="ToggleModeButton_Click" />
+
+                                <TextBlock x:Name="ErrorText" Foreground="#F87171" TextWrapping="Wrap" Margin="0,10,0,0" />
+                            </StackPanel>
+
+                            <StackPanel x:Name="SettingsSignedInPanel" Visibility="Collapsed">
+                                <TextBlock x:Name="SignedInAsText" Foreground="#ECEEED" FontSize="13" Margin="0,0,0,4" />
+                                <TextBlock x:Name="PlanText" Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,12" />
+
+                                <Button Content="Refresh plan" Height="26" Width="110" HorizontalAlignment="Left"
+                                        Margin="0,0,0,14" Click="RefreshPlanButton_Click" />
+
+                                <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <CheckBox x:Name="AutonomyCheckBox" Content="Allow Mira to control my screen (computer use)"
+                                                  Foreground="#ECEEED" Checked="AutonomyCheckBox_Changed" Unchecked="AutonomyCheckBox_Changed" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#C99A3E" Margin="0,4,0,0"
+                                                   Text="When on, chat requests can move your mouse, click, type, and take screenshots to complete tasks. Off by default." />
+                                    </StackPanel>
+                                </Border>
+
+                                <Button Content="Sign Out" Height="26" Width="90" HorizontalAlignment="Left" Click="SignOutButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
                     </ScrollViewer>
 
-                    <Grid Grid.Row="2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="InputBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
-                                 KeyDown="InputBox_KeyDown" />
-                        <Button x:Name="SendButton" Grid.Column="1" Content="Send" Width="60" Height="30" Margin="8,0,0,0"
-                                Click="SendButton_Click" />
-                    </Grid>
+                    <!-- Placeholder for the 6 not-yet-built tabs -->
+                    <StackPanel x:Name="PlaceholderPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock x:Name="PlaceholderText" Foreground="#6B736F" FontSize="13"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                    </StackPanel>
                 </Grid>
             </Grid>
-        </Border>
-    </Grid>
+        </Grid>
+    </Border>
 </Window>
