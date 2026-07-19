@@ -746,6 +746,33 @@
                                 </StackPanel>
                             </Expander>
 
+                            <!-- Agents &amp; Memory: Memory only this pass (Connected Apps, Import
+                                 Knowledge, Agent Folder, Transcripts Folder, and Radial Launcher all
+                                 need their own new subsystem and stay deferred, see IMPLEMENTATION_PLAN.md). -->
+                            <Expander Header="Agents &amp; Memory" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock Text="Memory" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" />
+                                        <Button x:Name="MemoryClearAllButton" Content="Clear All" HorizontalAlignment="Right"
+                                                Click="MemoryClearAllButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                    </Grid>
+
+                                    <StackPanel x:Name="MemoryClearConfirmPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                                        <TextBlock Text="Delete everything Mira remembers about you? This can't be undone."
+                                                   Foreground="#F87171" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="Yes, clear everything" Click="MemoryClearConfirmButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                                            <Button Content="Cancel" Click="MemoryClearCancelButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <TextBlock x:Name="MemoryEmptyText" Visibility="Collapsed" Foreground="#59FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
+                                               Text="Nothing remembered yet. Try telling Mira something like &quot;remember that my favorite editor is VS Code.&quot;" />
+
+                                    <StackPanel x:Name="MemoryList" />
+                                </StackPanel>
+                            </Expander>
+
                             <!-- Advanced -->
                             <Expander Header="Advanced" Style="{StaticResource SettingsGroupExpanderStyle}">
                                 <StackPanel Margin="0,10,0,4">

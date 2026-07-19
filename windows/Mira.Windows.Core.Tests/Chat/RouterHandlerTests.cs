@@ -1,5 +1,6 @@
 using Mira.Windows.Core.Chat;
 using Xunit;
+using MemoryCategory = Mira.Windows.Core.Memory.MemoryCategory;
 
 namespace Mira.Windows.Core.Tests.Chat;
 
@@ -142,5 +143,75 @@ public class RouterHandlerTests
     public void IsRiskyPrompt_OrdinaryPhrasing_IsFalse(string prompt)
     {
         Assert.False(RouterHandler.IsRiskyPrompt(prompt));
+    }
+
+    [Theory]
+    [InlineData("do you remember my favorite color", "my favorite color")]
+    [InlineData("what do you know about my job", "my job")]
+    [InlineData("recall what editor I use", "what editor I use")]
+    [InlineData("what did i tell you about my dog", "my dog")]
+    public void ExtractMemoryQuery_FindsQueryAfterPrefix(string prompt, string expected)
+    {
+        Assert.Equal(expected, RouterHandler.ExtractMemoryQuery(prompt));
+    }
+
+    [Fact]
+    public void ExtractMemoryQuery_NoPrefix_ReturnsPromptUnchanged()
+    {
+        var prompt = "tell me about myself";
+        Assert.Equal(prompt, RouterHandler.ExtractMemoryQuery(prompt));
+    }
+
+    [Fact]
+    public void ParseMemoryFact_WellFormedJson_ParsesAllFields()
+    {
+        const string reply = """{"key": "favorite_editor", "value": "VS Code", "category": "preference"}""";
+        var (key, value, category) = RouterHandler.ParseMemoryFact(reply);
+        Assert.Equal("favorite_editor", key);
+        Assert.Equal("VS Code", value);
+        Assert.Equal(MemoryCategory.Preference, category);
+    }
+
+    [Fact]
+    public void ParseMemoryFact_ProseWrappedJson_StillExtracts()
+    {
+        const string reply = "Sure! Here's the fact:\n```json\n{\"key\": \"name\", \"value\": \"Alex\", \"category\": \"person\"}\n```";
+        var (key, value, category) = RouterHandler.ParseMemoryFact(reply);
+        Assert.Equal("name", key);
+        Assert.Equal("Alex", value);
+        Assert.Equal(MemoryCategory.Person, category);
+    }
+
+    [Fact]
+    public void ParseMemoryFact_MissingCategory_FallsBackToFact()
+    {
+        const string reply = """{"key": "k", "value": "v"}""";
+        var (_, _, category) = RouterHandler.ParseMemoryFact(reply);
+        Assert.Equal(MemoryCategory.Fact, category);
+    }
+
+    [Fact]
+    public void ParseMemoryFact_UnrecognizedCategory_FallsBackToFact()
+    {
+        const string reply = """{"key": "k", "value": "v", "category": "nonsense"}""";
+        var (_, _, category) = RouterHandler.ParseMemoryFact(reply);
+        Assert.Equal(MemoryCategory.Fact, category);
+    }
+
+    [Fact]
+    public void ParseMemoryFact_NoJsonObject_ReturnsNullKeyAndValue()
+    {
+        var (key, value, _) = RouterHandler.ParseMemoryFact("I'm not sure what to remember here.");
+        Assert.Null(key);
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public void ParseMemoryFact_MissingValue_ReturnsNullKeyAndValue()
+    {
+        const string reply = """{"key": "k"}""";
+        var (key, value, _) = RouterHandler.ParseMemoryFact(reply);
+        Assert.Null(key);
+        Assert.Null(value);
     }
 }

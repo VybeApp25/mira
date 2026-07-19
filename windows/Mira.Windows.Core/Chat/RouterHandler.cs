@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Mira.Windows.Core.Browser;
 using Mira.Windows.Core.LiveLookup;
+using Mira.Windows.Core.Memory;
 using Mira.Windows.Core.Providers;
 using Mira.Windows.Core.Routing;
 using Mira.Windows.Core.Skills;
@@ -78,6 +79,10 @@ public static class RouterHandler
             MiraRoute.MusicQuery => await MusicQueryReplyAsync(),
 
             MiraRoute.SpotifyControl => await SpotifyControlReplyAsync(prompt),
+
+            MiraRoute.MemoryQuery => MemoryQueryReply(prompt),
+
+            MiraRoute.MemoryWrite => await MemoryWriteReplyAsync(prompt, ct),
 
             _ => new RouteResult(RouteResultKind.NotAvailable, NotAvailableMessage(decision), decision.Route),
         };
@@ -533,6 +538,103 @@ public static class RouterHandler
         return SpotifyAction.Toggle;
     }
 
+    /// <summary>The Windows equivalent of RouterService.swift's <c>memoryQuery</c> case — mirrors <c>MiraToolService.recallMemories</c> exactly, including its top-8 cap and bullet formatting.</summary>
+    private static RouteResult MemoryQueryReply(string prompt)
+    {
+        var query = ExtractMemoryQuery(prompt);
+        var results = MemoryStore.Shared.Recall(query);
+        var text = results.Count == 0
+            ? $"No memories found for '{query}'."
+            : string.Join("\n", results.Take(8).Select(m => $"• {m.Key}: {m.Value}"));
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.MemoryQuery);
+    }
+
+    private static readonly string[] MemoryQueryPrefixes = ["do you remember ", "what do you know about ", "recall ", "what did i tell you about "];
+
+    /// <summary>Pure — mirrors <c>RouterService.extractMemoryQuery(from:)</c>: finds the first matching prefix anywhere in the text (not just at the start), then takes everything after it.</summary>
+    public static string ExtractMemoryQuery(string prompt)
+    {
+        var lower = prompt.ToLowerInvariant();
+        foreach (var prefix in MemoryQueryPrefixes)
+        {
+            var idx = lower.IndexOf(prefix, StringComparison.Ordinal);
+            if (idx >= 0) return prompt[(idx + prefix.Length)..].Trim();
+        }
+        return prompt;
+    }
+
+    /// <summary>
+    /// The Windows equivalent of RouterService.swift's <c>memoryWrite</c> case
+    /// — but a genuine fix, not a straight port. On Mac, this route falls
+    /// into the generic <c>agentOrFallback</c> catch-all and never actually
+    /// calls <c>MemoryStore.upsert</c> at all; only the voice tool-calling
+    /// loop's <c>remember</c> tool does that. Since typed "remember that I
+    /// like X" would otherwise silently do nothing (indistinguishable from
+    /// every other still-unbuilt route), and this port has no separate
+    /// voice-vs-text tool-calling split to explain the asymmetry, this
+    /// route calls a small Claude extraction (mirroring <c>LessonAuthor</c>/
+    /// <c>SkillAuthor</c>'s JSON-only-reply shape) to pull a key/value/category
+    /// out of the prompt and really persists it.
+    /// </summary>
+    private static async Task<RouteResult> MemoryWriteReplyAsync(string prompt, CancellationToken ct)
+    {
+        try
+        {
+            var (key, value, category) = await ExtractMemoryFactAsync(prompt, ct);
+            if (key is null || value is null)
+            {
+                return new RouteResult(RouteResultKind.Reply,
+                    "I couldn't tell what to remember from that — try something like \"remember that my favorite editor is VS Code.\"",
+                    MiraRoute.MemoryWrite);
+            }
+
+            MemoryStore.Shared.Upsert(key, value, category);
+            return new RouteResult(RouteResultKind.Reply, $"Remembered: {key} = {value}.", MiraRoute.MemoryWrite);
+        }
+        catch (Exception ex)
+        {
+            return new RouteResult(RouteResultKind.NotAvailable, $"I couldn't save that: {ex.Message}", MiraRoute.MemoryWrite);
+        }
+    }
+
+    private static async Task<(string? Key, string? Value, MemoryCategory Category)> ExtractMemoryFactAsync(string prompt, CancellationToken ct)
+    {
+        const string jsonShape = """{"key": "snake_case_key", "value": "human readable value", "category": "preference|project|person|fact|goal"}""";
+        var body = new JObject
+        {
+            ["model"] = "claude-haiku-4-5-20251001",
+            ["max_tokens"] = 200,
+            ["system"] = $"Extract the single fact or preference the user wants remembered. Reply with ONLY a JSON object, no prose, no markdown fences, in exactly this shape: {jsonShape}",
+            ["messages"] = new JArray { new JObject { ["role"] = "user", ["content"] = prompt } },
+        };
+        var raw = await AnthropicProxyClient.SendAsync(body, ct);
+        return ParseMemoryFact(raw);
+    }
+
+    /// <summary>Pure — parses the model's JSON reply, extracted so it's testable against canned text without a live Claude call. Falls back to <see cref="MemoryCategory.Fact"/> for an unrecognized or missing category rather than failing the whole extraction.</summary>
+    public static (string? Key, string? Value, MemoryCategory Category) ParseMemoryFact(string rawReply)
+    {
+        var start = rawReply.IndexOf('{');
+        var end = rawReply.LastIndexOf('}');
+        if (start < 0 || end <= start) return (null, null, MemoryCategory.Fact);
+
+        try
+        {
+            var json = JObject.Parse(rawReply[start..(end + 1)]);
+            var key = (string?)json["key"];
+            var value = (string?)json["value"];
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value)) return (null, null, MemoryCategory.Fact);
+
+            var categoryRaw = (string?)json["category"] ?? "fact";
+            var category = Enum.TryParse<MemoryCategory>(categoryRaw, ignoreCase: true, out var parsed) ? parsed : MemoryCategory.Fact;
+            return (key.Trim(), value.Trim(), category);
+        }
+        catch
+        {
+            return (null, null, MemoryCategory.Fact);
+        }
+    }
+
     /// <summary>
     /// local_response covers genuine small talk (canned, instant) AND anything
     /// the classifier judged "answerable without tools or live data" — the
@@ -592,6 +694,8 @@ public static class RouterHandler
         var parts = new List<string>();
         var skillContext = SkillStore.Shared.BuildContext();
         if (!string.IsNullOrEmpty(skillContext)) parts.Add(skillContext);
+        var memoryBlock = MemoryStore.Shared.BuildPromptBlock();
+        if (!string.IsNullOrEmpty(memoryBlock)) parts.Add(memoryBlock);
         if (PersonalitySettings.CatModeEnabled) parts.Add(PersonalitySettings.CatModeInstruction);
         return string.Join("\n\n", parts);
     }

@@ -33,6 +33,9 @@ using FontFamily = System.Windows.Media.FontFamily;
 using ContextMenu = System.Windows.Controls.ContextMenu;
 using MenuItem = System.Windows.Controls.MenuItem;
 using Rectangle = System.Windows.Shapes.Rectangle;
+using MemoryModel = Mira.Windows.Core.Memory.Memory;
+using MemoryStore = Mira.Windows.Core.Memory.MemoryStore;
+using MemoryConfidenceTier = Mira.Windows.Core.Memory.MemoryConfidenceTier;
 
 namespace Mira.Windows.App.Shell;
 
@@ -155,6 +158,7 @@ public partial class IslandWindow : Window
             LessonProgressStore.Shared.Changed -= OnLearnChanged;
             LessonRunner.Shared.Changed -= OnLearnChanged;
             LessonRunner.Shared.Stop();
+            MemoryStore.Shared.Changed -= OnMemoryChanged;
             _eyesTimer?.Stop();
         };
 
@@ -202,6 +206,9 @@ public partial class IslandWindow : Window
         _eyesTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
         _eyesTimer.Tick += (_, _) => UpdateEyes();
         _eyesTimer.Start();
+
+        MemoryStore.Shared.Changed += OnMemoryChanged;
+        RenderMemoryList();
 
         LessonStore.Shared.Changed += OnLearnChanged;
         LessonProgressStore.Shared.Changed += OnLearnChanged;
@@ -1765,6 +1772,89 @@ public partial class IslandWindow : Window
 
     private void TermsButton_Click(object sender, RoutedEventArgs e) =>
         BrowserLauncher.Open("https://rdbljrbjsmbfqwwpwwvn.supabase.co/storage/v1/object/public/releases/terms.html");
+
+    // ---- Memory ----
+
+    private void OnMemoryChanged() => Dispatcher.Invoke(RenderMemoryList);
+
+    private void RenderMemoryList()
+    {
+        var memories = MemoryStore.Shared.Memories.OrderByDescending(m => m.Confidence).ToList();
+        MemoryEmptyText.Visibility = memories.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        MemoryList.Children.Clear();
+        foreach (var memory in memories) MemoryList.Children.Add(BuildMemoryRow(memory));
+    }
+
+    private UIElement BuildMemoryRow(MemoryModel memory)
+    {
+        var tierColor = memory.ConfidenceTier switch
+        {
+            MemoryConfidenceTier.High => Color.FromRgb(0x33, 0xD6, 0x4A),
+            MemoryConfidenceTier.Medium => Color.FromRgb(0xF5, 0x9E, 0x0B),
+            _ => Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF),
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var dot = new Ellipse { Width = 7, Height = 7, Fill = new SolidColorBrush(tierColor), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(dot, 0);
+
+        var textStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        textStack.Children.Add(new TextBlock
+        {
+            Text = memory.Key,
+            Foreground = System.Windows.Media.Brushes.White,
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        textStack.Children.Add(new TextBlock
+        {
+            Text = memory.Value,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        Grid.SetColumn(textStack, 1);
+        textStack.ToolTip = $"{memory.Category} · {memory.ConfidenceTier} confidence";
+
+        var deleteButton = new Button
+        {
+            Content = "✕", FontSize = 11, Width = 22, Height = 22,
+            Background = System.Windows.Media.Brushes.Transparent, BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)), Cursor = System.Windows.Input.Cursors.Hand, ToolTip = "Forget",
+        };
+        deleteButton.Click += (_, e) => { e.Handled = true; MemoryStore.Shared.Delete(memory.Id); };
+        Grid.SetColumn(deleteButton, 2);
+
+        grid.Children.Add(dot);
+        grid.Children.Add(textStack);
+        grid.Children.Add(deleteButton);
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 7, 6, 7),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = grid,
+        };
+    }
+
+    private void MemoryClearAllButton_Click(object sender, RoutedEventArgs e) => MemoryClearConfirmPanel.Visibility = Visibility.Visible;
+
+    private void MemoryClearCancelButton_Click(object sender, RoutedEventArgs e) => MemoryClearConfirmPanel.Visibility = Visibility.Collapsed;
+
+    private void MemoryClearConfirmButton_Click(object sender, RoutedEventArgs e)
+    {
+        MemoryStore.Shared.Clear();
+        MemoryClearConfirmPanel.Visibility = Visibility.Collapsed;
+    }
 
     // ---- Chat (identical pipeline to ChatWindow — same RouterHandler call, same streaming) ----
 
