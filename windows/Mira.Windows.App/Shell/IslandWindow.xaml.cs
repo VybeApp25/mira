@@ -6,9 +6,11 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Diagnostics;
 using Mira.Windows.App.Camera;
 using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
+using Mira.Windows.Core.Agents;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
 using Mira.Windows.Core.Entitlements;
@@ -55,7 +57,7 @@ public partial class IslandWindow : Window
 
     private static readonly (IslandTab Tab, string Name)[] PlaceholderTabs =
     [
-        (IslandTab.Shelf, "Shelf"), (IslandTab.Agents, "Agents"),
+        (IslandTab.Shelf, "Shelf"),
         (IslandTab.Skills, "Skills"), (IslandTab.Learn, "Learn"), (IslandTab.Crons, "Crons"),
     ];
 
@@ -124,6 +126,7 @@ public partial class IslandWindow : Window
             CameraPreviewService.Shared.StartFailed -= OnCameraStartFailed;
             CameraPreviewService.Shared.Stop();
             ClipboardHistoryStore.Shared.Changed -= OnClipboardHistoryChanged;
+            AgentJobStore.Shared.Changed -= OnAgentJobsChanged;
         };
 
         ApplyCornerRadius(new CornerRadius(0, 0, 10, 10));
@@ -147,6 +150,9 @@ public partial class IslandWindow : Window
 
         ClipboardHistoryStore.Shared.Changed += OnClipboardHistoryChanged;
         RenderClipboardList();
+
+        AgentJobStore.Shared.Changed += OnAgentJobsChanged;
+        RenderAgentJobList();
 
         SelectTab(IslandTab.Home);
     }
@@ -254,6 +260,7 @@ public partial class IslandWindow : Window
         ChatPanel.Visibility = tab == IslandTab.Chat ? Visibility.Visible : Visibility.Collapsed;
         CameraPanel.Visibility = tab == IslandTab.Camera ? Visibility.Visible : Visibility.Collapsed;
         LabsPanel.Visibility = tab == IslandTab.Labs ? Visibility.Visible : Visibility.Collapsed;
+        AgentsPanel.Visibility = tab == IslandTab.Agents ? Visibility.Visible : Visibility.Collapsed;
         SettingsScroller.Visibility = tab == IslandTab.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         var placeholder = Array.Find(PlaceholderTabs, p => p.Tab == tab);
@@ -639,6 +646,179 @@ public partial class IslandWindow : Window
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
         return $"{(int)span.TotalDays}d ago";
+    }
+
+    // ---- Agents ----
+
+    private void AgentPromptBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var text = AgentPromptBox.Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            AgentTypeBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        AgentTypeBadge.Visibility = Visibility.Visible;
+        AgentTypeBadgeText.Text = AgentJob.Detect(text) switch
+        {
+            AgentJobType.DeepResearch => "🔎 Research",
+            AgentJobType.ContentGeneration => "📝 Content",
+            _ => "🤖 Task",
+        };
+    }
+
+    private void AgentPromptBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            SubmitAgentJob();
+        }
+    }
+
+    private void AgentSubmitButton_Click(object sender, RoutedEventArgs e) => SubmitAgentJob();
+
+    private void SubmitAgentJob()
+    {
+        var prompt = AgentPromptBox.Text.Trim();
+        if (string.IsNullOrEmpty(prompt)) return;
+
+        var (job, error) = AgentJobStore.Shared.SubmitJob(prompt);
+        if (error is not null)
+        {
+            AgentTypeBadge.Visibility = Visibility.Visible;
+            AgentTypeBadgeText.Text = error;
+            return;
+        }
+
+        AgentPromptBox.Text = "";
+        AgentTypeBadge.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnAgentJobsChanged() => Dispatcher.Invoke(RenderAgentJobList);
+
+    private void RenderAgentJobList()
+    {
+        AgentJobList.Children.Clear();
+        var jobs = AgentJobStore.Shared.Jobs;
+
+        if (jobs.Count == 0)
+        {
+            AgentJobList.Children.Add(new TextBlock
+            {
+                Text = "No agent tasks yet — try \"research the history of coffee\" or \"write a short blog post about focus\".",
+                Foreground = new SolidColorBrush(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF)),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 24, 0, 0),
+            });
+            return;
+        }
+
+        foreach (var job in jobs) AgentJobList.Children.Add(BuildAgentJobRow(job));
+    }
+
+    private UIElement BuildAgentJobRow(AgentJob job)
+    {
+        var (statusColor, statusLabel) = job.Status switch
+        {
+            AgentJobStatus.Queued => (Color.FromRgb(0x25, 0x63, 0xEB), "Queued"),
+            AgentJobStatus.Running => (Color.FromRgb(0x25, 0x63, 0xEB), "Running…"),
+            AgentJobStatus.Completed => (Color.FromRgb(0x34, 0xD3, 0x99), "Completed"),
+            AgentJobStatus.Failed => (Color.FromRgb(0xF8, 0x71, 0x71), "Failed"),
+            AgentJobStatus.Cancelled => (Color.FromRgb(0x6B, 0x73, 0x6F), "Cancelled"),
+            _ => (Colors.White, job.Status.ToString()),
+        };
+
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new TextBlock { Text = job.Icon, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(icon, 0);
+
+        var promptText = new TextBlock
+        {
+            Text = job.Prompt,
+            Foreground = System.Windows.Media.Brushes.White,
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(promptText, 1);
+
+        var statusText = new TextBlock
+        {
+            Text = statusLabel,
+            Foreground = new SolidColorBrush(statusColor),
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 0),
+        };
+        Grid.SetColumn(statusText, 2);
+
+        var deleteButton = new Button
+        {
+            Content = "✕",
+            FontSize = 11,
+            Width = 20,
+            Height = 20,
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Remove",
+        };
+        deleteButton.Click += (_, e) => { e.Handled = true; AgentJobStore.Shared.RemoveJob(job.Id); };
+        Grid.SetColumn(deleteButton, 3);
+
+        headerGrid.Children.Add(icon);
+        headerGrid.Children.Add(promptText);
+        headerGrid.Children.Add(statusText);
+        headerGrid.Children.Add(deleteButton);
+
+        var contentStack = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var bodyText = job.Status switch
+        {
+            AgentJobStatus.Completed => job.ResultText ?? "",
+            AgentJobStatus.Failed => $"Error: {job.ErrorMessage}",
+            AgentJobStatus.Cancelled => job.ErrorMessage ?? "Cancelled.",
+            _ => "Working…",
+        };
+        contentStack.Children.Add(new TextBlock
+        {
+            Text = bodyText,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        if (!string.IsNullOrEmpty(job.OutputFilePath))
+        {
+            var path = job.OutputFilePath;
+            var openButton = new Button { Content = "Open file", Height = 24, Width = 90, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) };
+            openButton.Click += (_, _) =>
+            {
+                try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+                catch { /* file may have been moved/deleted since it was written */ }
+            };
+            contentStack.Children.Add(openButton);
+        }
+
+        return new Expander
+        {
+            Header = headerGrid,
+            Content = contentStack,
+            Foreground = System.Windows.Media.Brushes.White,
+            Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)),
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(8),
+        };
     }
 
     // ---- Settings (folded in from the old MainWindow) ----

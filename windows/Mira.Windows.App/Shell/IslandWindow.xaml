@@ -120,7 +120,7 @@
                         <Button x:Name="TabChat" Tag="Chat" Content="💬" ToolTip="Chat" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabShelf" Tag="Shelf" Content="🗂" ToolTip="Shelf" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
-                        <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
+                        <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
                         <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
                         <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyleDim}" />
@@ -266,6 +266,35 @@
                                            TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
                             </StackPanel>
                         </Grid>
+                    </Grid>
+
+                    <!-- Agents: submit + track background tasks. Only DeepResearch/ContentGeneration/Custom
+                         have a real runner; WebsiteBuilder and its whole family (edit/improve/health/publish)
+                         are deliberately deferred, see IMPLEMENTATION_PLAN.md. -->
+                    <Grid x:Name="AgentsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="AgentPromptBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
+                                     TextChanged="AgentPromptBox_TextChanged" KeyDown="AgentPromptBox_KeyDown" />
+                            <Border x:Name="AgentTypeBadge" Grid.Column="1" Background="#382563EB" CornerRadius="10"
+                                    Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="AgentTypeBadgeText" Foreground="White" FontSize="10" />
+                            </Border>
+                            <Button Grid.Column="2" Content="Run" Width="56" Height="30" Margin="8,0,0,0" Click="AgentSubmitButton_Click" />
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="AgentJobList" />
+                        </ScrollViewer>
                     </Grid>
 
                     <!-- Chat -->
