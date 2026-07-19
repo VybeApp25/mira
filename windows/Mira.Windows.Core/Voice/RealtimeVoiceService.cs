@@ -246,7 +246,22 @@ public sealed class RealtimeVoiceService : IDisposable
             }
         }
         catch (OperationCanceledException) { /* expected on teardown */ }
-        catch (WebSocketException ex) { ErrorOccurred?.Invoke(ex.Message); }
+        catch (WebSocketException ex)
+        {
+            ErrorOccurred?.Invoke(ex.Message);
+            SetState(VoiceSessionState.Idle);
+        }
+        catch (Exception ex)
+        {
+            // Anything unexpected here previously killed this background loop
+            // silently (nobody awaits the Task.Run that started it) -- confirmed
+            // directly that this left the UI stuck showing "Connecting..." forever
+            // with zero feedback whenever an event handler threw. Now it at least
+            // surfaces an error and releases the session back to Idle instead of
+            // hanging indefinitely.
+            ErrorOccurred?.Invoke($"Voice session error: {ex.Message}");
+            SetState(VoiceSessionState.Idle);
+        }
     }
 
     private void HandleEvent(string json)
@@ -255,6 +270,19 @@ public sealed class RealtimeVoiceService : IDisposable
         try { evt = JObject.Parse(json); }
         catch { return; }
 
+        try
+        {
+            DispatchEvent(evt);
+        }
+        catch (Exception ex)
+        {
+            ErrorOccurred?.Invoke($"Voice session error handling '{(string?)evt["type"]}': {ex.Message}");
+            SetState(VoiceSessionState.Idle);
+        }
+    }
+
+    private void DispatchEvent(JObject evt)
+    {
         switch ((string?)evt["type"])
         {
             case "session.created":
