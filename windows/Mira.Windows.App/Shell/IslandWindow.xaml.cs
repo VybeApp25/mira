@@ -181,6 +181,7 @@ public partial class IslandWindow : Window
             WakeWordService.Shared.Pause();
             RealtimeVoiceService.Shared.StateChanged -= OnVoiceStateChanged;
             RealtimeVoiceService.Shared.AssistantTranscriptDelta -= OnVoiceTranscriptDelta;
+            RealtimeVoiceService.Shared.UserTranscriptCompleted -= OnUserTranscriptCompleted;
             RealtimeVoiceService.Shared.ErrorOccurred -= OnVoiceError;
             RealtimeVoiceService.Shared.Warning -= OnVoiceWarning;
             if (_voiceSessionActive) _ = RealtimeVoiceService.Shared.DisconnectAsync();
@@ -258,6 +259,7 @@ public partial class IslandWindow : Window
         // wiring being part of the notch itself, not a standalone surface.
         RealtimeVoiceService.Shared.StateChanged += OnVoiceStateChanged;
         RealtimeVoiceService.Shared.AssistantTranscriptDelta += OnVoiceTranscriptDelta;
+        RealtimeVoiceService.Shared.UserTranscriptCompleted += OnUserTranscriptCompleted;
         RealtimeVoiceService.Shared.ErrorOccurred += OnVoiceError;
         RealtimeVoiceService.Shared.Warning += OnVoiceWarning;
 
@@ -2251,6 +2253,19 @@ public partial class IslandWindow : Window
     {
         if (_voiceAssistantBubble is null) return;
         _voiceAssistantBubble.Text += delta;
+        Scroller.ScrollToBottom();
+    });
+
+    /// <summary>
+    /// Mirrors the Swift original's <c>onUserMessage</c> callback -- appends the
+    /// user's own transcribed utterance as a right-side bubble, same as text
+    /// chat's send path. Without this, voice only ever showed Mira's replies;
+    /// what the user actually said never appeared anywhere.
+    /// </summary>
+    private void OnUserTranscriptCompleted(string text) => Dispatcher.Invoke(() =>
+    {
+        _history.Add(new ChatMessage { Role = ChatRole.User, Content = text });
+        _bubbles.Add(new ChatBubbleViewModel(ChatRole.User, text));
         Scroller.ScrollToBottom();
     });
 

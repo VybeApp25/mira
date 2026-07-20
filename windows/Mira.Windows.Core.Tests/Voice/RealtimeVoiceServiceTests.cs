@@ -40,4 +40,28 @@ public class RealtimeVoiceServiceTests
         Assert.NotNull(tool["parameters"]?["properties"]?["query"]);
         Assert.Contains("query", tool["parameters"]?["required"]?.Values<string>() ?? Array.Empty<string>());
     }
+
+    [Theory]
+    [InlineData("you")]
+    [InlineData("You.")]
+    [InlineData("Thanks for watching!")]
+    [InlineData("  thank you  ")]
+    [InlineData("...")]
+    [InlineData("Um")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsPhantomTranscript_FiltersWhisperHallucinations(string raw)
+    {
+        Assert.True(RealtimeVoiceService.IsPhantomTranscript(raw));
+    }
+
+    [Theory]
+    [InlineData("yes")]
+    [InlineData("no")]
+    [InlineData("stop")]
+    [InlineData("search the web for who won the world cup")]
+    public void IsPhantomTranscript_DoesNotFilterRealUtterances(string raw)
+    {
+        Assert.False(RealtimeVoiceService.IsPhantomTranscript(raw));
+    }
 }

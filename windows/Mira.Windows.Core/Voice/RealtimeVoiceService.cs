@@ -92,6 +92,16 @@ public sealed class RealtimeVoiceService : IDisposable
 
     public event Action<VoiceSessionState>? StateChanged;
     public event Action<string>? AssistantTranscriptDelta;
+
+    /// <summary>
+    /// Fires once per completed user utterance with the transcribed text (Whisper,
+    /// via the session's <c>audio.input.transcription</c> config) -- mirrors the
+    /// Swift original's <c>onUserMessage</c>/<c>userDraft</c>. Without this, voice
+    /// only ever showed Mira's own replies; what the user said was captured and
+    /// sent as audio but never transcribed or displayed anywhere.
+    /// </summary>
+    public event Action<string>? UserTranscriptCompleted;
+
     public event Action<string>? ErrorOccurred;
 
     /// <summary>
@@ -377,6 +387,13 @@ public sealed class RealtimeVoiceService : IDisposable
             case "input_audio_buffer.speech_stopped":
                 break;
 
+            // ── User transcript (requires audio.input.transcription in session config) ──
+            case "conversation.item.input_audio_transcription.completed":
+                var transcript = (string?)evt["transcript"] ?? "";
+                if (transcript.Length > 0 && !IsPhantomTranscript(transcript))
+                    UserTranscriptCompleted?.Invoke(transcript);
+                break;
+
             case "response.created":
                 _receivedAudioThisTurn = false;
                 SetState(VoiceSessionState.Thinking);
@@ -540,6 +557,7 @@ public sealed class RealtimeVoiceService : IDisposable
                 ["input"] = new JObject
                 {
                     ["format"] = new JObject { ["type"] = "audio/pcm", ["rate"] = RealtimeAudioFormat.SampleRate },
+                    ["transcription"] = new JObject { ["model"] = "whisper-1", ["language"] = "en" },
                     ["turn_detection"] = BuildTurnDetectionConfig(),
                 },
                 ["output"] = new JObject
@@ -552,6 +570,28 @@ public sealed class RealtimeVoiceService : IDisposable
             ["tool_choice"] = "auto",
         };
         return EmitAsync(new JObject { ["type"] = "session.update", ["session"] = session });
+    }
+
+    /// <summary>
+    /// Whisper reliably hallucinates a small set of stock phrases when handed
+    /// near-silence or non-speech noise (audio a too-eager VAD commits when no
+    /// one is actually talking) -- matches the Swift original's <c>phantomTranscripts</c>
+    /// set exactly. Short, real utterances ("yes," "no," "stop," "next") are
+    /// deliberately NOT in this set.
+    /// </summary>
+    private static readonly HashSet<string> PhantomTranscripts = new()
+    {
+        "you", "thank you", "thanks", "thank you.", "thanks for watching",
+        "thanks for watching!", "thank you for watching", "bye", "bye.",
+        "okay", "ok", ".", "..", "...", "uh", "um", "hmm", "mm", "mhm",
+        "you're", "so", "yeah", "right", "i", "the", "a",
+    };
+
+    /// <summary>Pure -- extracted for direct unit-testing. Mirrors the Swift original's <c>isPhantomTranscript</c> exactly (normalize, then set-membership check).</summary>
+    public static bool IsPhantomTranscript(string raw)
+    {
+        var normalized = raw.ToLowerInvariant().Trim(' ', '\t', '\n', '.', ',', '!', '?', '…', '"', '\'', '-', '♪');
+        return normalized.Length == 0 || PhantomTranscripts.Contains(normalized);
     }
 
     /// <summary>
