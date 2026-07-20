@@ -66,7 +66,8 @@ public sealed class RealtimeVoiceService : IDisposable
     private const string Model = "gpt-realtime";
     private const string SystemInstructions =
         "You are Mira, a helpful voice assistant running on Windows. Keep responses concise and conversational. "
-        + "A screenshot of the user's current screen is attached at the start of each turn, so you can see and reference what they're looking at.";
+        + "A screenshot of the user's current screen is attached at the start of each turn, so you can see and reference what they're looking at. "
+        + "search_web and control_computer can take several seconds -- before or while calling either of these two specific tools, briefly say something natural like \"Let me check\" or \"One sec, pulling that up\" (under 5 words) so it doesn't feel like dead air. Never do this for now_playing, control_spotify, or play_video -- those are instant, so a filler phrase would just slow them down.";
 
     // Mirrors RealtimeVoiceService.swift's buildSessionUpdate turn_detection block exactly.
     private const decimal VadThreshold = 0.65m;
