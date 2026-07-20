@@ -112,6 +112,14 @@ public partial class IslandWindow : Window
     private bool _voiceSessionActive;
     private ChatBubbleViewModel? _voiceAssistantBubble;
 
+    /// <summary>
+    /// The current turn's assistant bubble, kept as an insertion anchor for the
+    /// user's own transcript even after <see cref="_voiceAssistantBubble"/> itself
+    /// is cleared on turn-completion -- see <see cref="OnUserTranscriptCompleted"/>
+    /// for why this is needed separately.
+    /// </summary>
+    private ChatBubbleViewModel? _pendingUserTranscriptAnchor;
+
     public IslandWindow()
     {
         InitializeComponent();
@@ -2236,6 +2244,7 @@ public partial class IslandWindow : Window
         if (state == VoiceSessionState.Thinking && _voiceAssistantBubble is null)
         {
             _voiceAssistantBubble = new ChatBubbleViewModel(ChatRole.Assistant, "");
+            _pendingUserTranscriptAnchor = _voiceAssistantBubble;
             _bubbles.Add(_voiceAssistantBubble);
             Scroller.ScrollToBottom();
         }
@@ -2257,15 +2266,30 @@ public partial class IslandWindow : Window
     });
 
     /// <summary>
-    /// Mirrors the Swift original's <c>onUserMessage</c> callback -- appends the
+    /// Mirrors the Swift original's <c>onUserMessage</c> callback -- shows the
     /// user's own transcribed utterance as a right-side bubble, same as text
     /// chat's send path. Without this, voice only ever showed Mira's replies;
     /// what the user actually said never appeared anywhere.
+    ///
+    /// Inserted BEFORE the turn's own assistant bubble (<see cref="_pendingUserTranscriptAnchor"/>)
+    /// rather than appended at the end -- Whisper's transcription of the user's
+    /// audio is a separate async call from response generation and routinely
+    /// finishes AFTER the model has already started (and rendered) its reply to
+    /// that same utterance, which, if simply appended, put every user bubble one
+    /// turn late: [Mira's reply][user's question] instead of the correct
+    /// [user's question][Mira's reply] -- a real user-reported bug, not a
+    /// hypothetical one.
     /// </summary>
     private void OnUserTranscriptCompleted(string text) => Dispatcher.Invoke(() =>
     {
         _history.Add(new ChatMessage { Role = ChatRole.User, Content = text });
-        _bubbles.Add(new ChatBubbleViewModel(ChatRole.User, text));
+        var bubble = new ChatBubbleViewModel(ChatRole.User, text);
+
+        var index = _pendingUserTranscriptAnchor is not null ? _bubbles.IndexOf(_pendingUserTranscriptAnchor) : -1;
+        if (index >= 0) _bubbles.Insert(index, bubble);
+        else _bubbles.Add(bubble);
+        _pendingUserTranscriptAnchor = null;
+
         Scroller.ScrollToBottom();
     });
 
