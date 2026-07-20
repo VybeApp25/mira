@@ -216,26 +216,41 @@ public static class RouterHandler
             // Best-effort -- a failed browser launch shouldn't block the spoken answer below.
         }
 
+        var answer = await RunWebSearchAsync(query, ct);
+        var text = answer is null
+            ? "I opened the results in your browser — take a look."
+            : $"{answer}\n\n_Opened the full results in your browser._";
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.WebSearch);
+    }
+
+    /// <summary>
+    /// Runs a live Claude web-search call for <paramref name="query"/> and
+    /// returns just the spoken-friendly answer (or null on failure/empty) --
+    /// no browser side effect here, so callers can each decide when/whether
+    /// to open one. Shared by the chat WebSearch route above and by the
+    /// voice session's <c>search_web</c> tool (<see cref="Voice.RealtimeVoiceService"/>),
+    /// which both need the exact same live-answer call but open the browser
+    /// at different points in their own flow.
+    /// </summary>
+    public static async Task<string?> RunWebSearchAsync(string query, CancellationToken ct)
+    {
         var body = new JObject
         {
             ["model"] = "claude-haiku-4-5-20251001",
             ["max_tokens"] = 500,
             ["system"] = "You are Mira. Use web search to answer with current, accurate information. Reply in 1-3 plain spoken sentences. No markdown, no bullet lists, no citation list.",
             ["tools"] = new JArray { new JObject { ["type"] = "web_search_20250305", ["name"] = "web_search", ["max_uses"] = 3 } },
-            ["messages"] = new JArray { new JObject { ["role"] = "user", ["content"] = prompt } },
+            ["messages"] = new JArray { new JObject { ["role"] = "user", ["content"] = query } },
         };
 
         try
         {
             var answer = await AnthropicProxyClient.SendAsync(body, ct);
-            var text = string.IsNullOrWhiteSpace(answer)
-                ? "I opened the results in your browser — take a look."
-                : $"{answer.Trim()}\n\n_Opened the full results in your browser._";
-            return new RouteResult(RouteResultKind.Reply, text, MiraRoute.WebSearch);
+            return string.IsNullOrWhiteSpace(answer) ? null : answer.Trim();
         }
         catch
         {
-            return new RouteResult(RouteResultKind.Reply, "I opened the results in your browser — take a look.", MiraRoute.WebSearch);
+            return null;
         }
     }
 

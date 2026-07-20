@@ -5,6 +5,8 @@ using Mira.Contracts.MintRealtimeToken;
 using Mira.Contracts.ReportVoiceUsage;
 using Mira.Windows.Core.Audio;
 using Mira.Windows.Core.Auth;
+using Mira.Windows.Core.Browser;
+using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Config;
 using Mira.Windows.Core.Vision;
 using Newtonsoft.Json.Linq;
@@ -36,15 +38,15 @@ namespace Mira.Windows.Core.Voice;
 /// Also deliberately narrower than the Swift original, matching
 /// docs/windows/IMPLEMENTATION_PLAN.md Phase 4's original scope:
 /// <list type="bullet">
-/// <item><b>No tool-calling.</b> The Swift session.update declares
-/// <c>MiraToolService.definitions</c> so the model can invoke Mira's ~35 tools
-/// mid-conversation; no such tool surface exists on Windows yet, so this port's
-/// session.update omits <c>tools</c>/<c>tool_choice</c> entirely — the model
-/// simply won't attempt to call anything.</item>
-/// <item><b>No screen-context injection.</b> The Swift instructions string
-/// includes <c>ContextService.shared.buildPromptBlock()</c> (frontmost app,
-/// clipboard, battery, etc.); this port uses a static system prompt since that
-/// context-gathering service doesn't exist on Windows yet.</item>
+/// <item><b>Only one tool, not ~35.</b> The Swift session.update declares
+/// <c>MiraToolService.definitions</c> so the model can invoke any of Mira's
+/// ~35 tools (memory, calendar, Spotify, shell commands, computer control,
+/// ...) mid-conversation; almost none of that surface exists on Windows yet.
+/// This port declares just <c>search_web</c> (added after a user report that
+/// voice couldn't answer live questions like "who won the world cup," unlike
+/// Mac) — see <see cref="SendSessionUpdateAsync"/> and the
+/// <c>response.function_call_arguments.done</c> case below. Every other Mac
+/// voice tool remains unavailable in voice on Windows.</item>
 /// <item><b>Simplified playback-drained detection.</b> The Swift original
 /// schedules a silent "sentinel" audio buffer and gets an exact completion
 /// callback when it plays; this port polls <see cref="RealtimePlaybackSink.IsDrained"/>
@@ -110,6 +112,11 @@ public sealed class RealtimeVoiceService : IDisposable
 
     private int _chunksSentThisTurn;
     private bool _receivedAudioThisTurn;
+
+    // ── Tool call assembly (mirrors the Swift original's pendingToolName/pendingCallId/pendingToolArgs) ──
+    private string _pendingToolCallId = "";
+    private string _pendingToolName = "";
+    private string _pendingToolArgs = "";
 
     private RealtimeVoiceService() { }
 
@@ -415,6 +422,29 @@ public sealed class RealtimeVoiceService : IDisposable
                 if (!_receivedAudioThisTurn) SetState(VoiceSessionState.Listening);
                 break;
 
+            // ── Tool call assembly (mirrors the Swift original's response.output_item.added /
+            // response.function_call_arguments.delta / response.function_call_arguments.done trio) ──
+            case "response.output_item.added":
+                if ((string?)evt["item"]?["type"] == "function_call")
+                {
+                    _pendingToolName = (string?)evt["item"]?["name"] ?? "";
+                    _pendingToolCallId = (string?)evt["item"]?["call_id"] ?? "";
+                    _pendingToolArgs = "";
+                }
+                break;
+
+            case "response.function_call_arguments.delta":
+                _pendingToolArgs += (string?)evt["delta"] ?? "";
+                break;
+
+            case "response.function_call_arguments.done":
+                var callId = (string?)evt["call_id"] ?? _pendingToolCallId;
+                var toolName = (string?)evt["name"] ?? _pendingToolName;
+                var toolArgs = (string?)evt["arguments"] ?? _pendingToolArgs;
+                _ = RunToolAsync(callId, toolName, toolArgs);
+                _pendingToolCallId = ""; _pendingToolName = ""; _pendingToolArgs = "";
+                break;
+
             case "error":
                 // Mirrors the Swift original's benign-error filtering exactly -- these
                 // are ordinary races (cancelling a response that already finished,
@@ -518,8 +548,69 @@ public sealed class RealtimeVoiceService : IDisposable
                     ["voice"] = MiraVoiceSettings.Saved.Id(),
                 },
             },
+            ["tools"] = BuildToolDefinitions(),
+            ["tool_choice"] = "auto",
         };
         return EmitAsync(new JObject { ["type"] = "session.update", ["session"] = session });
+    }
+
+    /// <summary>
+    /// The single tool this port declares -- matches <c>MiraToolService.definitions</c>'s
+    /// own <c>search_web</c> schema exactly (name, description, and the required
+    /// <c>query</c> string parameter), pulled into its own pure method so the shape is
+    /// directly testable without a live connection.
+    /// </summary>
+    public static JArray BuildToolDefinitions() => new()
+    {
+        new JObject
+        {
+            ["type"] = "function",
+            ["name"] = "search_web",
+            ["description"] = "Search the web for current, live information (news, sports results, prices, anything not in your training data) and open the results in the browser.",
+            ["parameters"] = new JObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JObject { ["query"] = new JObject { ["type"] = "string", ["description"] = "Search terms" } },
+                ["required"] = new JArray { "query" },
+            },
+        },
+    };
+
+    /// <summary>Executes a tool call and reports the result back, mirroring the Swift original's <c>runTool</c> exactly (function_call_output, then response.create so the model speaks the result).</summary>
+    private async Task RunToolAsync(string callId, string name, string argsJson)
+    {
+        var output = name switch
+        {
+            "search_web" => await ExecuteSearchWebToolAsync(argsJson),
+            _ => $"Unknown tool '{name}'.",
+        };
+
+        await EmitAsync(new JObject
+        {
+            ["type"] = "conversation.item.create",
+            ["item"] = new JObject { ["type"] = "function_call_output", ["call_id"] = callId, ["output"] = output },
+        });
+        await EmitAsync(new JObject { ["type"] = "response.create" });
+    }
+
+    /// <summary>
+    /// Reuses the exact same live Claude web-search call the text-chat WebSearch
+    /// route already makes (<see cref="RouterHandler.RunWebSearchAsync"/>) -- so voice
+    /// gets a real, current spoken answer, not just Mac's own placeholder
+    /// ("Opened a search... in your browser") with no actual answer content.
+    /// </summary>
+    private static async Task<string> ExecuteSearchWebToolAsync(string argsJson)
+    {
+        string query;
+        try { query = (string?)JObject.Parse(argsJson)["query"] ?? ""; }
+        catch { query = ""; }
+        if (string.IsNullOrWhiteSpace(query)) return "I need a search query to look that up.";
+
+        try { BrowserLauncher.Open($"https://www.google.com/search?q={Uri.EscapeDataString(query)}"); }
+        catch { /* best-effort -- a failed browser launch shouldn't block the spoken answer */ }
+
+        var answer = await RouterHandler.RunWebSearchAsync(query, CancellationToken.None);
+        return answer ?? $"Opened a search for '{query}' in your browser.";
     }
 
     /// <summary>

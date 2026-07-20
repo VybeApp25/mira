@@ -26,4 +26,18 @@ public class RealtimeVoiceServiceTests
         var json = config.ToString(Newtonsoft.Json.Formatting.None);
         Assert.Contains("\"threshold\":0.65", json);
     }
+
+    [Fact]
+    public void BuildToolDefinitions_DeclaresExactlySearchWebWithARequiredQueryParameter()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+
+        Assert.Single(tools);
+        var tool = (Newtonsoft.Json.Linq.JObject)tools[0];
+        Assert.Equal("function", (string?)tool["type"]);
+        Assert.Equal("search_web", (string?)tool["name"]);
+        Assert.Equal("object", (string?)tool["parameters"]?["type"]);
+        Assert.NotNull(tool["parameters"]?["properties"]?["query"]);
+        Assert.Contains("query", tool["parameters"]?["required"]?.Values<string>() ?? Array.Empty<string>());
+    }
 }
