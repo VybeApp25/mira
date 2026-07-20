@@ -99,19 +99,54 @@ public sealed class ComputerUseOrchestrator
         var stepsLeft = PerTaskStepCeiling;
         var result = "";
 
+        // Sliding cache breakpoint for the growing conversation history -- this is
+        // what actually balloons in size across a multi-step task (every prior
+        // screenshot stays in `messages`), unlike the static system+tools prefix
+        // below. Each step marks the current last content block cacheable, then
+        // un-marks it before the NEXT step moves the breakpoint forward -- otherwise
+        // stale breakpoints would accumulate past Anthropic's 4-per-request limit
+        // well before the 40-step ceiling.
+        JObject? previousCacheBreakpoint = null;
+
         while (!_stopRequested && stepsLeft-- > 0)
         {
             JObject response;
             try
             {
+                if (previousCacheBreakpoint is not null) previousCacheBreakpoint.Remove("cache_control");
+                if (messages.Count > 0 && messages[^1]?["content"] is JArray lastContent && lastContent.Count > 0 && lastContent[^1] is JObject lastBlock)
+                {
+                    lastBlock["cache_control"] = new JObject { ["type"] = "ephemeral" };
+                    previousCacheBreakpoint = lastBlock;
+                }
+
+                // system + tools are byte-identical on every single step of a task (only
+                // the growing messages array changes), so both are marked cacheable --
+                // Anthropic serves the cached prefix back much faster on steps 2+ instead
+                // of fully reprocessing the same system prompt/tool schema from scratch
+                // every step. Pure latency/cost win, no behavior change -- neither this
+                // port nor the Swift original used caching here before this pass.
                 var body = new JObject
                 {
                     ["model"] = Model,
                     ["max_tokens"] = 16000,
-                    ["system"] = systemPrompt,
+                    ["system"] = new JArray
+                    {
+                        new JObject
+                        {
+                            ["type"] = "text",
+                            ["text"] = systemPrompt,
+                            ["cache_control"] = new JObject { ["type"] = "ephemeral" },
+                        },
+                    },
                     ["tools"] = new JArray
                     {
-                        new JObject { ["type"] = "computer_20251124", ["name"] = "computer", ["display_width_px"] = width, ["display_height_px"] = height },
+                        new JObject
+                        {
+                            ["type"] = "computer_20251124", ["name"] = "computer",
+                            ["display_width_px"] = width, ["display_height_px"] = height,
+                            ["cache_control"] = new JObject { ["type"] = "ephemeral" },
+                        },
                     },
                     ["messages"] = messages,
                 };
