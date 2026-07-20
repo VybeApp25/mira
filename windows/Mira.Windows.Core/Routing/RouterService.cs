@@ -121,6 +121,19 @@ public sealed class RouterService
             case MiraRoute.RepoTask:
             case MiraRoute.CodexTask:
             case MiraRoute.ComputerUse:
+            // Not in the Swift original's own bypass list, but the exact same
+            // failure mode Mac's own developers already fixed for computerUse
+            // ("must not be second-guessed by Haiku... which then told the user
+            // 'I can't open YouTube' [when it can]") — confirmed live: Haiku is
+            // non-deterministic enough that a deterministic, high-confidence
+            // match on an unambiguous factual-recency/live-data phrase ("who won
+            // the world cup", a stock ticker, "weather") can still get
+            // reclassified down to the tool-less higher_model route, which then
+            // apologizes that it has no real-time access instead of actually
+            // answering — reproduced directly, not guessed at.
+            case MiraRoute.WebSearch:
+            case MiraRoute.WeatherLookup:
+            case MiraRoute.StockLookup:
                 return sync;
         }
 

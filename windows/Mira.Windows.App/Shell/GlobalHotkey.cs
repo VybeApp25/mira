@@ -18,6 +18,7 @@ public sealed class GlobalHotkey : IDisposable
     public const uint ModControl = 0x0002;
     public const uint ModShift = 0x0004;
     public const uint VkT = 0x54;
+    public const uint VkV = 0x56;
 
     private const int WM_HOTKEY = 0x0312;
 

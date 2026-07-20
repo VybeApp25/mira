@@ -93,6 +93,7 @@ public partial class IslandWindow : Window
     private IslandTab _activeTab = IslandTab.Home;
     private DispatcherTimer? _collapseTimer;
     private GlobalHotkey? _hotkey;
+    private GlobalHotkey? _voiceHotkey;
 
     private bool _isSeekingNowPlaying;
     private WriteableBitmap? _cameraBitmap;
@@ -134,6 +135,13 @@ public partial class IslandWindow : Window
                 SetExpanded(true);
             };
 
+            // Ctrl+Alt+V -- the Windows equivalent of the Mac app's Control+Option+V
+            // voice shortcut. Calls StartVoiceSessionAsync (not EnterVoiceModeAsync):
+            // Mac's own voice shortcut stays in the closed notch too ("PTT — stays in
+            // the closed notch pill"), matching wake word's exact non-expanding behavior.
+            _voiceHotkey = new GlobalHotkey(this, id: 2, GlobalHotkey.ModControl | GlobalHotkey.ModAlt, GlobalHotkey.VkV);
+            _voiceHotkey.Pressed += () => _ = StartVoiceSessionAsync();
+
             // Also needs a real HWND, same reason as the hotkey above.
             _clipboardWatcher.Start(this);
 
@@ -145,6 +153,7 @@ public partial class IslandWindow : Window
         Closed += (_, _) =>
         {
             _hotkey?.Dispose();
+            _voiceHotkey?.Dispose();
             _clipboardWatcher.Stop();
             AccountService.Shared.StateChanged -= OnAuthStateChanged;
             EntitlementService.Shared.PlanChanged -= OnPlanChanged;
