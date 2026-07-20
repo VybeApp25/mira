@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using Mira.Contracts.MintRealtimeToken;
 using Mira.Contracts.ReportVoiceUsage;
+using Mira.Windows.Core.Audio;
 using Mira.Windows.Core.Auth;
 using Mira.Windows.Core.Config;
 using Mira.Windows.Core.Vision;
@@ -548,7 +549,27 @@ public sealed class RealtimeVoiceService : IDisposable
     private void SetState(VoiceSessionState state)
     {
         State = state;
+        PlayCueForState(state);
         StateChanged?.Invoke(state);
+    }
+
+    /// <summary>
+    /// Mirrors PillStateModel.swift's <c>setMode</c> calling into
+    /// <c>AudioCueService.playModeChange</c> centrally on every mode change,
+    /// rather than at each individual call site -- Windows has no separate
+    /// PillMode type (that's a Mac-only debounced SwiftUI state layer), so this
+    /// maps directly off <see cref="VoiceSessionState"/> instead, using the
+    /// exact same sound-per-mode assignments (idle/working have none).
+    /// </summary>
+    private static void PlayCueForState(VoiceSessionState state)
+    {
+        switch (state)
+        {
+            case VoiceSessionState.Listening: AudioCueService.Shared.Play(MiraSound.Enter); break;
+            case VoiceSessionState.Thinking: AudioCueService.Shared.Play(MiraSound.SkillUp); break;
+            case VoiceSessionState.Speaking: AudioCueService.Shared.PlayTextReceive(); break;
+            case VoiceSessionState.Connecting: AudioCueService.Shared.PlayVoiceStart(); break; // intentional no-op, matches Mac
+        }
     }
 
     public void Dispose()

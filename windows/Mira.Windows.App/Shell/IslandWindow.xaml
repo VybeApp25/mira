@@ -742,8 +742,12 @@
                                               Foreground="#ECEEED" Margin="0,0,0,8" Checked="CatModeCheckBox_Changed" Unchecked="CatModeCheckBox_Changed" />
                                     <CheckBox x:Name="ShowInCaptureCheckBox" Content="Show in screen recordings"
                                               Foreground="#ECEEED" Margin="0,0,0,4" Checked="ShowInCaptureCheckBox_Changed" Unchecked="ShowInCaptureCheckBox_Changed" />
-                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"
                                                Text="When off, Mira's window is excluded from screen recordings and shares (you still see it normally)." />
+                                    <CheckBox x:Name="SoundEffectsCheckBox" Content="Sound effects"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="SoundEffectsCheckBox_Changed" Unchecked="SoundEffectsCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="Chimes for sending/receiving messages, agent tasks, and other UI events." />
                                 </StackPanel>
                             </Expander>
 

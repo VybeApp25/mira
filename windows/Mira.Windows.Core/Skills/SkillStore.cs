@@ -1,3 +1,4 @@
+using Mira.Windows.Core.Audio;
 using Mira.Windows.Core.Storage;
 using Newtonsoft.Json;
 
@@ -35,8 +36,10 @@ public sealed class SkillStore
 
     public void Toggle(string id)
     {
+        var willActivate = !_activeIds.Contains(id);
         if (!_activeIds.Add(id)) _activeIds.Remove(id);
         PersistActiveIds();
+        AudioCueService.Shared.Play(willActivate ? MiraSound.SkillUp : MiraSound.SkillDown);
         Changed?.Invoke();
     }
 

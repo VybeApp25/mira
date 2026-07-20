@@ -4,6 +4,15 @@
     <ProjectReference Include="..\Mira.Windows.Core\Mira.Windows.Core.csproj" />
   </ItemGroup>
 
+  <!-- Mira's real UI sound cues, copied from the Mac app's own Resources bundle
+       (same files, MP3/WAV are not platform-specific). AudioCueService reads
+       these from the running exe's own directory at runtime. -->
+  <ItemGroup>
+    <None Include="Assets\Sounds\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>

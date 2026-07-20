@@ -1,4 +1,5 @@
 using Mira.Contracts.ProfileRow;
+using Mira.Windows.Core.Audio;
 using Mira.Windows.Core.Entitlements;
 using Mira.Windows.Core.Storage;
 using Newtonsoft.Json;
@@ -58,7 +59,11 @@ public sealed class AgentJobStore
     public (AgentJob? Job, string? Error) SubmitJob(string prompt, AgentJobType? explicitType = null, CancellationToken ct = default)
     {
         var gateError = CheckCanSubmit(EntitlementService.Shared.Plan, RunningCount);
-        if (gateError is not null) return (null, gateError);
+        if (gateError is not null)
+        {
+            AudioCueService.Shared.PlayAgentBlocked();
+            return (null, gateError);
+        }
 
         var job = new AgentJob
         {
@@ -72,6 +77,7 @@ public sealed class AgentJobStore
         lock (_gate) _jobs.Insert(0, job);
         Persist();
         Changed?.Invoke();
+        AudioCueService.Shared.PlayAgentLaunch();
 
         _ = RunJobAsync(job, ct);
         return (job, null);
@@ -117,6 +123,7 @@ public sealed class AgentJobStore
                 job.OutputFilePath = result.OutputFilePath;
                 job.Status = AgentJobStatus.Completed;
             }
+            AudioCueService.Shared.PlayAgentComplete();
         }
         catch (Exception ex)
         {

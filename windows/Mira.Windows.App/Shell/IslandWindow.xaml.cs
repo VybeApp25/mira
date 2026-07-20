@@ -14,6 +14,7 @@ using Mira.Windows.App.Camera;
 using Mira.Windows.App.Home;
 using Mira.Windows.Core.Account;
 using Mira.Windows.Core.Agents;
+using Mira.Windows.Core.Audio;
 using Mira.Windows.Core.Browser;
 using Mira.Windows.Core.Chat;
 using Mira.Windows.Core.Clipboard;
@@ -133,6 +134,7 @@ public partial class IslandWindow : Window
             {
                 Activate();
                 SetExpanded(true);
+                AudioCueService.Shared.PlayTextOpen(); // mirrors .miraActivateText's exact cue
             };
 
             // Ctrl+Alt+V -- the Windows equivalent of the Mac app's Control+Option+V
@@ -190,6 +192,7 @@ public partial class IslandWindow : Window
         ConfirmRiskyCheckBox.IsChecked = AutonomySettings.ConfirmRiskyActions;
         CatModeCheckBox.IsChecked = PersonalitySettings.CatModeEnabled;
         ShowInCaptureCheckBox.IsChecked = AppearanceSettings.ShowInScreenCaptures;
+        SoundEffectsCheckBox.IsChecked = !AudioCueSettings.IsMuted;
         PopulateBrowserPreferenceCombo();
         PopulateInputDeviceCombo();
         PopulateOutputDeviceCombo();
@@ -491,6 +494,11 @@ public partial class IslandWindow : Window
             CameraImage.Source = null;
             _cameraBitmap = null;
         }
+
+        // Mirrors IslandChatView.swift's .onAppear/.onDisappear cues -- entering/leaving
+        // the Chat tab specifically, not any other tab switch.
+        if (tab == IslandTab.Chat && previousTab != IslandTab.Chat) AudioCueService.Shared.Play(MiraSound.Enter);
+        else if (tab != IslandTab.Chat && previousTab == IslandTab.Chat) AudioCueService.Shared.PlayTextClose();
     }
 
     // ---- Home: Now Playing media panel ----
@@ -1852,6 +1860,9 @@ public partial class IslandWindow : Window
         CaptureAffinity.Apply(this, visible);
     }
 
+    private void SoundEffectsCheckBox_Changed(object sender, RoutedEventArgs e) =>
+        AudioCueSettings.IsMuted = SoundEffectsCheckBox.IsChecked != true;
+
     private void PopulateBrowserPreferenceCombo()
     {
         BrowserPreferenceCombo.Items.Clear();
@@ -2062,6 +2073,7 @@ public partial class IslandWindow : Window
         _history.Add(new ChatMessage { Role = ChatRole.User, Content = text });
         _bubbles.Add(new ChatBubbleViewModel(ChatRole.User, text));
         Scroller.ScrollToBottom();
+        AudioCueService.Shared.PlayTextSend();
 
         var assistantBubble = new ChatBubbleViewModel(ChatRole.Assistant, "");
         _bubbles.Add(assistantBubble);
@@ -2080,6 +2092,7 @@ public partial class IslandWindow : Window
                 assistantBubble.Text = result.Text;
 
             _history.Add(new ChatMessage { Role = ChatRole.Assistant, Content = assistantBubble.Text });
+            AudioCueService.Shared.PlayTextReceive();
         }
         catch (Exception ex)
         {
