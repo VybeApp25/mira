@@ -240,7 +240,7 @@ public sealed class RealtimeVoiceService : IDisposable
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{MiraConfig.SupabaseUrl}/functions/v1/mint-realtime-token");
         req.Headers.Add("apikey", MiraConfig.SupabaseAnonKey);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SupabaseService.CachedAccessToken);
-        req.Content = new StringContent(new JObject { ["voice"] = "alloy" }.ToString(Newtonsoft.Json.Formatting.None),
+        req.Content = new StringContent(new JObject { ["voice"] = MiraVoiceSettings.Saved.Id() }.ToString(Newtonsoft.Json.Formatting.None),
             Encoding.UTF8, "application/json");
 
         using var resp = await http.SendAsync(req, ct);
@@ -515,7 +515,7 @@ public sealed class RealtimeVoiceService : IDisposable
                 ["output"] = new JObject
                 {
                     ["format"] = new JObject { ["type"] = "audio/pcm", ["rate"] = RealtimeAudioFormat.SampleRate },
-                    ["voice"] = "alloy",
+                    ["voice"] = MiraVoiceSettings.Saved.Id(),
                 },
             },
         };

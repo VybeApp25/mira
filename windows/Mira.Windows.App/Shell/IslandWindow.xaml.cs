@@ -141,8 +141,11 @@ public partial class IslandWindow : Window
             // voice shortcut. Calls StartVoiceSessionAsync (not EnterVoiceModeAsync):
             // Mac's own voice shortcut stays in the closed notch too ("PTT — stays in
             // the closed notch pill"), matching wake word's exact non-expanding behavior.
+            // Deliberately a Windows-specific improvement over Mac (which only ever
+            // starts a session from this shortcut): pressing it again while a session
+            // is already active stops it, so the same key both starts and ends listening.
             _voiceHotkey = new GlobalHotkey(this, id: 2, GlobalHotkey.ModControl | GlobalHotkey.ModAlt, GlobalHotkey.VkV);
-            _voiceHotkey.Pressed += () => _ = StartVoiceSessionAsync();
+            _voiceHotkey.Pressed += () => _ = _voiceSessionActive ? StopVoiceSessionAsync() : StartVoiceSessionAsync();
 
             // Also needs a real HWND, same reason as the hotkey above.
             _clipboardWatcher.Start(this);
@@ -196,6 +199,7 @@ public partial class IslandWindow : Window
         PopulateBrowserPreferenceCombo();
         PopulateInputDeviceCombo();
         PopulateOutputDeviceCombo();
+        PopulateMiraVoiceCombo();
         WakeWordDeviceText.Text = AudioDevices.DefaultWakeWordInputDeviceName() ?? "Could not detect a default microphone.";
         AlwaysOnCheckBox.IsChecked = VoiceAlwaysOnSettings.IsEnabled;
         RenderForAuthState(AccountService.Shared.State);
@@ -1933,6 +1937,25 @@ public partial class IslandWindow : Window
         if (index - 1 < devices.Count) AudioDeviceSettings.PreferredInputDeviceId = devices[index - 1].Id;
     }
 
+    /// <summary>Mirrors SettingsView.swift's voiceSection list -- one row per <see cref="MiraVoice"/>, no preview playback (Windows has no TTS-preview pipeline yet).</summary>
+    private void PopulateMiraVoiceCombo()
+    {
+        MiraVoiceCombo.Items.Clear();
+        var voices = Enum.GetValues<MiraVoice>();
+        foreach (var v in voices) MiraVoiceCombo.Items.Add(v.Label());
+
+        var savedIndex = Array.IndexOf(voices, MiraVoiceSettings.Saved);
+        MiraVoiceCombo.SelectedIndex = savedIndex >= 0 ? savedIndex : 0;
+    }
+
+    private void MiraVoiceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var voices = Enum.GetValues<MiraVoice>();
+        var index = MiraVoiceCombo.SelectedIndex;
+        if (index < 0 || index >= voices.Length) return;
+        MiraVoiceSettings.Saved = voices[index];
+    }
+
     private void PopulateOutputDeviceCombo()
     {
         OutputDeviceCombo.Items.Clear();
@@ -2162,7 +2185,14 @@ public partial class IslandWindow : Window
 
     private void VoiceMicButton_Click(object sender, RoutedEventArgs e) => _ = EnterVoiceModeAsync();
 
-    private async void VoiceCloseButton_Click(object sender, RoutedEventArgs e)
+    private async void VoiceCloseButton_Click(object sender, RoutedEventArgs e) => await StopVoiceSessionAsync();
+
+    /// <summary>
+    /// Ends the current voice session, whether closed via the composer's X
+    /// button or via the Ctrl+Alt+V hotkey being pressed a second time while
+    /// listening.
+    /// </summary>
+    private async Task StopVoiceSessionAsync()
     {
         var wasAlwaysOn = RealtimeVoiceService.Shared.IsAlwaysOnActive;
         _voiceSessionActive = false;

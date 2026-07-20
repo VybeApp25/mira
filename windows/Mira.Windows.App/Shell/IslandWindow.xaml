@@ -764,6 +764,11 @@
                                     <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
                                                Text="Which speaker/headphones Mira's voice replies play through." />
 
+                                    <TextBlock Text="Mira Voice" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="MiraVoiceCombo" Height="26" SelectionChanged="MiraVoiceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
+                                               Text="Which voice Mira speaks with. Takes effect on the next voice session." />
+
                                     <TextBlock Text="Hey Mira" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
                                     <TextBlock x:Name="WakeWordDeviceText" Foreground="#ADB5B2" FontSize="11" TextWrapping="Wrap" />
                                     <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
