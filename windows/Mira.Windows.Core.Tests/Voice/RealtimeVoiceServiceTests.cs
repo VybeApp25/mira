@@ -1,3 +1,4 @@
+using System.Linq;
 using Mira.Windows.Core.Voice;
 using Xunit;
 
@@ -28,17 +29,51 @@ public class RealtimeVoiceServiceTests
     }
 
     [Fact]
-    public void BuildToolDefinitions_DeclaresExactlySearchWebWithARequiredQueryParameter()
+    public void BuildToolDefinitions_DeclaresSearchWebWithARequiredQueryParameter()
     {
         var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var tool = tools.Values<Newtonsoft.Json.Linq.JObject>().Single(t => (string?)t!["name"] == "search_web")!;
 
-        Assert.Single(tools);
-        var tool = (Newtonsoft.Json.Linq.JObject)tools[0];
         Assert.Equal("function", (string?)tool["type"]);
-        Assert.Equal("search_web", (string?)tool["name"]);
         Assert.Equal("object", (string?)tool["parameters"]?["type"]);
         Assert.NotNull(tool["parameters"]?["properties"]?["query"]);
         Assert.Contains("query", tool["parameters"]?["required"]?.Values<string>() ?? Array.Empty<string>());
+    }
+
+    [Fact]
+    public void BuildToolDefinitions_DeclaresExactlyThreeTools()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var names = tools.Values<Newtonsoft.Json.Linq.JObject>().Select(t => (string?)t!["name"]).ToList();
+
+        Assert.Equal(3, tools.Count);
+        Assert.Contains("search_web", names);
+        Assert.Contains("now_playing", names);
+        Assert.Contains("control_spotify", names);
+    }
+
+    [Fact]
+    public void BuildToolDefinitions_NowPlayingHasNoParameters()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var tool = tools.Values<Newtonsoft.Json.Linq.JObject>().Single(t => (string?)t!["name"] == "now_playing")!;
+
+        Assert.Equal("function", (string?)tool["type"]);
+        Assert.Empty(tool["parameters"]?["required"] ?? new Newtonsoft.Json.Linq.JArray());
+    }
+
+    [Fact]
+    public void BuildToolDefinitions_ControlSpotifyOnlyExposesImplementedActions()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var tool = tools.Values<Newtonsoft.Json.Linq.JObject>().Single(t => (string?)t!["name"] == "control_spotify")!;
+
+        var enumValues = tool["parameters"]?["properties"]?["action"]?["enum"]?.Values<string>().ToList();
+        Assert.Equal(new[] { "play_pause", "next", "previous" }, enumValues);
+        // Library actions Windows doesn't implement (favorite, playlists, follow, named-song-play)
+        // must never appear as selectable options.
+        Assert.DoesNotContain("favorite", enumValues!);
+        Assert.DoesNotContain("play_song", enumValues!);
     }
 
     [Theory]

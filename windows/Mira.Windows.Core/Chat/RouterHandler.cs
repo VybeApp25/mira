@@ -466,8 +466,8 @@ public static class RouterHandler
         return !Regex.IsMatch(uri.Host, @"^\d{1,3}(\.\d{1,3}){3}$");
     }
 
-    /// <summary>The Windows equivalent of RouterService.swift's <c>musicQuery</c> case, but on genuinely better infrastructure than Mac's own: Mac reads a private, undocumented framework (<c>MRMediaRemote</c>); Windows uses the public, documented GSMTC API already built for the Home tab (<see cref="NowPlayingBridge"/>).</summary>
-    private static Task<RouteResult> MusicQueryReplyAsync()
+    /// <summary>The Windows equivalent of RouterService.swift's <c>musicQuery</c> case, but on genuinely better infrastructure than Mac's own: Mac reads a private, undocumented framework (<c>MRMediaRemote</c>); Windows uses the public, documented GSMTC API already built for the Home tab (<see cref="NowPlayingBridge"/>). Public -- also used by voice's <c>now_playing</c> tool.</summary>
+    public static Task<RouteResult> MusicQueryReplyAsync()
     {
         var np = NowPlayingBridge.Current;
         var text = np is { HasContent: true }
@@ -499,29 +499,35 @@ public static class RouterHandler
                 MiraRoute.SpotifyControl);
         }
 
-        var np = NowPlayingBridge.Current;
-        if (np is null)
-        {
-            return new RouteResult(RouteResultKind.NotAvailable, "I can't reach media controls right now.", MiraRoute.SpotifyControl);
-        }
+        var text = await RunSpotifyActionAsync(action);
+        return new RouteResult(RouteResultKind.Reply, text, MiraRoute.SpotifyControl);
+    }
 
-        string reply;
+    /// <summary>
+    /// Runs a basic-transport media action and returns the spoken-friendly
+    /// result -- extracted so voice's <c>control_spotify</c> tool
+    /// (<see cref="Voice.RealtimeVoiceService"/>) can reuse the exact same
+    /// GSMTC-backed logic as the chat SpotifyControl route above, instead of
+    /// going through <see cref="DetectSpotifyAction"/>'s text parsing (voice
+    /// passes a clean action enum directly via its tool schema).
+    /// </summary>
+    public static async Task<string> RunSpotifyActionAsync(SpotifyAction action)
+    {
+        var np = NowPlayingBridge.Current;
+        if (np is null) return "I can't reach media controls right now.";
+
         switch (action)
         {
             case SpotifyAction.Next:
                 await np.NextTrackAsync();
-                reply = "Skipped.";
-                break;
+                return "Skipped.";
             case SpotifyAction.Previous:
                 await np.PreviousTrackAsync();
-                reply = "Went back.";
-                break;
+                return "Went back.";
             default:
                 await np.TogglePlayPauseAsync();
-                reply = "Done.";
-                break;
+                return "Done.";
         }
-        return new RouteResult(RouteResultKind.Reply, reply, MiraRoute.SpotifyControl);
     }
 
     public enum SpotifyAction { Toggle, Next, Previous, Unsupported }

@@ -595,10 +595,20 @@ public sealed class RealtimeVoiceService : IDisposable
     }
 
     /// <summary>
-    /// The single tool this port declares -- matches <c>MiraToolService.definitions</c>'s
-    /// own <c>search_web</c> schema exactly (name, description, and the required
-    /// <c>query</c> string parameter), pulled into its own pure method so the shape is
-    /// directly testable without a live connection.
+    /// The tools this port declares. <c>search_web</c> matches
+    /// <c>MiraToolService.definitions</c>'s own schema exactly (name, description,
+    /// and the required <c>query</c> string parameter). <c>now_playing</c> and
+    /// <c>control_spotify</c> were added after a user report that voice couldn't
+    /// answer "what song is this" or "pause the music" -- both already exist for
+    /// text chat via <see cref="RouterHandler"/>'s GSMTC-backed
+    /// <c>MusicQueryReplyAsync</c>/basic-transport Spotify control, just not
+    /// exposed as voice tools yet. Unlike Mac's own free-text <c>control_spotify</c>
+    /// action parsing, this declares a strict <c>action</c> enum with only the
+    /// subset Windows actually implements (play/pause/skip/back) -- library
+    /// actions (favorite, playlists, follow, named-song-play) aren't offered as
+    /// selectable options at all, rather than being selectable and then declined.
+    /// Pulled into its own pure method so the shape is directly testable without
+    /// a live connection.
     /// </summary>
     public static JArray BuildToolDefinitions() => new()
     {
@@ -614,6 +624,28 @@ public sealed class RealtimeVoiceService : IDisposable
                 ["required"] = new JArray { "query" },
             },
         },
+        new JObject
+        {
+            ["type"] = "function",
+            ["name"] = "now_playing",
+            ["description"] = "Identify the song currently playing (title and artist). Use whenever the user asks \"what song is this,\" \"what's playing,\" or similar.",
+            ["parameters"] = new JObject { ["type"] = "object", ["properties"] = new JObject(), ["required"] = new JArray() },
+        },
+        new JObject
+        {
+            ["type"] = "function",
+            ["name"] = "control_spotify",
+            ["description"] = "Basic playback control for whatever media session is currently active (Spotify or any other player): play/pause, skip to the next track, or go back to the previous track.",
+            ["parameters"] = new JObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JObject
+                {
+                    ["action"] = new JObject { ["type"] = "string", ["enum"] = new JArray { "play_pause", "next", "previous" }, ["description"] = "Which transport action to perform" },
+                },
+                ["required"] = new JArray { "action" },
+            },
+        },
     };
 
     /// <summary>Executes a tool call and reports the result back, mirroring the Swift original's <c>runTool</c> exactly (function_call_output, then response.create so the model speaks the result).</summary>
@@ -622,6 +654,8 @@ public sealed class RealtimeVoiceService : IDisposable
         var output = name switch
         {
             "search_web" => await ExecuteSearchWebToolAsync(argsJson),
+            "now_playing" => (await RouterHandler.MusicQueryReplyAsync()).Text,
+            "control_spotify" => await ExecuteControlSpotifyToolAsync(argsJson),
             _ => $"Unknown tool '{name}'.",
         };
 
@@ -651,6 +685,22 @@ public sealed class RealtimeVoiceService : IDisposable
 
         var answer = await RouterHandler.RunWebSearchAsync(query, CancellationToken.None);
         return answer ?? $"Opened a search for '{query}' in your browser.";
+    }
+
+    /// <summary>Maps the tool's strict <c>action</c> enum to <see cref="RouterHandler.SpotifyAction"/> and reuses the same GSMTC-backed transport call the chat SpotifyControl route makes.</summary>
+    private static async Task<string> ExecuteControlSpotifyToolAsync(string argsJson)
+    {
+        string action;
+        try { action = (string?)JObject.Parse(argsJson)["action"] ?? ""; }
+        catch { action = ""; }
+
+        var spotifyAction = action switch
+        {
+            "next" => RouterHandler.SpotifyAction.Next,
+            "previous" => RouterHandler.SpotifyAction.Previous,
+            _ => RouterHandler.SpotifyAction.Toggle,
+        };
+        return await RouterHandler.RunSpotifyActionAsync(spotifyAction);
     }
 
     /// <summary>
