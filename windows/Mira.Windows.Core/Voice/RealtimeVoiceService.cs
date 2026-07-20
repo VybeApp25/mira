@@ -607,6 +607,15 @@ public sealed class RealtimeVoiceService : IDisposable
     /// subset Windows actually implements (play/pause/skip/back) -- library
     /// actions (favorite, playlists, follow, named-song-play) aren't offered as
     /// selectable options at all, rather than being selectable and then declined.
+    /// <c>play_video</c> and <c>control_computer</c> were added after a user
+    /// report that "pull up YouTube" ran a plain web search instead of opening
+    /// YouTube, and "click on the first one" got "I can't control your mouse" --
+    /// matching Mac's own split exactly: <c>play_video</c> is the instant,
+    /// no-agent path for watch requests (Mac's own description explicitly says
+    /// never use <c>control_computer</c> for these), while <c>control_computer</c>
+    /// is reserved for genuine multi-step screen automation and reuses the exact
+    /// same <see cref="RouterHandler.ComputerUseReplyAsync"/> gating chat already
+    /// has (off unless the user enabled autonomous mode in Settings).
     /// Pulled into its own pure method so the shape is directly testable without
     /// a live connection.
     /// </summary>
@@ -646,6 +655,30 @@ public sealed class RealtimeVoiceService : IDisposable
                 ["required"] = new JArray { "action" },
             },
         },
+        new JObject
+        {
+            ["type"] = "function",
+            ["name"] = "play_video",
+            ["description"] = "INSTANTLY open YouTube results for a video the user wants to WATCH -- game highlights, a clip, a trailer, a music video, \"show me / play / pull it up / put on\" a video, or anything mentioning YouTube. Opens the results page (top clip first) and returns immediately. ALWAYS use this for watch requests instead of control_computer -- never spin up desktop control just to open a video. Resolve \"it\"/\"them\"/\"those\" from the conversation into a full search query.",
+            ["parameters"] = new JObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JObject { ["query"] = new JObject { ["type"] = "string", ["description"] = "Full search query, e.g. 'USA vs Bosnia highlights last night' or 'Oppenheimer official trailer'" } },
+                ["required"] = new JArray { "query" },
+            },
+        },
+        new JObject
+        {
+            ["type"] = "function",
+            ["name"] = "control_computer",
+            ["description"] = "Physically control the user's Windows PC for a genuine MULTI-STEP task that needs mouse/keyboard automation: open an app and reply to an email, fill out a form, navigate through an app's UI, click through several steps. This is slow (a live vision loop) -- use it ONLY when the task truly needs it. To simply WATCH a video, use play_video instead -- it is instant. Requires the user to have turned on autonomous/computer-use mode in Settings; if it's off, this will explain that rather than acting.",
+            ["parameters"] = new JObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JObject { ["task"] = new JObject { ["type"] = "string", ["description"] = "Complete, self-contained description of the multi-step task, including context from the conversation" } },
+                ["required"] = new JArray { "task" },
+            },
+        },
     };
 
     /// <summary>Executes a tool call and reports the result back, mirroring the Swift original's <c>runTool</c> exactly (function_call_output, then response.create so the model speaks the result).</summary>
@@ -656,6 +689,8 @@ public sealed class RealtimeVoiceService : IDisposable
             "search_web" => await ExecuteSearchWebToolAsync(argsJson),
             "now_playing" => (await RouterHandler.MusicQueryReplyAsync()).Text,
             "control_spotify" => await ExecuteControlSpotifyToolAsync(argsJson),
+            "play_video" => ExecutePlayVideoTool(argsJson),
+            "control_computer" => await ExecuteControlComputerToolAsync(argsJson),
             _ => $"Unknown tool '{name}'.",
         };
 
@@ -701,6 +736,36 @@ public sealed class RealtimeVoiceService : IDisposable
             _ => RouterHandler.SpotifyAction.Toggle,
         };
         return await RouterHandler.RunSpotifyActionAsync(spotifyAction);
+    }
+
+    /// <summary>Reuses the exact same instant YouTube-open call the chat VideoPlayback route makes -- no agent, just a browser open.</summary>
+    private static string ExecutePlayVideoTool(string argsJson)
+    {
+        string query;
+        try { query = (string?)JObject.Parse(argsJson)["query"] ?? ""; }
+        catch { query = ""; }
+        return string.IsNullOrWhiteSpace(query) ? "I need to know what to search for on YouTube." : RouterHandler.OpenVideoSearch(query);
+    }
+
+    /// <summary>
+    /// Reuses the exact same gated screen-automation call the chat ComputerUse
+    /// route makes (<see cref="RouterHandler.ComputerUseReplyAsync"/>) -- same
+    /// autonomous-mode opt-in check, same risky-action confirmation text, same
+    /// <see cref="Vision.ComputerUseOrchestrator"/>. A confirmation-required
+    /// result is simply spoken as-is; voice has no mechanism yet to track a
+    /// pending confirmation across turns, so a verbal "yes" afterward won't
+    /// auto-resume the action -- a known, honestly-scoped limitation rather
+    /// than a silent gap.
+    /// </summary>
+    private static async Task<string> ExecuteControlComputerToolAsync(string argsJson)
+    {
+        string task;
+        try { task = (string?)JObject.Parse(argsJson)["task"] ?? ""; }
+        catch { task = ""; }
+        if (string.IsNullOrWhiteSpace(task)) return "I need a description of what to do.";
+
+        var result = await RouterHandler.ComputerUseReplyAsync(task, CancellationToken.None);
+        return result.Text;
     }
 
     /// <summary>

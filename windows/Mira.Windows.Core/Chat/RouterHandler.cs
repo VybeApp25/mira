@@ -95,7 +95,7 @@ public static class RouterHandler
     /// off by default) — otherwise it falls back to a plain reply explaining
     /// that, rather than silently doing nothing or silently acting without consent.
     /// </summary>
-    private static async Task<RouteResult> ComputerUseReplyAsync(string prompt, CancellationToken ct)
+    public static async Task<RouteResult> ComputerUseReplyAsync(string prompt, CancellationToken ct)
     {
         if (!AutonomySettings.ComputerUseEnabled)
         {
@@ -366,17 +366,29 @@ public static class RouterHandler
     }
 
     /// <summary>The Windows equivalent of RouterService.swift's <c>videoPlayback</c> case — deterministic, no Claude call: clean the query, open YouTube's search results.</summary>
-    private static RouteResult VideoPlaybackReply(string prompt)
+    private static RouteResult VideoPlaybackReply(string prompt) =>
+        new(RouteResultKind.Reply, OpenVideoSearch(VideoQuery(prompt)), MiraRoute.VideoPlayback);
+
+    /// <summary>
+    /// Instantly opens YouTube search results for <paramref name="query"/> --
+    /// no agent, no screenshots, just a browser open, mirroring the Swift
+    /// original's dedicated <c>play_video</c> tool (explicitly separate from
+    /// <c>control_computer</c>, which is reserved for genuine multi-step
+    /// automation). Shared by the chat VideoPlayback route above (which derives
+    /// <paramref name="query"/> via <see cref="VideoQuery"/>'s filler-stripping)
+    /// and voice's <c>play_video</c> tool (which gets a clean query directly
+    /// from the model, no stripping needed).
+    /// </summary>
+    public static string OpenVideoSearch(string query)
     {
-        var query = VideoQuery(prompt);
         try
         {
             BrowserLauncher.Open($"https://www.youtube.com/results?search_query={Uri.EscapeDataString(query)}");
-            return new RouteResult(RouteResultKind.Reply, $"Pulling up \"{query}\" on YouTube in your browser — top result's right there.", MiraRoute.VideoPlayback);
+            return $"Pulling up \"{query}\" on YouTube in your browser — top result's right there.";
         }
         catch
         {
-            return new RouteResult(RouteResultKind.Reply, "I couldn't work out what to search for — try naming the video.", MiraRoute.VideoPlayback);
+            return "I couldn't open that in your browser.";
         }
     }
 

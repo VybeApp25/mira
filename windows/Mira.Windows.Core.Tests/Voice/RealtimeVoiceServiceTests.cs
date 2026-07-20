@@ -41,15 +41,42 @@ public class RealtimeVoiceServiceTests
     }
 
     [Fact]
-    public void BuildToolDefinitions_DeclaresExactlyThreeTools()
+    public void BuildToolDefinitions_DeclaresExactlyFiveTools()
     {
         var tools = RealtimeVoiceService.BuildToolDefinitions();
         var names = tools.Values<Newtonsoft.Json.Linq.JObject>().Select(t => (string?)t!["name"]).ToList();
 
-        Assert.Equal(3, tools.Count);
+        Assert.Equal(5, tools.Count);
         Assert.Contains("search_web", names);
         Assert.Contains("now_playing", names);
         Assert.Contains("control_spotify", names);
+        Assert.Contains("play_video", names);
+        Assert.Contains("control_computer", names);
+    }
+
+    [Fact]
+    public void BuildToolDefinitions_PlayVideoRequiresQuery()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var tool = tools.Values<Newtonsoft.Json.Linq.JObject>().Single(t => (string?)t!["name"] == "play_video")!;
+
+        Assert.Equal("function", (string?)tool["type"]);
+        Assert.NotNull(tool["parameters"]?["properties"]?["query"]);
+        Assert.Contains("query", tool["parameters"]?["required"]?.Values<string>() ?? Array.Empty<string>());
+    }
+
+    [Fact]
+    public void BuildToolDefinitions_ControlComputerRequiresTask()
+    {
+        var tools = RealtimeVoiceService.BuildToolDefinitions();
+        var tool = tools.Values<Newtonsoft.Json.Linq.JObject>().Single(t => (string?)t!["name"] == "control_computer")!;
+
+        Assert.Equal("function", (string?)tool["type"]);
+        Assert.NotNull(tool["parameters"]?["properties"]?["task"]);
+        Assert.Contains("task", tool["parameters"]?["required"]?.Values<string>() ?? Array.Empty<string>());
+        // Mac's own description explicitly steers the model away from using this
+        // for video/watch requests -- confirm the port kept that guidance.
+        Assert.Contains("play_video", (string?)tool["description"] ?? "");
     }
 
     [Fact]
