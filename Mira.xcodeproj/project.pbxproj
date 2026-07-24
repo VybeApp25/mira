@@ -155,6 +155,7 @@
 		6B44686F1F7AE50B7A3ECFBE /* KnowledgeImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */; };
 		6BF2AC0495AE8F975033F4D8 /* CallModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3C803AA19621D1944B4FBA /* CallModels.swift */; };
 		6CF9EF47A828BFECFEB24AB9 /* GroundingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D41497F7635F087FD3D293 /* GroundingService.swift */; };
+		6E47F814B4E3E3FE9A329E25 /* AgentTaskLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2367522465C644BA053A40E7 /* AgentTaskLifecycleTests.swift */; };
 		705A9CD000BDFFB117C7E404 /* OnboardingNarrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B4FD4FFA5539F9EDC9F1DE /* OnboardingNarrator.swift */; };
 		713DA3CACD91572D8939C588 /* CodexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF6665B0465EE94AD47A55B /* CodexService.swift */; };
 		7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */; };
@@ -246,6 +247,7 @@
 		B9346FC64CCF6A05E8DA358D /* skill-up.wav in Resources */ = {isa = PBXBuildFile; fileRef = EF8119ECAE1C7A35BEE1D5B7 /* skill-up.wav */; };
 		B9B9F936F0A92699E25BA606 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */; };
 		BB26C7ACD6AAE5F3CCD3B3B8 /* ComputerUseTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */; };
+		BC60E6C2321B66C168EE7EC7 /* HUDStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ADF6BF355189E5EF73DBB2F /* HUDStateMachineTests.swift */; };
 		BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */; };
 		BE920249C6E6429E497C7954 /* PolicyWeightStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */; };
 		BF26435153371D1BBC560BE2 /* obsidian.md in Resources */ = {isa = PBXBuildFile; fileRef = 8F4F81E8FA81740E9B72884C /* obsidian.md */; };
@@ -352,6 +354,16 @@
 		FFD6E7D16C01F5E9BF1CB61E /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7230251B147A0AA2C01D691 /* WeatherService.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		26FF64D365CE97F5010A6E81 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3646508DA08F58E0B720B9B9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FCE4BAB270C9879CEFDFA543;
+			remoteInfo = Mira;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		01ACF9118D36B54D9E00146F /* ComputerUseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseService.swift; sourceTree = "<group>"; };
 		041B7A6A32E7D953B37E758B /* reminders_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = reminders_rw.py; sourceTree = "<group>"; };
@@ -368,6 +380,7 @@
 		088180F819F6CAD079F973DB /* googledrive.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googledrive.md; sourceTree = "<group>"; };
 		08A5AC40C1042DAD57BCF102 /* EngineRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRouter.swift; sourceTree = "<group>"; };
 		090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDWindowManager.swift; sourceTree = "<group>"; };
+		0ADF6BF355189E5EF73DBB2F /* HUDStateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDStateMachineTests.swift; sourceTree = "<group>"; };
 		0B0C8CBB3FF39C09431B7076 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryStore.swift; sourceTree = "<group>"; };
 		0C866D699E86AEDCD53A7217 /* TriggersTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriggersTabView.swift; sourceTree = "<group>"; };
@@ -396,6 +409,7 @@
 		2092349BB2AA496891F90AE4 /* notes_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = notes_rw.py; sourceTree = "<group>"; };
 		216189A0F0FB6DEF096C0C03 /* googledocs.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googledocs.md; sourceTree = "<group>"; };
 		21A7D9D513B1CB993680D6A8 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
+		2367522465C644BA053A40E7 /* AgentTaskLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskLifecycleTests.swift; sourceTree = "<group>"; };
 		2401A65BD01B1E1859DD4B36 /* server.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = server.js; sourceTree = "<group>"; };
 		2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentProcessManager.swift; sourceTree = "<group>"; };
 		2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReliabilityDashboardView.swift; sourceTree = "<group>"; };
@@ -453,6 +467,7 @@
 		4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationCard.swift; sourceTree = "<group>"; };
 		4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaKeyInterceptService.swift; sourceTree = "<group>"; };
 		4D338F3984A3F96A95ECFC9B /* ProjectEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEvent.swift; sourceTree = "<group>"; };
+		4D8C1BB7BED9F3FE55F0DA89 /* MiraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MiraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EEECA9CB745DF2B4BB66205 /* CodexBridgeConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexBridgeConfig.swift; sourceTree = "<group>"; };
 		4EF4D36984622D43BDC26EF2 /* CallAudioCaptures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioCaptures.swift; sourceTree = "<group>"; };
 		4EFFBF922DC370825297F52C /* github-issues.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "github-issues.md"; sourceTree = "<group>"; };
@@ -850,8 +865,18 @@
 			isa = PBXGroup;
 			children = (
 				2824EFB7442C6F4AF52C6FBE /* Mira.app */,
+				4D8C1BB7BED9F3FE55F0DA89 /* MiraTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		76825C0B6ED90D0789246B65 /* MiraTests */ = {
+			isa = PBXGroup;
+			children = (
+				2367522465C644BA053A40E7 /* AgentTaskLifecycleTests.swift */,
+				0ADF6BF355189E5EF73DBB2F /* HUDStateMachineTests.swift */,
+			);
+			path = MiraTests;
 			sourceTree = "<group>";
 		};
 		88E5225DF4D53EC61EAACEC9 /* PythonSkills */ = {
@@ -880,6 +905,7 @@
 			children = (
 				18A4F3CB8B14BD7FB49CEE7D /* Skills */,
 				B1E35459BDE79C37D5E39EE8 /* Mira */,
+				76825C0B6ED90D0789246B65 /* MiraTests */,
 				D8AA324BF4666DEB17DD11F9 /* Frameworks */,
 				6BAEE14F16EA8C85A415D967 /* Products */,
 			);
@@ -1180,6 +1206,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		4752D9F7ED6CF532DB91DA6E /* MiraTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E15B1A1909C433AC39B54B5E /* Build configuration list for PBXNativeTarget "MiraTests" */;
+			buildPhases = (
+				DE1DBAB380DAAC98C2D5166B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0F10BCED56445D44F413CB80 /* PBXTargetDependency */,
+			);
+			name = MiraTests;
+			packageProductDependencies = (
+			);
+			productName = MiraTests;
+			productReference = 4D8C1BB7BED9F3FE55F0DA89 /* MiraTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		FCE4BAB270C9879CEFDFA543 /* Mira */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 71645AA03320AAE7C1C513F1 /* Build configuration list for PBXNativeTarget "Mira" */;
@@ -1233,6 +1277,7 @@
 			projectRoot = "";
 			targets = (
 				FCE4BAB270C9879CEFDFA543 /* Mira */,
+				4752D9F7ED6CF532DB91DA6E /* MiraTests */,
 			);
 		};
 /* End PBXProject section */
@@ -1595,7 +1640,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DE1DBAB380DAAC98C2D5166B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6E47F814B4E3E3FE9A329E25 /* AgentTaskLifecycleTests.swift in Sources */,
+				BC60E6C2321B66C168EE7EC7 /* HUDStateMachineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0F10BCED56445D44F413CB80 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FCE4BAB270C9879CEFDFA543 /* Mira */;
+			targetProxy = 26FF64D365CE97F5010A6E81 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		208296D53EFA86929FAF13EC /* Release */ = {
@@ -1706,6 +1768,44 @@
 			};
 			name = Release;
 		};
+		81E3A4A4A25025795A7453B7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trevonbarbour.mira.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mira.app/Contents/MacOS/Mira";
+			};
+			name = Release;
+		};
+		945E3B06EFF1CE7ED768C4F7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trevonbarbour.mira.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mira.app/Contents/MacOS/Mira";
+			};
+			name = Debug;
+		};
 		DF9A5E3F041B6FF1857B57CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1786,6 +1886,15 @@
 			buildConfigurations = (
 				40B1443C261072C4A005B21A /* Debug */,
 				684AB6C3D72D73B8BBACC028 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E15B1A1909C433AC39B54B5E /* Build configuration list for PBXNativeTarget "MiraTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				945E3B06EFF1CE7ED768C4F7 /* Debug */,
+				81E3A4A4A25025795A7453B7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

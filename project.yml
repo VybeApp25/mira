@@ -106,3 +106,16 @@ targets:
           # that Apple's notarization service rejects in distribution builds).
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
           OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
+  MiraTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: MiraTests
+    dependencies:
+      - target: Mira
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.trevonbarbour.mira.tests
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGNING_ALLOWED: NO
