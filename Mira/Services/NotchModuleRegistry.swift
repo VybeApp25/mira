@@ -79,18 +79,33 @@ final class NotchModuleRegistry: ObservableObject {
         if selectedID == nil { selectedID = visibleModules.first?.id }
     }
 
-    /// On first run the dock would otherwise be empty, which reads as broken
-    /// rather than as "nothing pinned yet". Pin whatever is registered, up to the
-    /// cap. Runs once — the flag means a user who deliberately unpins everything
-    /// doesn't get their choices re-added on the next launch.
-    private let defaultPinsKey = "mira_notch_module_default_pins_v1"
+    /// An empty dock reads as broken rather than as "nothing pinned yet", so a
+    /// module is pinned the first time it is ever seen.
+    ///
+    /// This tracks SEEN IDS rather than a single "defaults applied" flag. The flag
+    /// version was wrong in a way that showed up immediately: it ran on the first
+    /// launch when only Weather existed, marked itself done, and then every module
+    /// added later — by this build or any future app update — was silently left
+    /// unpinned. Recording ids instead means new modules get pinned when they
+    /// appear, while a module the user deliberately unpins stays unpinned, because
+    /// its id has already been seen.
+    private let seenModulesKey = "mira_notch_modules_seen_v1"
 
     private func applyDefaultPinsIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: defaultPinsKey) else { return }
-        guard !modules.isEmpty else { return }
-        pinnedIDs = Array(visibleModules.prefix(Self.maxPinned).map(\.id))
+        var seen = Set(UserDefaults.standard.stringArray(forKey: seenModulesKey) ?? [])
+        var changed = false
+
+        for module in visibleModules where !seen.contains(module.id) {
+            seen.insert(module.id)
+            changed = true
+            if pinnedIDs.count < Self.maxPinned, !pinnedIDs.contains(module.id) {
+                pinnedIDs.append(module.id)
+            }
+        }
+
+        guard changed else { return }
+        UserDefaults.standard.set(Array(seen), forKey: seenModulesKey)
         UserDefaults.standard.set(pinnedIDs, forKey: pinnedKey)
-        UserDefaults.standard.set(true, forKey: defaultPinsKey)
     }
 
     func register(_ newModules: [any NotchModule]) {

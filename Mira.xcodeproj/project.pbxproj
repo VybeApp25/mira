@@ -344,6 +344,7 @@
 		F589FCE7A2CF1542A4DA073B /* youtube-content.md in Resources */ = {isa = PBXBuildFile; fileRef = 92504D55469DFD30F82D1CE6 /* youtube-content.md */; };
 		F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */; };
 		F74BDDCA2F6C86B24F6E213C /* googlesheets.md in Resources */ = {isa = PBXBuildFile; fileRef = E0C3193DA00933B0BD1B5B4E /* googlesheets.md */; };
+		F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */; };
 		F84804BC8E9238CA2534CC14 /* AgentRecommendation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC35A0516A020B690B3C1904 /* AgentRecommendation.swift */; };
 		F8DA8ED87428CC67DCC7B272 /* TeachingHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E725D6F6415478DAE245772 /* TeachingHUD.swift */; };
 		F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */; };
@@ -528,6 +529,7 @@
 		7A3D097DC5931A0FF5E7CA5D /* NotchGeometryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchGeometryProvider.swift; sourceTree = "<group>"; };
 		7A684DFA80C324D18C0D0EB5 /* notion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = notion.md; sourceTree = "<group>"; };
 		7C46953D1361F747CFB25E28 /* FailureMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureMemory.swift; sourceTree = "<group>"; };
+		7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemModule.swift; sourceTree = "<group>"; };
 		7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeBridge.swift; sourceTree = "<group>"; };
 		7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJobStore.swift; sourceTree = "<group>"; };
 		7EABAFC55507CAA7A38F7F58 /* narration-32avewxye1iet.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-32avewxye1iet.mp3"; sourceTree = "<group>"; };
@@ -817,6 +819,7 @@
 		503EC2541417075E485E2BB5 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
+				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
 			);
 			path = Modules;
@@ -1595,6 +1598,7 @@
 				8A133C5A0C621D99DDBA8C8E /* SuccessObserver.swift in Sources */,
 				9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */,
 				2CB842A914171B3FBE05C76B /* SystemHUDView.swift in Sources */,
+				F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */,
 				2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */,
 				54B4D7164B0307CA0AA8DB8F /* SystemVolumeControl.swift in Sources */,
 				7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */,

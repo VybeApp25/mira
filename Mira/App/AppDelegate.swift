@@ -83,7 +83,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Phase 0 notch modules. Registration order is the initial carousel order;
         // the user's saved order takes over once they reorder anything.
         NotchModuleRegistry.shared.register([
-            WeatherModule()
+            WeatherModule(),
+            SystemModule()
         ])
 
         // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused

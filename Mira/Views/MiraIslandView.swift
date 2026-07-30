@@ -132,7 +132,9 @@ struct MiraIslandView: View {
     /// drawn — it hides below two pinned modules, and reserving space for a strip
     /// that isn't there leaves a black band under the panel.
     private var moduleChromeHeight: CGFloat {
-        38 + (moduleRegistry.pinnedModules.count > 1 ? 40 : 0)
+        // navBar 38, then the measured 21pt gap + 28pt dock circles + 12pt of
+        // strip padding, only when the strip is actually drawn.
+        38 + (moduleRegistry.pinnedModules.count > 1 ? 21 + 40 : 0)
     }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
@@ -740,7 +742,9 @@ struct MiraIslandView: View {
             // draws the header, back chip, and collapse affordance around it.
             // The pinned dock strip sits below the panel, detached, matching
             // MacNotch's floating circular row.
-            VStack(spacing: 6) {
+            // 21pt gap measured from MacNotch: its dock strip floats detached
+            // below the slab rather than being attached to it.
+            VStack(spacing: 21) {
                 NotchModuleShellView(notchBandHeight: 30) {
                     animController.collapse()
                 }

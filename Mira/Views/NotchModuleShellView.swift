@@ -54,6 +54,20 @@ struct NotchModuleShellView: View {
                     content(for: module)
                     header(for: module)
                 }
+                // Horizontal swipe is the PRIMARY navigation between modules —
+                // MacNotch's own settings call it "the horizontal swipe carousel"
+                // and the pinned dock is only a shortcut into it. Trackpad scroll
+                // and drag both work; a drag is what a mouse user reaches for.
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { value in
+                            // Ignore mostly-vertical drags so scrolling a module's
+                            // own content never flips to the next module.
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            registry.advance(by: value.translation.width < 0 ? 1 : -1)
+                        }
+                )
                 // Bottom corners match the slab's expanded radius so the module
                 // ends flush with the panel instead of squaring off inside it.
                 .clipShape(
