@@ -21,6 +21,75 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Artwork colour
+
+/// Pulls a vivid accent out of album artwork so the waveform is tinted by what's
+/// playing rather than being a flat white. MacNotch does this — with a yellow
+/// album its bars are gold — and it's most of why their collapsed media reads as
+/// designed rather than generic.
+///
+/// Cached by artwork identity: this runs on the main actor and the waveform
+/// redraws 30x a second, so recomputing per frame would be absurd.
+@MainActor
+enum ArtworkAccent {
+
+    private static var cache: [ObjectIdentifier: Color] = [:]
+    private static let fallback = Color.white.opacity(0.80)
+
+    static func color(for image: NSImage?) -> Color {
+        guard let image else { return fallback }
+        let key = ObjectIdentifier(image)
+        if let hit = cache[key] { return hit }
+
+        let result = compute(image) ?? fallback
+        // Bounded so a long session with many tracks can't grow without limit.
+        if cache.count > 32 { cache.removeAll() }
+        cache[key] = result
+        return result
+    }
+
+    /// Averages the most saturated pixels of a downsampled copy. Weighting by
+    /// saturation avoids the washed-out grey you get from averaging everything,
+    /// which is what makes naive dominant-colour extraction look muddy.
+    private static func compute(_ image: NSImage) -> Color? {
+        let side = 16
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+
+        var rSum = 0.0, gSum = 0.0, bSum = 0.0, wSum = 0.0
+        for y in 0..<side {
+            for x in 0..<side {
+                guard let c = rep.colorAt(x: x, y: y) else { continue }
+                let r = Double(c.redComponent), g = Double(c.greenComponent), b = Double(c.blueComponent)
+                let maxC = max(r, g, b), minC = min(r, g, b)
+                let sat = maxC <= 0 ? 0 : (maxC - minC) / maxC
+                // Ignore near-black and near-white; they carry no hue.
+                guard maxC > 0.18, minC < 0.96 else { continue }
+                let w = sat * sat * maxC
+                rSum += r * w; gSum += g * w; bSum += b * w; wSum += w
+            }
+        }
+        guard wSum > 0.001 else { return nil }
+
+        // Lift toward full brightness so the bars stay legible on black.
+        var r = rSum / wSum, g = gSum / wSum, b = bSum / wSum
+        let peak = max(r, g, b)
+        if peak > 0 {
+            let lift = min(1.0 / peak, 1.6)
+            r *= lift; g *= lift; b *= lift
+        }
+        return Color(red: min(r, 1), green: min(g, 1), blue: min(b, 1))
+    }
+}
+
 // MARK: - Track-change detection
 
 /// Publishes a brief "just changed" window so the pill can widen and name the
@@ -123,18 +192,18 @@ struct CollapsedMediaEarsView: View {
             Image(nsImage: art)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: 20, height: 20)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
                 )
         } else {
             // Placeholder keeps the ear's width stable while artwork loads, so
             // the pill doesn't jitter a moment after a track starts.
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.white.opacity(0.10))
-                .frame(width: 20, height: 20)
+                .frame(width: 22, height: 22)
                 .overlay(
                     Image(systemName: "music.note")
                         .font(.system(size: 9, weight: .medium))
@@ -148,8 +217,10 @@ struct CollapsedMediaEarsView: View {
     private var rightEar: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            MediaWaveform(isPlaying: info.isPlaying, reduceMotion: reduceMotion)
-                .frame(width: 26, height: 14)
+            MediaWaveform(isPlaying: info.isPlaying,
+                          reduceMotion: reduceMotion,
+                          tint: ArtworkAccent.color(for: info.artwork))
+                .frame(width: 30, height: 17)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, 12)
@@ -166,10 +237,14 @@ private struct MediaWaveform: View {
 
     let isPlaying: Bool
     let reduceMotion: Bool
+    /// Taken from the album artwork, so the bars carry the record's colour.
+    let tint: Color
 
-    private static let bars = 5
-    private static let phases: [Double] = [0.0, 0.9, 1.8, 0.45, 1.35]
-    private static let speeds: [Double] = [3.1, 2.4, 3.6, 2.8, 3.3]
+    // Seven thin bars rather than five thick ones — denser reads as a level
+    // meter, sparser reads as a loading indicator.
+    private static let bars = 7
+    private static let phases: [Double] = [0.0, 0.9, 1.8, 0.45, 1.35, 2.2, 0.7]
+    private static let speeds: [Double] = [3.1, 2.4, 3.6, 2.8, 3.3, 2.6, 3.9]
 
     var body: some View {
         if reduceMotion || !isPlaying {
@@ -190,11 +265,11 @@ private struct MediaWaveform: View {
     }
 
     private func bars(_ height: @escaping (Int) -> Double) -> some View {
-        HStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 1.5) {
             ForEach(0..<Self.bars, id: \.self) { i in
                 Capsule()
-                    .fill(Color.white.opacity(0.80))
-                    .frame(width: 2.5)
+                    .fill(tint)
+                    .frame(width: 2)
                     .frame(maxHeight: .infinity)
                     .scaleEffect(y: height(i), anchor: .center)
             }
