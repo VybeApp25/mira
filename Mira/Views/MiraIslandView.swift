@@ -264,7 +264,16 @@ struct MiraIslandView: View {
             } else if isExpanded {
                 expandedContent
                     .opacity(animController.contentVisible ? 1 : 0)
+                    // The moving half of frame-snap-then-animate-content. The frame
+                    // is already at its final size by the time this runs (expand()
+                    // delays contentVisible ~0.16s), so the content settles INTO a
+                    // stationary panel instead of riding it open. Small on purpose —
+                    // at more than a few points it reads as a slide-in.
+                    .offset(y: animController.contentVisible ? 0 : -7)
                     .animation(.easeInOut(duration: 0.14), value: animController.contentVisible)
+                    .animation(reduceMotion ? nil
+                                            : .spring(response: 0.30, dampingFraction: 0.85),
+                               value: animController.contentVisible)
             } else {
                 collapsedContent
                     .opacity(animController.contentVisible ? 0 : 1)
@@ -342,14 +351,24 @@ struct MiraIslandView: View {
             x: 0,
             y: isExpanded ? 22 : 6
         )
-        .animation(
-            reduceMotion
-                ? .easeInOut(duration: 0.10)
-                : (isExpanded
-                    ? .spring(response: 0.40, dampingFraction: 0.74, blendDuration: 0)
-                    : .spring(response: 0.30, dampingFraction: 0.82, blendDuration: 0)),
-            value: isExpanded
-        )
+        // FRAME SNAPS — measured behavior, not taste.
+        //
+        // Polling MacNotch's window server every 3ms across three hover cycles
+        // returned ZERO intermediate sizes: 930x112 -> 1080x230 in a single
+        // sample. A 300ms spring would have produced ~100 samples. Its panel
+        // does not resize over time at all; it jumps, and every bit of motion
+        // you perceive is content moving INSIDE the new frame.
+        //
+        // Mira sprang the frame here (response 0.40 expanding / 0.30 collapsing),
+        // which is why the panel read as inflating rather than as a surface that
+        // was simply already there. `nil` kills animation for the frame, shape,
+        // and shadow. Inner `.animation(_:value:)` modifiers sit closer to their
+        // leaves and still win, so the content keeps animating — that half is
+        // driven by animController.contentVisible, which is deliberately delayed
+        // ~0.16s past the frame change so content moves into a settled frame.
+        //
+        // reduceMotion gets the same snap: there is nothing to reduce.
+        .animation(nil, value: isExpanded)
         // Animate the width change when the collapsed indicator activates/deactivates.
         .animation(
             reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),

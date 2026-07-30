@@ -85,7 +85,10 @@ struct NotchModuleShellView: View {
             }
         }
         .frame(height: registry.currentHeight)
-        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: registry.currentHeight)
+        // Same rule as the panel itself: switching to a module of a different
+        // height snaps the frame rather than springing it. Only the content
+        // crossfades. See the note on MiraIslandView's frame animation.
+        .animation(nil, value: registry.currentHeight)
         .animation(.easeInOut(duration: 0.18), value: registry.selectedID)
     }
 
