@@ -77,7 +77,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = NotchManager()
         manager.setup()
         notchManager = manager
-        MiraCursorManager.shared.activate()
+        CursorCompanionController.shared.start()   // honors the dock/undock preference
         AgentHUDWindowManager.shared.start()
 
         // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused

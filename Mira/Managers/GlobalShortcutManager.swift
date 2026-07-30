@@ -23,6 +23,7 @@ extension Notification.Name {
     static let miraDictateEnded           = Notification.Name("miraDictateEnded")
     // Draw-on-screen spatial context (⌃⌥D) — toggles the freehand draw overlay
     static let miraDrawModeToggled        = Notification.Name("miraDrawModeToggled")
+    static let miraToggleCursorCompanion  = Notification.Name("miraToggleCursorCompanion")
     // Notch-based onboarding flow
     static let miraOnboardingStarted      = Notification.Name("miraOnboardingStarted")
     // Show/hide the island in screenshots & screen recordings (demo mode)
@@ -98,6 +99,10 @@ private func miraHotKeyHandler(
             } else {
                 NotificationCenter.default.post(name: .miraDictateBegan, object: nil)
             }
+        case 6:
+            if !isRelease {
+                NotificationCenter.default.post(name: .miraToggleCursorCompanion, object: nil)
+            }
         default: break
         }
     }
@@ -115,6 +120,7 @@ final class GlobalShortcutManager {
     private var drawRef:      EventHotKeyRef?
     private var dictateRef:   EventHotKeyRef?
     private var clipboardRef: EventHotKeyRef?
+    private var cursorRef:    EventHotKeyRef?
     private var handlerRef:   EventHandlerRef?
 
     // "MIRA" encoded as OSType
@@ -155,6 +161,10 @@ final class GlobalShortcutManager {
         // keyCode 9 = V, carbonMods = cmdKey | controlKey
         RegisterEventHotKey(9, UInt32(cmdKey | controlKey),
                             clipHKID, GetApplicationEventTarget(), 0, &clipboardRef)
+        // ⌘⇧M — dock/undock the cursor companion (hardcoded, keyCode 46 = M)
+        let cursorHKID = EventHotKeyID(signature: Self.sig, id: 6)
+        RegisterEventHotKey(46, UInt32(cmdKey | shiftKey),
+                            cursorHKID, GetApplicationEventTarget(), 0, &cursorRef)
     }
 
     private func apply(_ config: ShortcutConfig, id: UInt32, into ref: inout EventHotKeyRef?) {
@@ -169,10 +179,12 @@ final class GlobalShortcutManager {
         if let r = drawRef      { UnregisterEventHotKey(r) }
         if let r = dictateRef   { UnregisterEventHotKey(r) }
         if let r = clipboardRef { UnregisterEventHotKey(r) }
+        if let r = cursorRef    { UnregisterEventHotKey(r) }
         voiceRef     = nil
         textRef      = nil
         drawRef      = nil
         dictateRef   = nil
         clipboardRef = nil
+        cursorRef    = nil
     }
 }

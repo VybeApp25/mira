@@ -321,6 +321,7 @@
 		E7770125B1AD124F5D5403A5 /* clicky-text-close.wav in Resources */ = {isa = PBXBuildFile; fileRef = 9344C492836BA77D4C12BD69 /* clicky-text-close.wav */; };
 		E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401567F80D6C5B2881BDD843 /* NotchManager.swift */; };
 		E8A5DFE9BD56F6964221CC8F /* narration-jw0xnfr9yy4n.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C6D98DE6531119E1835A4643 /* narration-jw0xnfr9yy4n.mp3 */; };
+		E8B535AB64374B962D38657C /* CursorCompanionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EF7E0EC950220C6878964F /* CursorCompanionController.swift */; };
 		E94F6F02EDBDAB3EACF251DB /* HoverDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93DBC03A1DAE3A288E46D27D /* HoverDetectionService.swift */; };
 		EA0362A436D574715FA05845 /* notion.md in Resources */ = {isa = PBXBuildFile; fileRef = 7A684DFA80C324D18C0D0EB5 /* notion.md */; };
 		EA34E17889F5809A0D65D945 /* PillStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03C7457034E97EA40219216 /* PillStateModel.swift */; };
@@ -618,6 +619,7 @@
 		BEF6665B0465EE94AD47A55B /* CodexService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexService.swift; sourceTree = "<group>"; };
 		BF8712738938AEA845880976 /* HoverPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverPreferences.swift; sourceTree = "<group>"; };
 		C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryView.swift; sourceTree = "<group>"; };
+		C1EF7E0EC950220C6878964F /* CursorCompanionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionController.swift; sourceTree = "<group>"; };
 		C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
 		C2173DE466719E2BE730C2CC /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementLocationDetector.swift; sourceTree = "<group>"; };
@@ -837,6 +839,7 @@
 				090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */,
 				8261E0EB0C3813433E9281F9 /* AnimationController.swift */,
 				5730D96274E04D43ABA9738A /* CallHUDManager.swift */,
+				C1EF7E0EC950220C6878964F /* CursorCompanionController.swift */,
 				5EACB11D9B19158691913008 /* DictationHUDWindowManager.swift */,
 				A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */,
 				3DCB04CEC46258B1B91FCFD3 /* HoverTrackingManager.swift */,
@@ -1424,6 +1427,7 @@
 				F36E27C8FAF4CD8550455FB9 /* CronScheduler.swift in Sources */,
 				7347437A0CAED43E1FB58B3F /* CronsTabView.swift in Sources */,
 				21420C753E74EF0F2F60B5B8 /* CursorBubbleService.swift in Sources */,
+				E8B535AB64374B962D38657C /* CursorCompanionController.swift in Sources */,
 				55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */,
 				604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */,
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,

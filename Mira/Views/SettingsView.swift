@@ -46,6 +46,7 @@ struct SettingsView: View {
     @AppStorage(WakeWordService.enabledKey) private var wakeWordEnabled = true
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
     @AppStorage(CodexService.sandboxBypassKey) private var codexBypassSandbox = false
+    @AppStorage(CursorCompanionController.dockedKey) private var cursorDocked = false
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
@@ -714,6 +715,31 @@ struct SettingsView: View {
                     .onChange(of: screenCompanionEnabled) {
                         NotificationCenter.default.post(name: .miraScreenCompanionChanged, object: nil)
                     }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            // Cursor companion (dock / undock)
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Show cursor companion")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Display Mira's companion bubble near your cursor. Docking hides it — voice and agents keep running. ⌘⇧M toggles it.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { !cursorDocked },
+                    set: { cursorDocked = !$0; CursorCompanionController.shared.apply() }
+                ))
+                .toggleStyle(.switch)
+                .tint(accent)
+                .labelsHidden()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
