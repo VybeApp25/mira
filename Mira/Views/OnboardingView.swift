@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVKit
 import AVFoundation
 
@@ -20,6 +21,10 @@ enum OnboardingStep: Equatable, Hashable {
     case permission(MiraPermission)
     case agentFolder
     case demoAgent
+    case demoFindInteresting
+    case demoIdentify
+    case demoDraftReply
+    case finale
     case paywall
     case done
 }
@@ -136,6 +141,10 @@ struct OnboardingView: View {
         case .permission(let perm):   PermissionStep(permission: perm, onAdvance: advance)
         case .agentFolder:            AgentFolderStep(onAdvance: advance)
         case .demoAgent:              DemoAgentStep(onAdvance: advance)
+        case .demoFindInteresting:    DemoFindInterestingStep(onAdvance: advance)
+        case .demoIdentify:           DemoIdentifyStep(onAdvance: advance)
+        case .demoDraftReply:         DemoDraftReplyStep(onAdvance: advance)
+        case .finale:                 FinaleStep(onAdvance: advance)
         case .paywall:                PaywallStep(onAdvance: { svc.completeSetup(); advance() })
         case .done:                   DoneStep(onDismiss: { svc.completeSetup(); onDismiss() })
         }
@@ -148,6 +157,10 @@ struct OnboardingView: View {
         for p in svc.missingPermissions() { s.append(.permission(p)) }
         s.append(.agentFolder)
         s.append(.demoAgent)
+        s.append(.demoFindInteresting)
+        s.append(.demoIdentify)
+        s.append(.demoDraftReply)
+        s.append(.finale)
         s.append(.paywall)
         s.append(.done)
         steps    = s
@@ -1161,6 +1174,247 @@ private struct DoneStep: View {
         .onAppear {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.60)) { scale = 1.0 }
             withAnimation(.easeOut(duration: 0.35).delay(0.1)) { opacity = 1.0 }
+        }
+    }
+}
+
+// MARK: - Capability demo steps (HeyClicky-parity onboarding)
+
+/// Shared visual for a running demo: an icon in an accent circle + a status line.
+private func demoBadge(icon: String, label: String, active: Bool = true) -> some View {
+    VStack(spacing: 14) {
+        ZStack {
+            Circle()
+                .fill(active ? accent.opacity(0.16) : Color.white.opacity(0.06))
+                .frame(width: 72, height: 72)
+            Image(systemName: icon)
+                .font(.system(size: 28))
+                .foregroundColor(active ? accent : .white.opacity(0.40))
+        }
+        Text(label)
+            .font(.system(size: 13))
+            .foregroundColor(.white.opacity(0.55))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 40)
+    }
+}
+
+private func skipDemoButton(_ action: @escaping () -> Void) -> some View {
+    Button("Skip demo", action: action)
+        .font(.system(size: 12))
+        .foregroundColor(.white.opacity(0.25))
+        .buttonStyle(.plain)
+        .padding(.bottom, 28)
+}
+
+/// Demo 1 — Mira looks at the screen and highlights something notable.
+private struct DemoFindInterestingStep: View {
+    let onAdvance: () -> Void
+    @State private var advanced = false
+    @State private var watchdog: Timer?
+    @State private var phase = "Looking at your screen…"
+
+    var body: some View {
+        VStack(spacing: 0) {
+            stepHeader(title: "Watch me look at your screen.",
+                       subtitle: "I'll spot something worth pointing out — right now.")
+            Spacer()
+            demoBadge(icon: "eye", label: phase)
+            Spacer()
+            skipDemoButton { finish() }
+        }
+        .onAppear { run() }
+        .onDisappear { watchdog?.invalidate() }
+    }
+
+    private func run() {
+        startWatchdog(15) { finish() }
+        Task {
+            _ = await OnboardingDemoRunner.shared.findSomethingInteresting()
+            phase = "That's screen awareness."
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            finish()
+        }
+    }
+
+    private func startWatchdog(_ seconds: TimeInterval, _ fire: @escaping () -> Void) {
+        watchdog = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { _ in fire() }
+    }
+
+    private func finish() {
+        guard !advanced else { return }
+        advanced = true
+        watchdog?.invalidate()
+        onAdvance()
+    }
+}
+
+/// Demo 2 — user clicks anything; Mira identifies it aloud.
+private struct DemoIdentifyStep: View {
+    let onAdvance: () -> Void
+    @State private var advanced = false
+    @State private var watchdog: Timer?
+    @State private var phase = "Click anything on your screen…"
+
+    var body: some View {
+        VStack(spacing: 0) {
+            stepHeader(title: "Point me at anything.",
+                       subtitle: "Click something on screen and I'll tell you what it is.")
+            Spacer()
+            demoBadge(icon: "hand.point.up.left", label: phase)
+            Spacer()
+            skipDemoButton { finish() }
+        }
+        .onAppear { run() }
+        .onDisappear { watchdog?.invalidate() }
+    }
+
+    private func run() {
+        // 15s safety net above the runner's own 10s click timeout.
+        watchdog = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { _ in finish() }
+        Task {
+            await OnboardingDemoRunner.shared.identifyUnderCursor()
+            phase = "I can read and act on anything you see."
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            finish()
+        }
+    }
+
+    private func finish() {
+        guard !advanced else { return }
+        advanced = true
+        watchdog?.invalidate()
+        onAdvance()
+    }
+}
+
+/// Demo 3 — Mira drafts a reply; the user approves before anything happens.
+private struct DemoDraftReplyStep: View {
+    let onAdvance: () -> Void
+    @State private var advanced = false
+    @State private var watchdog: Timer?
+    @State private var draft: String?
+    @State private var phase = "Drafting a reply from your screen…"
+
+    var body: some View {
+        VStack(spacing: 0) {
+            stepHeader(title: "I do things — but only with your OK.",
+                       subtitle: "I drafted a reply. Nothing happens until you approve it.")
+            Spacer()
+            if let draft {
+                draftCard(draft)
+            } else {
+                demoBadge(icon: "square.and.pencil", label: phase)
+            }
+            Spacer()
+            skipDemoButton { finish() }
+        }
+        .onAppear { run() }
+        .onDisappear { watchdog?.invalidate() }
+    }
+
+    private func draftCard(_ text: String) -> some View {
+        VStack(spacing: 16) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(accent.opacity(0.25), lineWidth: 0.5))
+                .overlay(
+                    Text(text)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.80))
+                        .multilineTextAlignment(.leading)
+                        .padding(18),
+                    alignment: .topLeading)
+                .frame(height: 120)
+                .padding(.horizontal, 40)
+
+            HStack(spacing: 12) {
+                Button("Discard") { finish() }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.white.opacity(0.45))
+                    .font(.system(size: 13))
+                primaryButton("Approve") { approve(text) }
+                    .frame(maxWidth: 180)
+            }
+            .padding(.horizontal, 40)
+        }
+    }
+
+    private func run() {
+        watchdog = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { _ in finish() }
+        Task {
+            let result = await OnboardingDemoRunner.shared.draftReply()
+            guard let result else { finish(); return }   // graceful: no draft → advance
+            withAnimation { draft = result }
+        }
+    }
+
+    /// Safe, reversible "action": copy to clipboard so nothing is sent anywhere.
+    private func approve(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        Task {
+            await OnboardingNarrator.shared.speakAndWait("Copied — you're always in control of what I do.")
+            finish()
+        }
+    }
+
+    private func finish() {
+        guard !advanced else { return }
+        advanced = true
+        watchdog?.invalidate()
+        onAdvance()
+    }
+}
+
+/// Finale — a personalized welcome page built from the user's real installed apps.
+private struct FinaleStep: View {
+    let onAdvance: () -> Void
+    @State private var pageURL: URL?
+    @State private var generated = false
+
+    private var userName: String {
+        MemoryStore.shared.memory(forKey: "user_name")?.value
+            ?? MemoryStore.shared.memory(forKey: "name")?.value
+            ?? NSFullUserName().components(separatedBy: " ").first
+            ?? ""
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            stepHeader(title: "One more thing.",
+                       subtitle: "I built you a welcome page — from the apps already on your Mac.")
+            Spacer()
+            demoBadge(icon: generated ? "checkmark.seal.fill" : "wand.and.stars",
+                      label: generated ? "Opened in your browser." : "Personalizing…")
+            Spacer()
+            primaryButton(generated ? "Continue →" : "…") { onAdvance() }
+                .padding(.horizontal, 40)
+                .padding(.bottom, 16)
+                .disabled(!generated)
+                .opacity(generated ? 1 : 0.4)
+            if generated, let pageURL {
+                Button("Reopen page") { NSWorkspace.shared.open(pageURL) }
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.30))
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 28)
+            } else {
+                Color.clear.frame(height: 28)
+            }
+        }
+        .onAppear { run() }
+    }
+
+    private func run() {
+        Task {
+            let url = OnboardingDemoRunner.shared.generateFinalePage(name: userName)
+            withAnimation {
+                pageURL = url
+                generated = true
+            }
         }
     }
 }

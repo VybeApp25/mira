@@ -306,6 +306,7 @@
 		DF7ED74A4C011F0D6D8FAB46 /* FileWatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01313512AA5C428B31B4E8C /* FileWatchService.swift */; };
 		DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */; };
 		E035CC20673493579EDBEEF7 /* CommunitySkillService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074634B000DC858CA2C2FBC2 /* CommunitySkillService.swift */; };
+		E0DD59CC9433DCECAFF424C8 /* OnboardingDemoRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111490EEF9590BCD876A568C /* OnboardingDemoRunner.swift */; };
 		E14FBAF9DC017FE43C87FCA7 /* IslandChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */; };
 		E1A23111FB0BBE1CC4A86CB1 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B324BC14AED4E3627AA2C7 /* Carbon.framework */; };
 		E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */; };
@@ -375,6 +376,7 @@
 		0E725D6F6415478DAE245772 /* TeachingHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingHUD.swift; sourceTree = "<group>"; };
 		0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		1029B0CDF63D0403A7704795 /* narration-3v2mm75996oxl.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-3v2mm75996oxl.mp3"; sourceTree = "<group>"; };
+		111490EEF9590BCD876A568C /* OnboardingDemoRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingDemoRunner.swift; sourceTree = "<group>"; };
 		111B0BAA1F242F751DD35E6D /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonScaffolder.swift; sourceTree = "<group>"; };
 		1315D895FDCA8EF23FBEAC5D /* narration-1v5sezddricgu.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-1v5sezddricgu.mp3"; sourceTree = "<group>"; };
@@ -998,6 +1000,7 @@
 				6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
+				111490EEF9590BCD876A568C /* OnboardingDemoRunner.swift */,
 				24B4FD4FFA5539F9EDC9F1DE /* OnboardingNarrator.swift */,
 				4486101C5C80FCD26BD6F11C /* OnboardingService.swift */,
 				872DD8FFE16217C9024800BE /* OpenAIService.swift */,
@@ -1506,6 +1509,7 @@
 				6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */,
 				54CD8C2E16FA6C1653F4BF9E /* OffscreenRenderer.swift in Sources */,
 				55BCED4E29F6C38F138C653C /* OnboardingDemoOverlay.swift in Sources */,
+				E0DD59CC9433DCECAFF424C8 /* OnboardingDemoRunner.swift in Sources */,
 				705A9CD000BDFFB117C7E404 /* OnboardingNarrator.swift in Sources */,
 				64F9B4EBAB9046A70F262318 /* OnboardingService.swift in Sources */,
 				BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */,
