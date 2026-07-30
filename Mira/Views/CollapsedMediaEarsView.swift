@@ -103,7 +103,21 @@ final class TrackChangeMonitor: ObservableObject {
     /// True for `expandedWindow` seconds after a new track starts.
     @Published private(set) var justChanged = false
 
-    private static let expandedWindow: TimeInterval = 3.5
+    /// MEASURED from MacNotch at 60fps: its widen begins at t=250ms and the
+    /// collapse begins at t=3050ms, so the pill holds wide for ~2.8s before
+    /// returning. Was 3.5s by guess.
+    private static let expandedWindow: TimeInterval = 2.8
+
+    /// MEASURED from the same capture. MacNotch's widen overshoots and settles:
+    /// 532 -> peak 884 at 283ms -> settles to 841 by 800ms. That is a 13.9%
+    /// overshoot, which solves to a damping ratio of 0.53; a 283ms time-to-peak
+    /// gives omega_n ~= 13.1 rad/s, i.e. a SwiftUI `response` of ~0.48. The
+    /// collapse mirrors it (489 trough against a 529 rest, ~13% undershoot).
+    ///
+    /// Mira previously used response 0.36 / damping 0.80 — stiffer, and with no
+    /// perceptible bounce at all. The bounce is the character of the motion.
+    static let widenSpring = Animation.spring(response: 0.48, dampingFraction: 0.53)
+    static let settleSpring = Animation.spring(response: 0.46, dampingFraction: 0.55)
     private var lastKey = ""
     private var resetWork: DispatchWorkItem?
 
@@ -118,12 +132,10 @@ final class TrackChangeMonitor: ObservableObject {
         guard hadPrevious, !title.isEmpty else { return }   // don't fire on first load
 
         resetWork?.cancel()
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { justChanged = true }
+        withAnimation(Self.widenSpring) { justChanged = true }
 
         let work = DispatchWorkItem { [weak self] in
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                self?.justChanged = false
-            }
+            withAnimation(Self.settleSpring) { self?.justChanged = false }
         }
         resetWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.expandedWindow, execute: work)
@@ -165,20 +177,17 @@ struct CollapsedMediaEarsView: View {
         HStack(spacing: 7) {
             artwork
             if trackChange.justChanged {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(info.title)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.92))
-                        .lineLimit(1)
-                    if !info.artist.isEmpty {
-                        Text(info.artist)
-                            .font(.system(size: 9))
-                            .foregroundColor(.white.opacity(0.50))
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: 150, alignment: .leading)
-                .transition(.opacity.combined(with: .move(edge: .leading)))
+                // Title ONLY, truncated. MacNotch's widened form shows a single
+                // line at a substantial weight — no artist row. Stacking two
+                // lines of metadata into a ~30pt strip is what made the earlier
+                // version feel cramped, and their capture confirms they don't.
+                Text(info.title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.95))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 180, alignment: .leading)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
             }
             Spacer(minLength: 0)
         }

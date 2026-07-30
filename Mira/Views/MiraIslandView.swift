@@ -112,8 +112,14 @@ struct MiraIslandView: View {
         if isMediaActivity {
             // Ears need room for artwork on the left and the waveform on the
             // right. On a track change MacNotch briefly grows to name what just
-            // started, then settles — that wider form is the +190.
-            return geometry.notchWidth + (trackChange.justChanged ? 190 : 96)
+            // started, then settles.
+            //
+            // The widened size is MEASURED: its pill goes 528 -> 841px, a ratio
+            // of 1.59. Applied to the compact form here (notchWidth + 96 = 296
+            // on a 200pt cutout) that lands at ~471, i.e. notchWidth + 271. The
+            // previous +190 was a guess and came out visibly too narrow to hold
+            // a track title.
+            return geometry.notchWidth + (trackChange.justChanged ? 271 : 96)
         }
         return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
@@ -417,9 +423,10 @@ struct MiraIslandView: View {
         )
         // The track-change widen DOES animate, unlike expand/collapse. It is a
         // change of content within the collapsed state rather than the panel
-        // opening, and MacNotch visibly grows and settles here.
+        // opening, and MacNotch visibly grows, overshoots and settles here.
+        // Spring constants solved from a 60fps capture — see TrackChangeMonitor.
         .animation(
-            reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.80),
+            reduceMotion ? nil : TrackChangeMonitor.widenSpring,
             value: trackChange.justChanged
         )
     }
