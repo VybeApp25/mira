@@ -80,6 +80,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         CursorCompanionController.shared.start()   // honors the dock/undock preference
         AgentHUDWindowManager.shared.start()
 
+        // Phase 0 notch modules. Registration order is the initial carousel order;
+        // the user's saved order takes over once they reorder anything.
+        NotchModuleRegistry.shared.register([
+            WeatherModule()
+        ])
+
         // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused
         // field, plus its "Dictating…" pill. Wiring only — hotkey is registered by
         // GlobalShortcutManager; these observe the began/ended notifications.

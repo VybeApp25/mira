@@ -24,6 +24,7 @@
 		0E37A87E6432FD04DF2C441B /* ProposalModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7939C1365120ADFFBCEEE8D /* ProposalModels.swift */; };
 		0E61F11180023F3C8FD8959D /* slack.md in Resources */ = {isa = PBXBuildFile; fileRef = 56EC347B47F1C0B55FBAD734 /* slack.md */; };
 		0F2017378D1394AAD7234E25 /* AttentionDirective.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641B7CB66B672FC642BC96AE /* AttentionDirective.swift */; };
+		0F5FFF626AE4697DC94E7755 /* WeatherModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */; };
 		1069F0D23BBC741304EE2EB1 /* polymarket.py in Resources */ = {isa = PBXBuildFile; fileRef = FF06F27DEBFA930ADF8EA0F5 /* polymarket.py */; };
 		11218344D3F6CBABAA2FF89F /* IntegrationContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76009B6D8C1113E1C1AF41D5 /* IntegrationContextService.swift */; };
 		120A35C07CAF013E92053042 /* narration-1vp84a6l0zv58.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 28C31009C45886938CD2B8AD /* narration-1vp84a6l0zv58.mp3 */; };
@@ -550,6 +551,7 @@
 		8887E72ED18B616336B6B36E /* diagram_gen.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = diagram_gen.py; sourceTree = "<group>"; };
 		8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIStreamingService.swift; sourceTree = "<group>"; };
 		8BE4187651AAE648F8751542 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherModule.swift; sourceTree = "<group>"; };
 		8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWeightStore.swift; sourceTree = "<group>"; };
 		8E84D4D0882E63DE896ED342 /* blender.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = blender.md; sourceTree = "<group>"; };
 		8F4F81E8FA81740E9B72884C /* obsidian.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = obsidian.md; sourceTree = "<group>"; };
@@ -812,6 +814,14 @@
 			path = OnboardingNarration;
 			sourceTree = "<group>";
 		};
+		503EC2541417075E485E2BB5 /* Modules */ = {
+			isa = PBXGroup;
+			children = (
+				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
+			);
+			path = Modules;
+			sourceTree = "<group>";
+		};
 		568EE09BA27B987F0A0E3E2A /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -910,6 +920,7 @@
 				2E401F6C1F1D75B5AC4D5734 /* Controllers */,
 				68EE4FC6D878A7268E7A1363 /* Managers */,
 				D81C426E76C691B29275C7BA /* Models */,
+				503EC2541417075E485E2BB5 /* Modules */,
 				568EE09BA27B987F0A0E3E2A /* Resources */,
 				CF57A98103639F94D9C66435 /* Services */,
 				FD3D2137623027F8C561CFBC /* Views */,
@@ -1607,6 +1618,7 @@
 				A86BC74E8A27B141F9C8924D /* VoicePreviewService.swift in Sources */,
 				A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */,
 				A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */,
+				0F5FFF626AE4697DC94E7755 /* WeatherModule.swift in Sources */,
 				FFD6E7D16C01F5E9BF1CB61E /* WeatherService.swift in Sources */,
 				FB72595BF0D80F191EBCF18E /* WebhookServer.swift in Sources */,
 				D254FEFCAA9426DB89C17B07 /* WebsiteBuilderAgent.swift in Sources */,

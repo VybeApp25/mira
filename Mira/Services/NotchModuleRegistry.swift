@@ -59,7 +59,22 @@ final class NotchModuleRegistry: ObservableObject {
         guard !modules.contains(where: { $0.id == module.id }) else { return }
         modules.append(AnyNotchModule(module))
         applySavedOrder()
+        applyDefaultPinsIfNeeded()
         if selectedID == nil { selectedID = visibleModules.first?.id }
+    }
+
+    /// On first run the dock would otherwise be empty, which reads as broken
+    /// rather than as "nothing pinned yet". Pin whatever is registered, up to the
+    /// cap. Runs once — the flag means a user who deliberately unpins everything
+    /// doesn't get their choices re-added on the next launch.
+    private let defaultPinsKey = "mira_notch_module_default_pins_v1"
+
+    private func applyDefaultPinsIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: defaultPinsKey) else { return }
+        guard !modules.isEmpty else { return }
+        pinnedIDs = Array(visibleModules.prefix(Self.maxPinned).map(\.id))
+        UserDefaults.standard.set(pinnedIDs, forKey: pinnedKey)
+        UserDefaults.standard.set(true, forKey: defaultPinsKey)
     }
 
     func register(_ newModules: [any NotchModule]) {

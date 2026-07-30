@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, chat, shelf, camera, agents, learn, settings, crons, labs, skills }
+enum IslandTab: Equatable { case home, chat, shelf, camera, agents, learn, settings, crons, labs, skills, modules }
 
 // MARK: - Main island view
 
@@ -59,6 +59,8 @@ struct MiraIslandView: View {
     @ObservedObject private var onboarding = NotchOnboardingManager.shared
     @ObservedObject private var engine     = ProjectEngine.shared
     @ObservedObject private var pointTo    = PointToService.shared
+    // Drives the module panel's height and selection (Phase 0 shell contract).
+    @ObservedObject private var moduleRegistry = NotchModuleRegistry.shared
     // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
     // pill even when the island is closed. (miraState.realtimeState is only mirrored
     // by IslandChatView, which exists only while expanded — so in always-on/closed
@@ -113,9 +115,21 @@ struct MiraIslandView: View {
     private var collapsedDropH: CGFloat { (!isExpanded && collapsedIndicatorActive) ? 34 : 0 }
     // Settings/agents/crons are content-dense — give them the tall panel.
     private var expandedHeight: CGFloat {
-        selectedTab == .home ? AnimationController.expandedH
-                             : AnimationController.expandedTallH
+        switch selectedTab {
+        case .home:
+            return AnimationController.expandedH
+        case .modules:
+            // The module declares its own height level; add the nav bar above the
+            // panel and the detached dock strip below it. This is the whole point
+            // of the height-level enum — the shell negotiates, the module declares.
+            return moduleRegistry.currentHeight + Self.moduleChromeHeight
+        default:
+            return AnimationController.expandedTallH
+        }
     }
+
+    /// navBar (38) + dock strip (34) + the VStack spacing between them (6).
+    private static let moduleChromeHeight: CGFloat = 78
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
         // Expanded: add the notch-height band on top so seating content below the
@@ -156,6 +170,14 @@ struct MiraIslandView: View {
         // Keep the hover zone in sync with the per-tab panel height — without
         // this, moving the cursor into the lower half of a tall tab collapses it.
         .onChange(of: selectedTab) { _, _ in
+            animController.currentExpandedH = expandedHeight
+            NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
+        }
+        // Switching modules (or toggling a module's tall mode) changes the panel
+        // height too — without this the hover zone keeps the previous module's
+        // size and the panel collapses when the cursor moves into the new space.
+        .onChange(of: moduleRegistry.currentHeight) { _, _ in
+            guard selectedTab == .modules else { return }
             animController.currentExpandedH = expandedHeight
             NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
         }
@@ -633,6 +655,7 @@ struct MiraIslandView: View {
             navTab(icon: "puzzlepiece.extension.fill", label: "Skills", tab: .skills)
             navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
             navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
+            navTab(icon: "square.grid.2x2.fill", label: "Modules", tab: .modules)
 
             Spacer()
 
@@ -708,6 +731,17 @@ struct MiraIslandView: View {
         switch selectedTab {
         case .home:
             NotchHomeTabView()
+        case .modules:
+            // Phase 0 shell. The module supplies content; NotchModuleShellView
+            // draws the header, back chip, and collapse affordance around it.
+            // The pinned dock strip sits below the panel, detached, matching
+            // MacNotch's floating circular row.
+            VStack(spacing: 6) {
+                NotchModuleShellView(notchBandHeight: 30) {
+                    animController.collapse()
+                }
+                NotchModuleDockStrip()
+            }
         case .chat:
             IslandChatView(
                 miraState: miraState,
