@@ -351,6 +351,8 @@ struct AgentJob: Identifiable, Codable {
     var editSourceEntryId: UUID?
     var publishTarget: String?       // e.g. "vercel", "netlify", "github" — set for publishWebsite jobs
     var errorCategory: MiraErrorCategory?
+    /// Frozen at enqueue so the worker never interrupts the user to ask "which window?".
+    var context: TaskContextSnapshot?
 
     init(type: AgentJobType, prompt: String) {
         self.id = UUID()
@@ -374,6 +376,7 @@ struct AgentJob: Identifiable, Codable {
         self.variantOptions = nil
         self.editSourceEntryId = nil
         self.publishTarget = nil
+        self.context = nil
     }
 
     var timeElapsed: TimeInterval? {

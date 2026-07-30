@@ -249,6 +249,7 @@
 		BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */; };
 		BE920249C6E6429E497C7954 /* PolicyWeightStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */; };
 		BF26435153371D1BBC560BE2 /* obsidian.md in Resources */ = {isa = PBXBuildFile; fileRef = 8F4F81E8FA81740E9B72884C /* obsidian.md */; };
+		BF372E184A15C8EB98F9C7B8 /* TaskContextCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF958B5FD4E56A9C7FAD9C1 /* TaskContextCapture.swift */; };
 		BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */; };
 		BF602219B770443FB8E60ADC /* claude-code.md in Resources */ = {isa = PBXBuildFile; fileRef = 69D1A19C98BFF6EDB3B69816 /* claude-code.md */; };
 		BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */; };
@@ -639,6 +640,7 @@
 		CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronScheduler.swift; sourceTree = "<group>"; };
 		CF3ECA23BA4BB2FC05E4365B /* PolicyRecommendation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyRecommendation.swift; sourceTree = "<group>"; };
 		CFCBC84F4F403ECD055D720E /* NotchCameraTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchCameraTabView.swift; sourceTree = "<group>"; };
+		CFF958B5FD4E56A9C7FAD9C1 /* TaskContextCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskContextCapture.swift; sourceTree = "<group>"; };
 		D01313512AA5C428B31B4E8C /* FileWatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileWatchService.swift; sourceTree = "<group>"; };
 		D0C51B0CE61AD6DDE4EA2B06 /* google-workspace.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "google-workspace.md"; sourceTree = "<group>"; };
 		D113AC6430C7DCCF0D20698D /* VoicePreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewService.swift; sourceTree = "<group>"; };
@@ -1031,6 +1033,7 @@
 				16910211171E9C8F0190DBD8 /* SystemStats.swift */,
 				97DDDB02E420ABF8DBFE372C /* SystemVolumeControl.swift */,
 				93237F9C8CE985B51E1E1062 /* TaskAnnouncer.swift */,
+				CFF958B5FD4E56A9C7FAD9C1 /* TaskContextCapture.swift */,
 				5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */,
 				2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */,
 				AEA51C6434233B46081A0496 /* TelemetryService.swift */,
@@ -1565,6 +1568,7 @@
 				2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */,
 				54B4D7164B0307CA0AA8DB8F /* SystemVolumeControl.swift in Sources */,
 				7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */,
+				BF372E184A15C8EB98F9C7B8 /* TaskContextCapture.swift in Sources */,
 				7FC3E90009139606A47CB42F /* TaskRunLedger.swift in Sources */,
 				CE064B3D139D43C3650179C1 /* TeachingEngine.swift in Sources */,
 				F8DA8ED87428CC67DCC7B272 /* TeachingHUD.swift in Sources */,
