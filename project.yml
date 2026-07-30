@@ -96,7 +96,12 @@ targets:
           CODE_SIGN_IDENTITY: "Mira Dev"
           CODE_SIGNING_REQUIRED: YES
           CODE_SIGNING_ALLOWED: YES
-          DEVELOPMENT_TEAM: "7FD7W8SX34"
+          # DEVELOPMENT_TEAM must stay EMPTY for Debug. "Mira Dev" is a local
+          # self-signed cert (subject is a bare CN=Mira Dev with no team OU), so
+          # pairing it with the Developer ID team makes Xcode fail the build with
+          # "No certificate for team '7FD7W8SX34' matching 'Mira Dev' found".
+          # Release still signs with the real team below.
+          DEVELOPMENT_TEAM: ""
         Release:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"

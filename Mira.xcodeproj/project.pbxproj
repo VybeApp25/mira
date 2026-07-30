@@ -1219,7 +1219,6 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					FCE4BAB270C9879CEFDFA543 = {
-						DevelopmentTeam = 7FD7W8SX34;
 						ProvisioningStyle = Manual;
 					};
 				};
@@ -1676,7 +1675,7 @@
 				CODE_SIGN_IDENTITY = "Mira Dev";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 7FD7W8SX34;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Mira/Info.plist;
