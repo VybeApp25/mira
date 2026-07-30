@@ -233,11 +233,17 @@ struct NotchModuleDockStrip: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(isCurrent ? accent : .white.opacity(0.55))
                             .frame(width: 28, height: 28)
+                            // OPAQUE. At 0.55 the desktop and any window behind
+                            // showed straight through the circles, which read as
+                            // a rendering fault rather than as floating controls.
+                            // MacNotch's dock buttons are solid black.
                             .background(
-                                Circle().fill(isCurrent
-                                              ? accent.opacity(0.18)
-                                              : Color.black.opacity(0.55))
+                                ZStack {
+                                    Circle().fill(Color.black)
+                                    if isCurrent { Circle().fill(accent.opacity(0.22)) }
+                                }
                             )
+                            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
                             .overlay(
                                 Circle().strokeBorder(
                                     isCurrent ? accent.opacity(0.45) : Color.white.opacity(0.08),

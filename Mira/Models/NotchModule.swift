@@ -172,6 +172,48 @@ extension NotchModule {
     var resolvedHeight: CGFloat { resolvedHeightLevel.points }
 }
 
+// MARK: - Closure-backed module
+
+/// A module whose content is supplied by a closure.
+///
+/// Exists so Mira's pre-existing panels (Home, Chat, Agents, Shelf, Settings…)
+/// can join the carousel without being rewritten. Several of them need injected
+/// dependencies — MiraState, the overlay controller, the capture service — that
+/// are NOT singletons, so they can't be reached from a module constructed in
+/// AppDelegate. Registering from inside the island view instead lets the closure
+/// capture them from a scope where they exist.
+///
+/// New modules should conform to `NotchModule` directly. This is the migration
+/// path for what already existed, not the pattern to copy.
+@MainActor
+final class ViewModule: NotchModule {
+
+    let id: String
+    let title: String
+    let icon: String
+    let heightLevel: NotchHeightLevel
+    let allowsTallMode: Bool
+
+    private let builder: () -> AnyView
+
+    init(id: String,
+         title: String,
+         icon: String,
+         heightLevel: NotchHeightLevel = .standard,
+         allowsTallMode: Bool = false,
+         @ViewBuilder content builder: @escaping () -> some View) {
+        self.id = id
+        self.title = title
+        self.icon = icon
+        self.heightLevel = heightLevel
+        self.allowsTallMode = allowsTallMode
+        let build = builder
+        self.builder = { AnyView(build()) }
+    }
+
+    func makeContent() -> AnyView { builder() }
+}
+
 // MARK: - Type erasure
 
 /// Erases `NotchModule` so the registry can hold a heterogeneous list.

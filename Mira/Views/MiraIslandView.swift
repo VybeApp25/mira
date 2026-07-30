@@ -150,27 +150,11 @@ struct MiraIslandView: View {
         return isMediaActivity ? 0 : 34
     }
     // Settings/agents/crons are content-dense — give them the tall panel.
+    /// The selected module declares its own height. No per-tab special casing and
+    /// no nav bar to account for any more — the module IS the panel. The dock
+    /// floats outside the pill, so it adds nothing here.
     private var expandedHeight: CGFloat {
-        switch selectedTab {
-        case .home:
-            return AnimationController.expandedH
-        case .modules:
-            // The module declares its own height level; add the nav bar above the
-            // panel and the detached dock strip below it. This is the whole point
-            // of the height-level enum — the shell negotiates, the module declares.
-            return moduleRegistry.currentHeight + moduleChromeHeight
-        default:
-            return AnimationController.expandedTallH
-        }
-    }
-
-    /// navBar (38), plus the dock strip (40 incl. spacing) only when it's actually
-    /// drawn — it hides below two pinned modules, and reserving space for a strip
-    /// that isn't there leaves a black band under the panel.
-    private var moduleChromeHeight: CGFloat {
-        // navBar 38, then the measured 21pt gap + 28pt dock circles + 12pt of
-        // strip padding, only when the strip is actually drawn.
-        38 + (moduleRegistry.pinnedModules.count > 1 ? 21 + 40 : 0)
+        moduleRegistry.currentHeight
     }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
@@ -193,21 +177,28 @@ struct MiraIslandView: View {
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.40), value: pillState.mode)
             }
-            pill
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
-            if let tab = notif.object as? IslandTab {
-                withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
-            } else if let str = notif.userInfo?["tab"] as? String {
-                switch str {
-                case "agents": withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents }
-                case "labs":   withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs   }
-                default:       withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   }
+            // Dock floats DETACHED below the slab, 21pt clear of it (measured),
+            // exactly as MacNotch's does — it is not part of the panel.
+            VStack(spacing: 21) {
+                pill
+                if isExpanded {
+                    NotchModuleDockStrip()
+                        .transition(.opacity)
                 }
             }
         }
+        .onAppear { registerTabModules() }
+        // Existing "show me tab X" callers now select the matching MODULE, so
+        // every deep link across the app keeps working with the nav bar gone.
+        .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
+            if let tab = notif.object as? IslandTab {
+                moduleRegistry.select(Self.moduleID(for: tab))
+            } else if let str = notif.userInfo?["tab"] as? String {
+                moduleRegistry.select(str)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
-            withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs }
+            moduleRegistry.select("labs")
         }
         // Keep the hover zone in sync with the per-tab panel height — without
         // this, moving the cursor into the lower half of a tall tab collapses it.
@@ -500,6 +491,80 @@ struct MiraIslandView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voiceModeLabel)
     }
 
+    // MARK: - Tab → module migration
+
+    /// Maps the legacy tab enum onto module ids. Kept so deep links posted as
+    /// `IslandTab` values keep landing on the right panel.
+    private static func moduleID(for tab: IslandTab) -> String {
+        switch tab {
+        case .home:     return "home"
+        case .chat:     return "chat"
+        case .agents:   return "agents"
+        case .shelf:    return "shelf"
+        case .camera:   return "camera"
+        case .skills:   return "skills"
+        case .learn:    return "learn"
+        case .crons:    return "crons"
+        case .labs:     return "labs"
+        case .settings: return "settings"
+        case .modules:  return "weather"
+        }
+    }
+
+    /// Registers Mira's pre-existing panels as modules so the carousel is the only
+    /// navigation and nothing becomes unreachable when the nav bar goes away.
+    ///
+    /// Done here rather than in AppDelegate because several of these views need
+    /// dependencies that aren't singletons (miraState, overlay, capture, voice,
+    /// wakeWord, taskStore); registering from the view lets the closures capture
+    /// them. Registration is idempotent by id, so running on every appear is safe.
+    private func registerTabModules() {
+        moduleRegistry.register([
+            ViewModule(id: "home", title: "Home", icon: "house.fill",
+                       heightLevel: .standard) {
+                NotchHomeTabView()
+            },
+            ViewModule(id: "chat", title: "Chat", icon: "message.fill",
+                       heightLevel: .tall) {
+                IslandChatView(miraState: miraState, overlay: overlay,
+                               capture: capture, voice: voice, wakeWord: wakeWord)
+            },
+            ViewModule(id: "agents", title: "Agents", icon: "cpu.fill",
+                       heightLevel: .tall) {
+                AgentsTabView(taskStore: taskStore, miraState: miraState,
+                              overlay: overlay, capture: capture, voice: voice)
+            },
+            ViewModule(id: "shelf", title: "Shelf", icon: "tray.full",
+                       heightLevel: .standard) {
+                FileShelfLabsView()
+            },
+            ViewModule(id: "camera", title: "Camera", icon: "camera.fill",
+                       heightLevel: .standard) {
+                NotchCameraTabView()
+            },
+            ViewModule(id: "skills", title: "Skills", icon: "puzzlepiece.extension.fill",
+                       heightLevel: .tall) {
+                SkillsTabView(miraState: miraState)
+            },
+            ViewModule(id: "learn", title: "Learn", icon: "graduationcap.fill",
+                       heightLevel: .tall) {
+                LessonsTabView()
+            },
+            ViewModule(id: "crons", title: "Crons", icon: "clock.fill",
+                       heightLevel: .tall) {
+                CronsTabView()
+            },
+            ViewModule(id: "labs", title: "Labs", icon: "sparkles",
+                       heightLevel: .tall) {
+                LabsTabView()
+            },
+            ViewModule(id: "settings", title: "Settings", icon: "gearshape.fill",
+                       heightLevel: .tall) {
+                SettingsView(state: miraState, embedded: true)
+            }
+        ])
+    }
+
     private var collapsedAccent: Color {
         switch pillState.mode {
         case .listening: return DS.Colors.accent
@@ -525,10 +590,11 @@ struct MiraIslandView: View {
 
             ZStack(alignment: .top) {
                 VStack(spacing: 0) {
-                    navBar
-                    Rectangle()
-                        .fill(Color.white.opacity(0.07))
-                        .frame(height: 0.5)
+                    // NO NAV BAR. MacNotch has no tab strip — the modules ARE the
+                    // navigation, reached by swiping the carousel or tapping the
+                    // dock below the slab. Mira's old row of ten tabs across the
+                    // top was the single largest structural difference, and every
+                    // module built inside it inherited that difference.
                     if let summary = miraState.hoverSummary {
                         hoverSummaryBar(summary)
                         Rectangle()
@@ -537,8 +603,10 @@ struct MiraIslandView: View {
                     }
                     continuationBanner
                     SidecarSuggestionBanner()
-                    tabContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    NotchModuleShellView(notchBandHeight: 0) {
+                        animController.collapse()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 // Phase 2: HUD overlay — sits on top of tabs, invisible when idle
