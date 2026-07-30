@@ -57,6 +57,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Mira transcribes your voice to text."
         NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
         NSCalendarsUsageDescription: "Mira shows your upcoming events in the Home tab."
+        NSRemindersUsageDescription: "Mira shows and completes your reminders in the notch's Todo module."
         NSAppleEventsUsageDescription: "Mira reads your active browser tab to provide context-aware assistance."
         NSLocationWhenInUseUsageDescription: "Mira uses your location to show local weather on the Home tab."
         NSLocationUsageDescription: "Mira uses your location to show local weather on the Home tab."

@@ -47,6 +47,8 @@
 	<string>Mira listens for voice commands.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Mira shows and completes your reminders in the notch's Todo module.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Mira sees your screen to show you exactly where to click.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
