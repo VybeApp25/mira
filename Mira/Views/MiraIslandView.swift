@@ -63,6 +63,8 @@ struct MiraIslandView: View {
     @ObservedObject private var moduleRegistry = NotchModuleRegistry.shared
     // Rotating collapsed-strip activities (media / timer / next event).
     @ObservedObject private var liveActivity   = LiveActivityService.shared
+    // Drives the brief widen-and-name when a new track starts.
+    @ObservedObject private var trackChange    = TrackChangeMonitor.shared
     // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
     // pill even when the island is closed. (miraState.realtimeState is only mirrored
     // by IslandChatView, which exists only while expanded — so in always-on/closed
@@ -93,10 +95,26 @@ struct MiraIslandView: View {
         pillState.mode != .idle || pointTo.isActive || liveActivity.current != nil
     }
 
+    /// True when the rotating strip's current item is media AND Mira has nothing
+    /// of its own to say — media then renders in the ears rather than below.
+    private var isMediaActivity: Bool {
+        liveActivity.current?.kind == .media
+            && hudVM.statusText.isEmpty
+            && taskStore.tasks.isEmpty
+            && !pointTo.isActive
+            && voiceModeLabel == nil
+    }
+
     // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
     private var pillW: CGFloat {
         if isOnboarding || isExpanded { return AnimationController.expandedW }
         guard collapsedIndicatorActive else { return geometry.notchWidth }
+        if isMediaActivity {
+            // Ears need room for artwork on the left and the waveform on the
+            // right. On a track change MacNotch briefly grows to name what just
+            // started, then settles — that wider form is the +190.
+            return geometry.notchWidth + (trackChange.justChanged ? 190 : 96)
+        }
         return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
 
@@ -118,7 +136,13 @@ struct MiraIslandView: View {
     // The physical notch occludes the top `notchHeight`, so collapsed content can't
     // render there. When active we grow the pill DOWNWARD and place the indicator +
     // label in this strip below the cutout (Dynamic-Island style).
-    private var collapsedDropH: CGFloat { (!isExpanded && collapsedIndicatorActive) ? 34 : 0 }
+    // Media lives in the ears at notch height, so it needs no drop strip at all —
+    // that is what keeps the pill wide and shallow instead of tall with something
+    // dangling under it.
+    private var collapsedDropH: CGFloat {
+        guard !isExpanded, collapsedIndicatorActive else { return 0 }
+        return isMediaActivity ? 0 : 34
+    }
     // Settings/agents/crons are content-dense — give them the tall panel.
     private var expandedHeight: CGFloat {
         switch selectedTab {
@@ -286,6 +310,17 @@ struct MiraIslandView: View {
                     .animation(.easeInOut(duration: 0.10), value: animController.contentVisible)
             }
 
+            // Media in the EARS — the menu-bar space either side of the camera
+            // cutout — at notch height. Content beside the cutout reads as part of
+            // the hardware; the same content hanging below it reads as a banner
+            // the app is showing you, which is what the drop-strip version did.
+            if !isExpanded && isMediaActivity {
+                CollapsedMediaEarsView(notchWidth: geometry.notchWidth)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .frame(height: geometry.notchHeight)
+                    .transition(.opacity)
+            }
+
             // Always-mounted SharedStatusView — never recreated on expand/collapse because it
             // lives at a stable ZStack slot above the content branches.
             // Collapsed: centered in the pill (HeyClicky NotchActivitySurface placement).
@@ -380,6 +415,13 @@ struct MiraIslandView: View {
             reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
             value: collapsedIndicatorActive
         )
+        // The track-change widen DOES animate, unlike expand/collapse. It is a
+        // change of content within the collapsed state rather than the panel
+        // opening, and MacNotch visibly grows and settles here.
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.80),
+            value: trackChange.justChanged
+        )
     }
 
     // MARK: - Collapsed pill
@@ -424,14 +466,18 @@ struct MiraIslandView: View {
                         .foregroundColor(collapsedAccent.opacity(0.9))
                         .lineLimit(1)
                         .transition(.opacity)
-                } else {
+                } else if !isMediaActivity {
                     // Nothing of Mira's own to report — rotate live activities
-                    // (media / timer / next event) the way MacNotch's collapsed
-                    // strip does. Deliberately LAST in this chain: voice state,
-                    // agent tasks and pointing all preempt it, because those are
-                    // Mira telling you what it is doing and must never be
-                    // rotated past. Draws nothing when no source is active, so an
-                    // idle pill stays indistinguishable from the hardware notch.
+                    // (timer / next event) the way MacNotch's collapsed strip
+                    // does. Deliberately LAST in this chain: voice state, agent
+                    // tasks and pointing all preempt it, because those are Mira
+                    // telling you what it is doing and must never be rotated
+                    // past. Draws nothing when no source is active, so an idle
+                    // pill stays indistinguishable from the hardware notch.
+                    //
+                    // Media is excluded here because it renders in the EARS
+                    // instead (see mediaEars) — beside the cutout rather than
+                    // hanging below it.
                     LiveActivityStrip()
                 }
             }
