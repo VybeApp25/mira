@@ -85,10 +85,11 @@ final class CodexComputerUseService: ObservableObject {
         let escaped = effectiveTask.replacingOccurrences(of: "'", with: "'\\''")
         // Codex gates MCP/computer-use tool calls behind its own approval+sandbox; in
         // non-interactive `exec` only the full bypass lets them through (verified
-        // 2026-06-17). Mira owns safety via its own gates (RouterService danger-confirm
-        // + MiraMCPServer's dangerous-tool prompt), so default to bypassing Codex's.
-        // Kill switch: mira_codex_bypass_sandbox.
-        let bypass = (UserDefaults.standard.object(forKey: "mira_codex_bypass_sandbox") as? Bool ?? true)
+        // 2026-06-17). That bypass is now OFF by default and an explicit opt-in
+        // (Settings › Developer Tools) — safe by default; Mira's own gates
+        // (RouterService danger-confirm + MiraMCPServer dangerous-tool prompt) still
+        // apply. When off, Codex's sandbox may block these tool calls.
+        let bypass = CodexService.sandboxBypassEnabled
             ? " --dangerously-bypass-approvals-and-sandbox" : ""
         let command = "codex exec '\(escaped)' --json --skip-git-repo-check\(bypass) -c model_reasoning_effort=\(effort)"
 

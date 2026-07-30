@@ -45,6 +45,7 @@ struct SettingsView: View {
     @AppStorage("mira_draw_context_enabled") private var drawContextEnabled = true
     @AppStorage(WakeWordService.enabledKey) private var wakeWordEnabled = true
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
+    @AppStorage(CodexService.sandboxBypassKey) private var codexBypassSandbox = false
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
@@ -1832,9 +1833,32 @@ struct SettingsView: View {
             VStack(spacing: 6) {
                 devToolRow(label: "Codex CLI", status: codexStatus, installCmd: "npm install -g @openai/codex")
                 devToolRow(label: "Claude Code", status: claudeCodeStatus, installCmd: "npm install -g @anthropic-ai/claude-code")
+                codexBypassRow
             }
         }
         .task { await checkDevTools() }
+    }
+
+    /// Explicit opt-in for the Codex sandbox bypass (default off / safe).
+    private var codexBypassRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Bypass Codex sandbox")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                Text("Advanced. Lets Codex skip its own approval + sandbox so it can run MCP/computer-use tools non-interactively. Mira's own safety gates still apply. Leave off unless a Codex task needs it.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: $codexBypassSandbox)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(codexBypassSandbox ? 0.06 : 0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private func devToolRow(label: String, status: String, installCmd: String) -> some View {
