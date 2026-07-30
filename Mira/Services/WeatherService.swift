@@ -8,6 +8,60 @@ struct WeatherInfo {
     var location:  String = ""
     var highF:     String = "--"
     var lowF:      String = "--"
+
+    // Detail metrics. wttr.in's j1 response already carries all of these — the
+    // service just wasn't reading them, so the Weather module had six fields to
+    // fill a full panel and looked empty. No extra request; same payload.
+    var feelsLikeF: String = "--"
+    var humidity:   String = "--"
+    var uvIndex:    String = "--"
+    var windMph:    String = "--"
+    var windDir:    String = ""
+    var precipIn:   String = "--"
+    var pressureIn: String = "--"
+    /// 0–100. Drives sky density in the procedural renderer, not just display.
+    var cloudCover: Int = 0
+    var sunrise:    String = ""
+    var sunset:     String = ""
+}
+
+/// One point on the hourly strip.
+struct WeatherHour: Identifiable {
+    let id = UUID()
+    /// wttr.in returns "0", "300", "600"… (HHmm with leading zeros stripped).
+    let hour24:  Int
+    let tempF:   String
+    let symbol:  String
+    /// Percent chance of rain, for the precip pips under the strip.
+    let rainPct: Int
+
+    /// "3PM" / "12AM" — compact enough for a strip of eight.
+    var label: String {
+        let h = hour24 % 24
+        let suffix = h < 12 ? "AM" : "PM"
+        let display = h % 12 == 0 ? 12 : h % 12
+        return "\(display)\(suffix)"
+    }
+}
+
+/// One day on the forecast row. wttr.in gives 3 days; WeatherKit would give 10,
+/// which is the only reason the module's tall mode is still worth wiring to it.
+struct WeatherDay: Identifiable {
+    let id = UUID()
+    let date:   String       // yyyy-MM-dd as returned
+    let highF:  String
+    let lowF:   String
+    let symbol: String
+
+    /// "Mon" — or "Today" for the first entry, which the view supplies.
+    var weekdayLabel: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        guard let d = fmt.date(from: date) else { return "" }
+        let out = DateFormatter()
+        out.dateFormat = "EEE"
+        return out.string(from: d)
+    }
 }
 
 /// One-shot async wrapper around Core Location. Returns the Mac's current
@@ -96,6 +150,11 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
 final class WeatherService: ObservableObject {
     @Published var weather  = WeatherInfo()
     @Published var isLoaded = false
+    /// Next 8 three-hourly points, rolling across the day boundary so the strip
+    /// never runs out at 11pm.
+    @Published var hourly: [WeatherHour] = []
+    /// 3 days (wttr.in's maximum).
+    @Published var daily:  [WeatherDay]  = []
 
     private let locator = LocationProvider()
 
@@ -149,21 +208,89 @@ final class WeatherService: ObservableObject {
             // Prefer the geocoded GPS city; fall back to wttr.in's nearest area.
             let city      = preferredLocation ?? (apiCity.isEmpty ? "" : apiCity)
 
+            let astro = (dayInfo?["astronomy"] as? [[String: Any]])?.first
+
+            let info = WeatherInfo(
+                tempF:      tempF,
+                condition:  desc,
+                sfSymbol:   Self.symbol(
+                    for: desc,
+                    isNight: Self.isNightHour(Calendar.current.component(.hour, from: Date()))
+                ),
+                location:   city,
+                highF:      maxF,
+                lowF:       minF,
+                feelsLikeF: cur["FeelsLikeF"]   as? String ?? tempF,
+                humidity:   cur["humidity"]     as? String ?? "--",
+                uvIndex:    cur["uvIndex"]      as? String ?? "--",
+                windMph:    cur["windspeedMiles"] as? String ?? "--",
+                windDir:    cur["winddir16Point"] as? String ?? "",
+                precipIn:   cur["precipInches"] as? String ?? "--",
+                pressureIn: cur["pressureInches"] as? String ?? "--",
+                cloudCover: Int(cur["cloudcover"] as? String ?? "") ?? 0,
+                sunrise:    astro?["sunrise"] as? String ?? "",
+                sunset:     astro?["sunset"]  as? String ?? ""
+            )
+
+            let days = (json["weather"] as? [[String: Any]]) ?? []
+            let hours = Self.parseHourly(days: days)
+            let daily = Self.parseDaily(days: days)
+
             DispatchQueue.main.async {
-                self.weather = WeatherInfo(
-                    tempF:     tempF,
-                    condition: desc,
-                    sfSymbol:  Self.symbol(for: desc),
-                    location:  city,
-                    highF:     maxF,
-                    lowF:      minF
-                )
+                self.weather = info
+                self.hourly  = hours
+                self.daily   = daily
                 self.isLoaded = true
             }
         }.resume()
     }
 
-    private static func symbol(for condition: String) -> String {
+    // MARK: - Forecast parsing
+
+    /// Flattens wttr.in's day→hourly nesting into the next 8 three-hourly points
+    /// starting from now. Rolling past midnight matters: without it the strip is
+    /// empty by late evening, which is exactly when someone glances at it.
+    private static func parseHourly(days: [[String: Any]]) -> [WeatherHour] {
+        let nowHour = Calendar.current.component(.hour, from: Date())
+        var out: [WeatherHour] = []
+
+        for (dayIndex, day) in days.enumerated() {
+            for h in (day["hourly"] as? [[String: Any]]) ?? [] {
+                // "0", "300", "1500" → 0, 3, 15
+                let raw = Int(h["time"] as? String ?? "0") ?? 0
+                let hour = raw / 100
+                // Skip hours already past, but only on today.
+                if dayIndex == 0 && hour < nowHour { continue }
+                let desc = (h["weatherDesc"] as? [[String: Any]])?.first?["value"] as? String ?? ""
+                out.append(WeatherHour(
+                    hour24:  hour,
+                    tempF:   h["tempF"] as? String ?? "--",
+                    symbol:  symbol(for: desc, isNight: isNightHour(hour)),
+                    rainPct: Int(h["chanceofrain"] as? String ?? "") ?? 0
+                ))
+                if out.count == 8 { return out }
+            }
+        }
+        return out
+    }
+
+    private static func parseDaily(days: [[String: Any]]) -> [WeatherDay] {
+        days.map { day in
+            let mid = (day["hourly"] as? [[String: Any]])?.dropFirst(4).first
+            let desc = (mid?["weatherDesc"] as? [[String: Any]])?.first?["value"] as? String ?? ""
+            return WeatherDay(
+                date:   day["date"] as? String ?? "",
+                highF:  day["maxtempF"] as? String ?? "--",
+                lowF:   day["mintempF"] as? String ?? "--",
+                symbol: symbol(for: desc)
+            )
+        }
+    }
+
+    /// `isNight` matters because wttr.in reports "Clear" at 3AM exactly as it does
+    /// at 3PM. Without it the hourly strip drew a blazing sun through the middle
+    /// of the night.
+    static func symbol(for condition: String, isNight: Bool = false) -> String {
         let c = condition.lowercased()
         if c.contains("thunder")                    { return "cloud.bolt.fill"     }
         if c.contains("snow") || c.contains("bliz") { return "cloud.snow.fill"     }
@@ -172,12 +299,19 @@ final class WeatherService: ObservableObject {
         if c.contains("fog")  || c.contains("mist") { return "cloud.fog.fill"      }
         if c.contains("overcast")                   { return "cloud.fill"           }
         if c.contains("cloud") && (c.contains("partly") || c.contains("sunny")) {
-            return "cloud.sun.fill"
+            return isNight ? "cloud.moon.fill" : "cloud.sun.fill"
         }
         if c.contains("cloud")                      { return "cloud.fill"           }
-        if c.contains("clear") || c.contains("sun") { return "sun.max.fill"         }
+        if c.contains("clear") || c.contains("sun") {
+            return isNight ? "moon.stars.fill" : "sun.max.fill"
+        }
         return "cloud.fill"
     }
+
+    /// Rough day/night split. Sunrise/sunset are in the payload, but they're
+    /// per-day strings ("06:50 AM") and the strip crosses midnight — a fixed
+    /// window is accurate enough to stop drawing suns at 3AM and costs nothing.
+    static func isNightHour(_ hour: Int) -> Bool { hour < 6 || hour >= 20 }
 
     // MARK: - Spoken lookup (cheap text path, no screenshots)
 

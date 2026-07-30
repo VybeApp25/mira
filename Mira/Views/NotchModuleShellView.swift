@@ -26,6 +26,12 @@ struct NotchModuleShellView: View {
     @ObservedObject private var registry = NotchModuleRegistry.shared
     @ObservedObject private var accentSvc = AccentColorService.shared
 
+    /// Height of the overlaid header. Modules inset their FOREGROUND content by
+    /// this so it clears the title row, while their background (a weather sky, a
+    /// media gradient) still runs the full height of the panel. Read it via
+    /// `NotchModuleShellView.headerHeight` rather than hardcoding a guess.
+    static let headerHeight: CGFloat = 30
+
     /// Height of the black band the physical notch occludes. Content is seated
     /// below it so the cutout can never cover an interactive control — the same
     /// fix applied to the tab panel on 2026-07-05.
@@ -37,11 +43,26 @@ struct NotchModuleShellView: View {
     private var accent: Color { accentSvc.color }
 
     var body: some View {
-        VStack(spacing: 0) {
+        Group {
             if let module = registry.selected {
-                header(for: module)
-                Divider().overlay(Color.white.opacity(0.06))
-                content(for: module)
+                // Header OVERLAYS the content rather than sitting in a row above
+                // it. A module's backdrop (the weather sky, say) then runs the
+                // full height of the panel instead of being boxed below a black
+                // header bar — which was what made the first pass read as a card
+                // pasted into a slab rather than one object.
+                ZStack(alignment: .top) {
+                    content(for: module)
+                    header(for: module)
+                }
+                // Bottom corners match the slab's expanded radius so the module
+                // ends flush with the panel instead of squaring off inside it.
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        bottomLeadingRadius: AnimationController.expandedBotR,
+                        bottomTrailingRadius: AnimationController.expandedBotR,
+                        style: .continuous
+                    )
+                )
             } else {
                 // Registry empty — only reachable before registration during
                 // startup. Draw nothing rather than an error state the user
@@ -90,7 +111,13 @@ struct NotchModuleShellView: View {
             }
         }
         .padding(.horizontal, 14)
-        .frame(height: max(notchBandHeight, 30))
+        .frame(height: max(notchBandHeight, Self.headerHeight))
+        // Scrim so header text stays legible over a bright module backdrop
+        // (a sunny sky) without needing an opaque bar.
+        .background(
+            LinearGradient(colors: [.black.opacity(0.45), .black.opacity(0.0)],
+                           startPoint: .top, endPoint: .bottom)
+        )
     }
 
     /// In-place drill-in affordance. Never opens a window — MacNotch pushes detail
@@ -151,9 +178,9 @@ struct NotchModuleShellView: View {
         Button(action: onCollapse) {
             Image(systemName: "arrow.down.right.and.arrow.up.left")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.45))
+                .foregroundColor(.white.opacity(0.75))
                 .frame(width: 20, height: 20)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .background(Circle().fill(Color.black.opacity(0.30)))
         }
         .buttonStyle(.plain)
         .help("Collapse")
@@ -175,7 +202,10 @@ struct NotchModuleDockStrip: View {
 
     var body: some View {
         let pinned = registry.pinnedModules
-        if !pinned.isEmpty {
+        // A single circle floating alone in black reads as a rendering artifact,
+        // not as a switcher. The strip only earns its space once there's
+        // somewhere to switch TO.
+        if pinned.count > 1 {
             HStack(spacing: 6) {
                 ForEach(pinned) { module in
                     let isCurrent = module.id == registry.selectedID

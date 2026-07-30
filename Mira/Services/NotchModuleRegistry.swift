@@ -46,6 +46,9 @@ final class NotchModuleRegistry: ObservableObject {
     /// position so re-enabling doesn't shuffle everything.
     @Published private(set) var hiddenIDs: Set<String> = []
 
+    /// Retains the per-module change forwarding set up in `register`.
+    private var moduleSubscriptions = Set<AnyCancellable>()
+
     private init() {
         pinnedIDs = UserDefaults.standard.stringArray(forKey: pinnedKey) ?? []
         hiddenIDs = Set(UserDefaults.standard.stringArray(forKey: hiddenKey) ?? [])
@@ -57,6 +60,19 @@ final class NotchModuleRegistry: ObservableObject {
     /// can't produce two copies in the carousel.
     func register(_ module: any NotchModule) {
         guard !modules.contains(where: { $0.id == module.id }) else { return }
+
+        // Forward the module's own change notifications to the registry. The
+        // shell observes the REGISTRY, so without this a module updating its
+        // title, subtitle, icon, or header accessories never redraws the header
+        // — the Weather module's city subtitle stayed blank after its first
+        // fetch landed, because only its content observed the data source.
+        if let observable = module as? any ObservableObject,
+           let publisher = observable.objectWillChange as? ObservableObjectPublisher {
+            publisher
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &moduleSubscriptions)
+        }
+
         modules.append(AnyNotchModule(module))
         applySavedOrder()
         applyDefaultPinsIfNeeded()

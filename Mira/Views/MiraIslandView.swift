@@ -122,14 +122,18 @@ struct MiraIslandView: View {
             // The module declares its own height level; add the nav bar above the
             // panel and the detached dock strip below it. This is the whole point
             // of the height-level enum — the shell negotiates, the module declares.
-            return moduleRegistry.currentHeight + Self.moduleChromeHeight
+            return moduleRegistry.currentHeight + moduleChromeHeight
         default:
             return AnimationController.expandedTallH
         }
     }
 
-    /// navBar (38) + dock strip (34) + the VStack spacing between them (6).
-    private static let moduleChromeHeight: CGFloat = 78
+    /// navBar (38), plus the dock strip (40 incl. spacing) only when it's actually
+    /// drawn — it hides below two pinned modules, and reserving space for a strip
+    /// that isn't there leaves a black band under the panel.
+    private var moduleChromeHeight: CGFloat {
+        38 + (moduleRegistry.pinnedModules.count > 1 ? 40 : 0)
+    }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
         // Expanded: add the notch-height band on top so seating content below the
