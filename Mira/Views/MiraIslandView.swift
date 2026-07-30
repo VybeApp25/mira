@@ -61,6 +61,8 @@ struct MiraIslandView: View {
     @ObservedObject private var pointTo    = PointToService.shared
     // Drives the module panel's height and selection (Phase 0 shell contract).
     @ObservedObject private var moduleRegistry = NotchModuleRegistry.shared
+    // Rotating collapsed-strip activities (media / timer / next event).
+    @ObservedObject private var liveActivity   = LiveActivityService.shared
     // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
     // pill even when the island is closed. (miraState.realtimeState is only mirrored
     // by IslandChatView, which exists only while expanded — so in always-on/closed
@@ -85,7 +87,10 @@ struct MiraIslandView: View {
     // True whenever any non-idle visual indicator should appear in the collapsed pill.
     // Also true while the PointToService cursor is in flight so the pill stays wide.
     private var collapsedIndicatorActive: Bool {
-        pillState.mode != .idle || pointTo.isActive
+        // A rotating live activity also counts: without it the pill keeps notch
+        // width and the drop strip stays 0pt tall, so the activity text would be
+        // rendered into no space at all.
+        pillState.mode != .idle || pointTo.isActive || liveActivity.current != nil
     }
 
     // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
@@ -107,7 +112,8 @@ struct MiraIslandView: View {
         }
     }
     private var hasCollapsedText: Bool {
-        !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive || voiceModeLabel != nil
+        !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive
+            || voiceModeLabel != nil || liveActivity.current != nil
     }
     // The physical notch occludes the top `notchHeight`, so collapsed content can't
     // render there. When active we grow the pill DOWNWARD and place the indicator +
@@ -418,6 +424,15 @@ struct MiraIslandView: View {
                         .foregroundColor(collapsedAccent.opacity(0.9))
                         .lineLimit(1)
                         .transition(.opacity)
+                } else {
+                    // Nothing of Mira's own to report — rotate live activities
+                    // (media / timer / next event) the way MacNotch's collapsed
+                    // strip does. Deliberately LAST in this chain: voice state,
+                    // agent tasks and pointing all preempt it, because those are
+                    // Mira telling you what it is doing and must never be
+                    // rotated past. Draws nothing when no source is active, so an
+                    // idle pill stays indistinguishable from the hardware notch.
+                    LiveActivityStrip()
                 }
             }
         }

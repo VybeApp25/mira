@@ -90,6 +90,7 @@
 		3FF94BFAEB99BBB0D83E4B11 /* imessage_read.py in Resources */ = {isa = PBXBuildFile; fileRef = B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */; };
 		3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F52A13C8B02EEA4701166A /* ResponseCardService.swift */; };
 		40B974C02419A2C9A32A6245 /* OutcomeEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */; };
+		41252FE3EF8037AAB0B421EB /* LiveActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1272F960C6DA927A3452D01 /* LiveActivityService.swift */; };
 		41A836A8FF78EF0DF0055710 /* agent-launch.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 34C283A8B11CD4F1E6371C82 /* agent-launch.mp3 */; };
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */; };
@@ -692,6 +693,7 @@
 		EEA12B26A9743FAB1D118372 /* AgentHUDColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDColumnView.swift; sourceTree = "<group>"; };
 		EF8119ECAE1C7A35BEE1D5B7 /* skill-up.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "skill-up.wav"; sourceTree = "<group>"; };
 		F06E43F02224F648C3BC05E6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F1272F960C6DA927A3452D01 /* LiveActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityService.swift; sourceTree = "<group>"; };
 		F15EE928CDBBA87B6E0A4919 /* HUDOverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDOverlayWindowController.swift; sourceTree = "<group>"; };
 		F3AE9C3419A694A4B7C648D1 /* ComputerUseOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseOrchestrator.swift; sourceTree = "<group>"; };
 		F41806DE60A2909E73385AE1 /* HoverInsightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInsightManager.swift; sourceTree = "<group>"; };
@@ -1007,6 +1009,7 @@
 				3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */,
 				4F73902D6E3F8EE8514F79EA /* LearnerModel.swift */,
 				1202DAFD939C983EE362BE7A /* LessonScaffolder.swift */,
+				F1272F960C6DA927A3452D01 /* LiveActivityService.swift */,
 				69651A1F761E1E1338C095AA /* LiveTranscriptionStream.swift */,
 				C3ABA2178F03DB65559DB946 /* MediaControls.swift */,
 				4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */,
@@ -1500,6 +1503,7 @@
 				2D1B1E425C97F6E5434DE441 /* LearnerModel.swift in Sources */,
 				DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */,
 				96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */,
+				41252FE3EF8037AAB0B421EB /* LiveActivityService.swift in Sources */,
 				EE6A97662B9ED3C7E5487D83 /* LiveTranscriptionStream.swift in Sources */,
 				3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */,
 				292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */,

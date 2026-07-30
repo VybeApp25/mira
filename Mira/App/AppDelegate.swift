@@ -87,6 +87,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SystemModule()
         ])
 
+        // Rotating collapsed strip. Voice/agent state preempts it in the pill.
+        LiveActivityService.shared.start()
+
         // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused
         // field, plus its "Dictating…" pill. Wiring only — hotkey is registered by
         // GlobalShortcutManager; these observe the began/ended notifications.
