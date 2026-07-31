@@ -111,11 +111,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         BluetoothService.shared.start()
 
-        // The AI Coding socket listens from launch, but ONLY once the CLI hook
-        // exists — otherwise every user pays for a socket server for a feature
-        // they never set up. It has to be running before the module is opened:
-        // a permission ask arrives while you're in the terminal, and the whole
-        // point is that the notch lights up without you going looking for it.
+        // AI Coding has two halves with different costs, so they start on
+        // different terms.
+        //
+        // The transcript watcher is the zero-setup path and runs whenever Claude
+        // Code has ever been used on this Mac — it's a lazy poll over files that
+        // already exist, and it has to be warm before the panel is opened or the
+        // first frame shows an empty list.
+        if ClaudeCodeSessionWatcher.shared.isAvailable {
+            ClaudeCodeSessionWatcher.shared.start(interval: 6)
+        }
+
+        // The socket only listens once the CLI hook exists — otherwise every
+        // user pays for a socket server for a feature they never set up. It also
+        // has to be running before the module is opened: a permission ask
+        // arrives while you're in the terminal, and the point is that the notch
+        // lights up without you going looking for it.
         if AICodingHookInstaller.shared.isInstalled {
             AICodingBridgeService.shared.start()
         }

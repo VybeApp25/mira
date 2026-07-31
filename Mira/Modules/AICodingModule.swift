@@ -1,11 +1,20 @@
 // AICodingModule.swift
 // Claude Code sessions in the notch, with Allow/Deny when the CLI is blocked.
 //
-// The audit scored this 🟡→✅: Mira already had more agent machinery than
-// MacNotch (ClaudeCodeBridge, CodexService, the HUD, bidirectional MCP), and
-// was missing exactly one thing — the affordance that answers a permission
-// prompt without switching to the terminal. That gap is what this module and
-// AICodingBridgeService close.
+// The panel has two independent sources, and keeping them independent is the
+// whole design:
+//
+//   • ClaudeCodeSessionWatcher reads the transcripts Claude Code already writes
+//     to ~/.claude/projects. This needs NOTHING installed, and it is where the
+//     session list, titles, tool steps and token counts come from.
+//   • AICodingBridgeService receives hook events over a Unix socket. It
+//     contributes exactly one thing the filesystem cannot: a permission request
+//     that is still blocked, and therefore still answerable.
+//
+// The first cut of this module had only the second source and required the
+// hook, so a running session was invisible until the user edited their own
+// settings.json. MacNotch's own copy says it the right way round — "Works via
+// file monitoring, hooks are optional for faster event notifications."
 //
 // The panel is deliberately dull when nothing needs you. A waiting session is
 // the only state that gets color, because a permission prompt you scroll past
@@ -13,6 +22,34 @@
 
 import SwiftUI
 import Combine
+
+// MARK: - Row
+
+/// One session as the panel sees it: transcript facts, plus a pending ask when
+/// the hook is installed and the CLI happens to be blocked right now.
+struct AICodingRow: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let folder: String
+    let branch: String?
+    let model: String?
+    let steps: [ClaudeCodeTranscript.Step]
+    let tokens: ClaudeCodeTranscript.Tokens
+    let lastActivity: Date
+    let pending: PendingPermission?
+    let isMidTool: Bool
+
+    enum Status { case waiting, working, idle }
+
+    var status: Status {
+        if pending != nil { return .waiting }
+        let age = Date().timeIntervalSince(lastActivity)
+        if age < ClaudeCodeSessionWatcher.activeWindow { return .working }
+        return .idle
+    }
+}
+
+// MARK: - Module
 
 @MainActor
 final class AICodingModule: NotchModule, ObservableObject {
@@ -24,34 +61,63 @@ final class AICodingModule: NotchModule, ObservableObject {
     let heightLevel: NotchHeightLevel = .standard
     let allowsTallMode = true
 
+    private let watcher   = ClaudeCodeSessionWatcher.shared
     private let bridge    = AICodingBridgeService.shared
     private let installer = AICodingHookInstaller.shared
     private var cancellables = Set<AnyCancellable>()
 
-    /// Session the user drilled into.
     @Published private(set) var detailSessionID: String?
 
     var detailTitle: String? { detailSessionID == nil ? nil : "AI Coding" }
     func popDetail() { detailSessionID = nil }
+    func show(_ id: String) { detailSessionID = id }
 
-    func show(_ session: AICodingSession) { detailSessionID = session.id }
+    /// Transcript sessions with any live permission ask merged in by id. The
+    /// hook's `session_id` is the same UUID Claude Code names the transcript
+    /// after, so this join needs no correlation heuristics.
+    var rows: [AICodingRow] {
+        let asks = Dictionary(uniqueKeysWithValues:
+            bridge.sessions.compactMap { session -> (String, PendingPermission)? in
+                guard let pending = session.pending else { return nil }
+                return (session.id, pending)
+            })
+
+        return watcher.transcripts.map { t in
+            AICodingRow(id: t.id,
+                        title: t.displayName,
+                        folder: t.folderName,
+                        branch: t.gitBranch,
+                        model: t.model,
+                        steps: t.steps,
+                        tokens: t.tokens,
+                        lastActivity: t.lastActivity,
+                        pending: asks[t.id],
+                        isMidTool: t.isMidTool)
+        }
+        .sorted { a, b in
+            // Anything blocked on a human outranks recency: it is the only row
+            // with a deadline attached.
+            if (a.status == .waiting) != (b.status == .waiting) { return a.status == .waiting }
+            return a.lastActivity > b.lastActivity
+        }
+    }
 
     var subtitle: NotchHeaderSubtitle? {
-        if let id = detailSessionID,
-           let session = bridge.sessions.first(where: { $0.id == id }) {
-            return NotchHeaderSubtitle(text: session.folderName, isPill: true)
+        if let id = detailSessionID, let row = rows.first(where: { $0.id == id }) {
+            return NotchHeaderSubtitle(text: row.folder, isPill: true)
         }
-        let waiting = bridge.sessions.filter { $0.status == .waiting }.count
+        let waiting = rows.filter { $0.status == .waiting }.count
         if waiting > 0 {
             return NotchHeaderSubtitle(text: waiting == 1 ? "1 waiting" : "\(waiting) waiting",
                                        isPill: true)
         }
-        let live = bridge.sessions.filter { $0.status != .ended }.count
-        return NotchHeaderSubtitle(text: live == 1 ? "1 session" : "\(live) sessions")
+        let working = rows.filter { $0.status == .working }.count
+        if working > 0 { return NotchHeaderSubtitle(text: "\(working) active") }
+        return NotchHeaderSubtitle(text: rows.isEmpty ? "no sessions" : "\(rows.count) recent")
     }
 
     init() {
-        for p in [bridge.objectWillChange, installer.objectWillChange] {
+        for p in [watcher.objectWillChange, bridge.objectWillChange, installer.objectWillChange] {
             p.sink { [weak self] _ in self?.objectWillChange.send() }
              .store(in: &cancellables)
         }
@@ -59,16 +125,21 @@ final class AICodingModule: NotchModule, ObservableObject {
 
     func didAppear() {
         installer.refresh()
-        // Safe to call repeatedly; it no-ops once the listener is up. Opening
-        // the module is also the moment a user who just installed the hook
-        // expects it to start working.
+        // Poll harder while the panel is on screen; the background cadence set
+        // at launch is deliberately lazy.
+        watcher.stop()
+        watcher.start(interval: 1.5)
         if installer.isInstalled { bridge.start() }
     }
 
-    func didDisappear() { detailSessionID = nil }
+    func didDisappear() {
+        detailSessionID = nil
+        watcher.stop()
+        watcher.start(interval: 6)
+    }
 
     func makeContent() -> AnyView {
-        AnyView(AICodingView(module: self, bridge: bridge, installer: installer))
+        AnyView(AICodingView(module: self, watcher: watcher, bridge: bridge, installer: installer))
     }
 }
 
@@ -77,21 +148,23 @@ final class AICodingModule: NotchModule, ObservableObject {
 private struct AICodingView: View {
 
     @ObservedObject var module: AICodingModule
+    @ObservedObject var watcher: ClaudeCodeSessionWatcher
     @ObservedObject var bridge: AICodingBridgeService
     @ObservedObject var installer: AICodingHookInstaller
     @ObservedObject private var accentSvc = AccentColorService.shared
+
+    @State private var showingSetup = false
 
     private var accent: Color { accentSvc.color }
 
     var body: some View {
         Group {
-            if let id = module.detailSessionID,
-               let session = bridge.sessions.first(where: { $0.id == id }) {
-                detail(session)
-            } else if !installer.isInstalled {
+            if let id = module.detailSessionID, let row = module.rows.first(where: { $0.id == id }) {
+                detail(row)
+            } else if showingSetup {
                 setup
             } else {
-                sessionList
+                list
             }
         }
         .padding(.top, NotchModuleShellView.headerHeight + 4)
@@ -100,25 +173,87 @@ private struct AICodingView: View {
         .background(Color.black)
     }
 
+    // MARK: List
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if module.rows.isEmpty {
+                Text(watcher.isAvailable
+                     ? "No Claude Code sessions in the last 12 hours. Start one in a terminal and it shows up here."
+                     : "Claude Code isn't installed, or has never run on this Mac.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(module.rows) { row in
+                        SessionRow(row: row,
+                                   accent: accent,
+                                   onOpen: { module.show(row.id) },
+                                   onAllow: { bridge.respond(sessionID: row.id, approve: true) },
+                                   onDeny:  { bridge.respond(sessionID: row.id, approve: false) })
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            footer
+        }
+    }
+
+    /// One line about what the panel can and can't do right now. Without the
+    /// hook the list is read-only, and saying so beats letting someone wait for
+    /// an Allow button that will never appear.
+    private var footer: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(installer.isInstalled ? Color(red: 0.40, green: 0.80, blue: 0.62)
+                                            : Color.white.opacity(0.25))
+                .frame(width: 5, height: 5)
+
+            Text(installer.isInstalled
+                 ? "Allow/Deny enabled"
+                 : "Read-only — turn on Allow/Deny to answer prompts here")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.40))
+
+            if !installer.isInstalled {
+                Button("Set up") { showingSetup = true }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+
+            Spacer(minLength: 0)
+
+            if watcher.liveProcessCount > 0 {
+                Text("\(watcher.liveProcessCount) running")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.30))
+            }
+        }
+    }
+
     // MARK: Setup
 
-    /// Shown until the CLI hook exists. Says what it will change, because it
-    /// edits a file the user owns and may well have written by hand.
     private var setup: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Answer Claude Code from the notch")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
 
-            Text("Mira installs a hook script and adds it to ~/.claude/settings.json. "
-                 + "When Claude Code asks to run a command or write a file, you can allow "
-                 + "or deny it here instead of switching to the terminal.")
+            Text("Sessions already show up without this. To also allow or deny a command "
+                 + "from here, Mira installs a hook script and adds it to ~/.claude/settings.json.")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.55))
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Your other hooks are left alone, and nothing is sent anywhere — the "
-                 + "hook talks to Mira over a local socket only you can read.")
+            Text("Your other hooks are left alone. Nothing is sent anywhere — the hook talks "
+                 + "to Mira over a local socket only you can read, and if Mira isn't running "
+                 + "your CLI prompts exactly as it does today.")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.35))
                 .fixedSize(horizontal: false, vertical: true)
@@ -126,9 +261,9 @@ private struct AICodingView: View {
             HStack(spacing: 8) {
                 Button {
                     installer.install()
-                    if installer.isInstalled { bridge.start() }
+                    if installer.isInstalled { bridge.start(); showingSetup = false }
                 } label: {
-                    Text("Connect Claude Code")
+                    Text("Enable Allow/Deny")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 12)
@@ -136,6 +271,11 @@ private struct AICodingView: View {
                         .background(Capsule().fill(accent))
                 }
                 .buttonStyle(.plain)
+
+                Button("Not now") { showingSetup = false }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.5))
 
                 if let error = installer.lastError {
                     Text(error)
@@ -150,51 +290,12 @@ private struct AICodingView: View {
         }
     }
 
-    // MARK: List
-
-    private var sessionList: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if bridge.sessions.isEmpty {
-                Text(bridge.isListening
-                     ? "No sessions yet. Start Claude Code in a terminal and it will appear here."
-                     : "Not listening — \(bridge.lastError ?? "the socket could not be opened").")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.35))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 5) {
-                    // Anything waiting on a human sorts to the top regardless of
-                    // recency — it is the only row with a deadline.
-                    ForEach(sortedSessions) { session in
-                        SessionRow(session: session,
-                                   accent: accent,
-                                   onOpen: { module.show(session) },
-                                   onAllow: { bridge.respond(sessionID: session.id, approve: true) },
-                                   onDeny:  { bridge.respond(sessionID: session.id, approve: false) })
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var sortedSessions: [AICodingSession] {
-        bridge.sessions.sorted { a, b in
-            if (a.status == .waiting) != (b.status == .waiting) { return a.status == .waiting }
-            return a.lastSeen > b.lastSeen
-        }
-    }
-
     // MARK: Detail
 
-    private func detail(_ session: AICodingSession) -> some View {
+    private func detail(_ row: AICodingRow) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                if let pending = session.pending {
+                if let pending = row.pending {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
                             ToolChip(name: pending.toolName, accent: accent, emphasized: true)
@@ -216,25 +317,40 @@ private struct AICodingView: View {
                         }
                         HStack(spacing: 8) {
                             DecisionButton(title: "Allow", isPrimary: true, accent: accent) {
-                                AICodingBridgeService.shared.respond(sessionID: session.id, approve: true)
+                                AICodingBridgeService.shared.respond(sessionID: row.id, approve: true)
                                 module.popDetail()
                             }
                             DecisionButton(title: "Deny", isPrimary: false, accent: accent) {
-                                AICodingBridgeService.shared.respond(sessionID: session.id, approve: false)
+                                AICodingBridgeService.shared.respond(sessionID: row.id, approve: false)
                                 module.popDetail()
                             }
                         }
                     }
                 }
 
+                HStack(spacing: 10) {
+                    if let branch = row.branch, branch != "HEAD" {
+                        Label(branch, systemImage: "arrow.triangle.branch")
+                    }
+                    if let model = row.model {
+                        Label(model, systemImage: "cpu")
+                    }
+                    Label("\(Self.compact(row.tokens.billable)) tokens", systemImage: "number")
+                }
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.40))
+                .labelStyle(.titleAndIcon)
+
                 Text("RECENT")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.white.opacity(0.32))
 
-                ForEach(session.events.reversed()) { event in
+                // Newest first, five rows — one tool per row, matching how the
+                // steps read in the transcript.
+                ForEach(row.steps.suffix(5).reversed()) { step in
                     HStack(alignment: .top, spacing: 6) {
-                        ToolChip(name: event.toolName, accent: accent, emphasized: false)
-                        Text(event.detail ?? "—")
+                        ToolChip(name: step.toolName, accent: accent, emphasized: false)
+                        Text(step.detail ?? "—")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.white.opacity(0.6))
                             .lineLimit(1)
@@ -242,8 +358,8 @@ private struct AICodingView: View {
                     }
                 }
 
-                if session.events.isEmpty {
-                    Text("No tool calls yet.")
+                if row.steps.isEmpty {
+                    Text("No tool calls in this session yet.")
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.3))
                 }
@@ -251,13 +367,19 @@ private struct AICodingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    static func compact(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000     { return String(format: "%.1fk", Double(n) / 1_000) }
+        return "\(n)"
+    }
 }
 
 // MARK: - Row
 
 private struct SessionRow: View {
 
-    let session: AICodingSession
+    let row: AICodingRow
     let accent: Color
     let onOpen: () -> Void
     let onAllow: () -> Void
@@ -269,39 +391,40 @@ private struct SessionRow: View {
         VStack(alignment: .leading, spacing: 5) {
             Button(action: onOpen) {
                 HStack(spacing: 7) {
-                    Image(systemName: session.source.icon)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 14)
+                    StatusDot(status: row.status, accent: accent)
 
-                    Text(session.folderName.isEmpty ? session.source.display : session.folderName)
+                    Text(row.title)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))
                         .lineLimit(1)
 
-                    StatusDot(status: session.status, accent: accent)
-
-                    Text(statusText)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.45))
+                    Text(row.folder)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.35))
                         .lineLimit(1)
 
                     Spacer(minLength: 4)
 
-                    if let last = session.events.last {
+                    if let last = row.steps.last, row.status != .waiting {
                         Text(last.toolName)
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(.white.opacity(0.42))
                     }
+
+                    Text(AICodingView.compact(row.tokens.billable))
+                        .font(.system(size: 9))
+                        .monospacedDigit()
+                        .foregroundColor(.white.opacity(0.28))
                 }
             }
             .buttonStyle(.plain)
 
             // The whole reason the module exists. Inline, so answering never
             // costs a drill-in.
-            if let pending = session.pending {
+            if let pending = row.pending {
                 HStack(spacing: 7) {
-                    Text(pending.detail ?? pending.toolName)
+                    ToolChip(name: pending.toolName, accent: accent, emphasized: true)
+                    Text(pending.detail ?? "")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.75))
                         .lineLimit(1)
@@ -310,45 +433,33 @@ private struct SessionRow: View {
                     DecisionButton(title: "Allow", isPrimary: true, accent: accent, action: onAllow)
                     DecisionButton(title: "Deny", isPrimary: false, accent: accent, action: onDeny)
                 }
-                .padding(.leading, 21)
+                .padding(.leading, 12)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 7)
-            .fill(session.status == .waiting ? accent.opacity(0.14)
-                                             : (hovering ? Color.white.opacity(0.05) : .clear)))
+            .fill(row.status == .waiting ? accent.opacity(0.14)
+                                         : (hovering ? Color.white.opacity(0.05) : .clear)))
         .onHover { hovering = $0 }
-    }
-
-    private var statusText: String {
-        switch session.status {
-        case .waiting: return "needs you"
-        case .working: return "working"
-        case .idle:    return "idle"
-        case .ended:   return "ended"
-        }
     }
 }
 
 // MARK: - Pieces
 
 private struct StatusDot: View {
-    let status: AICodingSession.Status
+    let status: AICodingRow.Status
     let accent: Color
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 5, height: 5)
+        Circle().fill(color).frame(width: 5, height: 5)
     }
 
     private var color: Color {
         switch status {
         case .waiting: return accent
         case .working: return Color(red: 0.40, green: 0.80, blue: 0.62)
-        case .idle:    return .white.opacity(0.30)
-        case .ended:   return .white.opacity(0.15)
+        case .idle:    return .white.opacity(0.28)
         }
     }
 }

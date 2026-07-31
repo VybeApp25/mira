@@ -105,6 +105,7 @@
 		450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */; };
 		452762C067D50B0C991CF939 /* ComputerUseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01ACF9118D36B54D9E00146F /* ComputerUseService.swift */; };
 		45DCD1E11E23C428C1E23DEC /* ReliabilityDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */; };
+		464FD46EF88CB659D0C12BF4 /* ClaudeCodeSessionWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */; };
 		47129E290E702FE79EA1780A /* apple-reminders.md in Resources */ = {isa = PBXBuildFile; fileRef = D74433F31D3AC43D9E8F2B4F /* apple-reminders.md */; };
 		478FDA0C013CF29117AED0EF /* MiraDebugLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 823E45E8C322474B713E0AD7 /* MiraDebugLog.swift */; };
 		47D10CE56F35895DF6988812 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B81907F9DDB9297D51C992A8 /* Assets.xcassets */; };
@@ -444,6 +445,7 @@
 		2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonsTabView.swift; sourceTree = "<group>"; };
 		2BFC8C65415313615C5F3B03 /* narration-jdcjns7igj8m.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-jdcjns7igj8m.mp3"; sourceTree = "<group>"; };
 		2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingEngine.swift; sourceTree = "<group>"; };
+		2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeSessionWatcher.swift; sourceTree = "<group>"; };
 		2F3CF04D89D09EF7D66A6A2E /* hatching.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = hatching.wav; sourceTree = "<group>"; };
 		30D7BBBE1AD86425D4A0E84B /* SkillBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillBundle.swift; sourceTree = "<group>"; };
 		30DBCAAD8D19FFE4F04F3375 /* FloatingButtonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingButtonService.swift; sourceTree = "<group>"; };
@@ -1022,6 +1024,7 @@
 				3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */,
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
+				2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */,
 				C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */,
@@ -1487,6 +1490,7 @@
 				86381236CFAE5F4DD5A0A433 /* ChatWidgetView.swift in Sources */,
 				68AB75F8085FC784C9D39C07 /* ClarificationCard.swift in Sources */,
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
+				464FD46EF88CB659D0C12BF4 /* ClaudeCodeSessionWatcher.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
 				4DFF8C79BB43C1DE7A8D6939 /* ClipReminderService.swift in Sources */,
 				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,
