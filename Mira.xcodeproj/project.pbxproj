@@ -60,6 +60,7 @@
 		24F66A36C54D673F2CD4D6CF /* PointFollowUpService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */; };
 		250780C8440697BF5B6D976E /* skill-down.wav in Resources */ = {isa = PBXBuildFile; fileRef = BCF4DFA486AA4A00D7530DEF /* skill-down.wav */; };
 		25BD88D576E3FA08502969B6 /* codex.md in Resources */ = {isa = PBXBuildFile; fileRef = AFCF5F2FCD6F8E8F960408E8 /* codex.md */; };
+		26A5FFE9B5B48CE37359F8F1 /* NotificationBannerWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A6ECB257EF03EF883111C4 /* NotificationBannerWatcher.swift */; };
 		26F353AEAA6B96BA0C721AA9 /* AssemblyAIStreamingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */; };
 		27670090351EC3C09EF2DABE /* netlify.md in Resources */ = {isa = PBXBuildFile; fileRef = C8380501F27005CAEAA4B607 /* netlify.md */; };
 		277DAE431BD25B27F7A1CF08 /* server.js in Resources */ = {isa = PBXBuildFile; fileRef = 2401A65BD01B1E1859DD4B36 /* server.js */; };
@@ -485,6 +486,7 @@
 		401567F80D6C5B2881BDD843 /* NotchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchManager.swift; sourceTree = "<group>"; };
 		40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportView.swift; sourceTree = "<group>"; };
 		418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCopyQueueService.swift; sourceTree = "<group>"; };
+		41A6ECB257EF03EF883111C4 /* NotificationBannerWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBannerWatcher.swift; sourceTree = "<group>"; };
 		42036566FF695AD6554E8E01 /* AgentOutputsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOutputsView.swift; sourceTree = "<group>"; };
 		441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputRoute.swift; sourceTree = "<group>"; };
 		4486101C5C80FCD26BD6F11C /* OnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingService.swift; sourceTree = "<group>"; };
@@ -1110,6 +1112,7 @@
 				CA700DD1C27CA8DEA372F8E2 /* NotchModuleRegistry.swift */,
 				6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */,
 				E631734099EB92C31D4A0F8E /* NotchSnoozeService.swift */,
+				41A6ECB257EF03EF883111C4 /* NotificationBannerWatcher.swift */,
 				53C99AB15A84E3C48B1EF6F5 /* NotificationCenterStore.swift */,
 				C2173DE466719E2BE730C2CC /* NowPlayingService.swift */,
 				B1AD319B291A2EBDA2515AC8 /* OffscreenRenderer.swift */,
@@ -1651,6 +1654,7 @@
 				8553F364B94786B1DBB37B20 /* NotchOnboardingView.swift in Sources */,
 				537303BEBFF07693137E2E35 /* NotchSnoozeService.swift in Sources */,
 				5F123B9F932F284C2C21F744 /* NotesModule.swift in Sources */,
+				26A5FFE9B5B48CE37359F8F1 /* NotificationBannerWatcher.swift in Sources */,
 				38419CE568D7D4DDDFD4986F /* NotificationCenterStore.swift in Sources */,
 				CE2C56B45114BF71AD9951C9 /* NotificationsModule.swift in Sources */,
 				6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */,

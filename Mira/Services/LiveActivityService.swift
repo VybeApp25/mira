@@ -209,9 +209,13 @@ final class LiveActivityService: ObservableObject {
     /// falls back to a count, because a message from twenty minutes ago sitting
     /// permanently in the notch is not a notification any more, it's wallpaper.
     ///
-    /// This is also where iPhone notifications appear, without anything extra:
-    /// Continuity delivers them into macOS Notification Center, and this reads
-    /// Notification Center rather than any one app.
+    /// iPhone notifications appear here too, but NOT for the reason an earlier
+    /// version of this comment gave. It claimed Continuity delivers them into the
+    /// same store Mira reads, so they arrived "without anything extra". That was
+    /// wrong: the database holds only Mac apps — checked directly, zero rows for
+    /// the mirrored apps that were on screen at the time. They arrive because
+    /// NotificationBannerWatcher reads the banner itself, which is the only
+    /// source that sees them at all.
     private func notificationActivity() -> LiveActivity? {
         let service = SystemNotificationsService.shared
         guard service.isTrusted else { return nil }
@@ -228,9 +232,22 @@ final class LiveActivityService: ObservableObject {
         guard service.isPopping, let latest = service.latest, service.isVisible(latest) else {
             return nil
         }
+        // The title carries the SENDER on the sources that have one, and dropping
+        // it was leaving the strip saying "Messages · are we still on for 7?" —
+        // which is the half of a banner you can least afford to lose. Included
+        // only when it isn't just the app name repeated.
+        let headline = latest.title.trimmingCharacters(in: .whitespaces)
+        let text: String
+        if !headline.isEmpty, headline.caseInsensitiveCompare(latest.app) != .orderedSame,
+           headline != latest.message {
+            text = "\(latest.app) · \(headline): \(latest.message)"
+        } else {
+            text = "\(latest.app) · \(latest.message)"
+        }
+
         return LiveActivity(kind: .notification,
                             icon: latest.icon,
-                            text: "\(latest.app) · \(latest.message)",
+                            text: text,
                             tint: Color(red: 0.55, green: 0.70, blue: 1.0),
                             appName: latest.app)
     }

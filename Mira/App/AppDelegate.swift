@@ -150,6 +150,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // which is precisely when nobody has the Notifications panel open.
         SystemNotificationsService.shared.start()
 
+        // The banner observer: catches every alert the moment it is drawn —
+        // including iPhone ones, which reach no database — and hides the native
+        // banner when the user has asked for that. Independent of the poll above,
+        // which now only supplies history.
+        NotificationBannerWatcher.shared.start()
+
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
 

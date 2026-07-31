@@ -3,21 +3,26 @@
 // in the audit — UNUserNotification appeared in four files but all of them were
 // Mira POSTING its own notifications, never reading the system's.
 //
-// Reads Notification Center's accessibility tree. Probed against the live
-// process before writing any of this, because the shape is not documented:
+// TWO SOURCES, and the reason for each.
 //
-//   com.apple.notificationcenterui
-//     └ AXWindow "Notification Center"
-//         └ AXGroup → AXGroup → AXScrollArea
-//             └ AXGroup            (the stack)
-//                 └ AXGroup        (one notification)
-//                      description = "App, Title, Subtitle, Body"
+//   • NotificationBannerWatcher (PRIMARY) — an accessibility observer on the
+//     banner window. Immediate, exact, and the ONLY source that sees iPhone
+//     notifications mirrored over Continuity.
+//   • NotificationCenterStore (HISTORY) — usernoted's database. Late by 5-10s
+//     and Mac-only, but it is the only source that outlives Mira's process, so
+//     it supplies the backlog on launch.
 //
-// That description is the only text carried — there are no separate title/body
-// attributes — so parsing splits on ", " and takes the first component as the
-// app. A body containing a comma will over-split; that is a display nuisance,
-// not a correctness problem, and inventing structure that isn't there would be
-// worse.
+// CORRECTION TO AN EARLIER VERSION OF THIS FILE. This header used to state that
+// the accessibility path "returns nothing, ever" and that banners cannot be
+// observed. Both claims were wrong. Banners carry subrole
+// AXNotificationCenterBanner with labelled `title`/`subtitle`/`body` children;
+// the original probe simply happened to run when no banner was on screen, which
+// a window-created observer makes impossible.
+//
+// The same header also described splitting the banner's description on ", " to
+// recover the fields, and called the resulting mangling of any body containing a
+// comma "a display nuisance, not a correctness problem". It was avoidable: the
+// labelled children carry the exact text, and the watcher reads those.
 //
 // NOT IMPLEMENTED: inline reply. MacNotch offers it, and it would mean locating
 // and driving a text field inside another process's UI, then hitting its send
@@ -115,12 +120,16 @@ final class SystemNotificationsService: ObservableObject {
             }
         }
 
-        guard isTrusted else { notifications = []; return }
+        // Clearing the DATABASE's contribution, not the whole list. Assigning to
+        // `notifications` here would wipe every live-captured alert on the next
+        // poll — including the iPhone ones, which exist in no other source.
+        guard isTrusted else { dbNotes = []; publishMerged(); return }
 
         guard let app = NSWorkspace.shared.runningApplications.first(where: {
             $0.bundleIdentifier == "com.apple.notificationcenterui"
         }) else {
-            notifications = []
+            dbNotes = []
+            publishMerged()
             return
         }
 
@@ -132,6 +141,74 @@ final class SystemNotificationsService: ObservableObject {
         ingest(found)
     }
 
+    /// Everything the banner watcher has caught this session, newest first.
+    ///
+    /// Held separately from the database's view because the two overlap without
+    /// agreeing: the same alert has a different identifier in each, and the ones
+    /// mirrored from an iPhone appear ONLY here. Merging happens at publish time.
+    private var liveNotes: [SystemNotification] = []
+
+    /// The database's view, unmerged.
+    private var dbNotes: [SystemNotification] = []
+
+    /// Content keys popped from a live banner, and when. Stops the same alert
+    /// popping a second time when the database catches up to it seconds later.
+    private var poppedKeys: [String: Date] = [:]
+
+    /// Identity by content rather than by source identifier, so the AX and
+    /// database views of one alert collapse to a single row.
+    private static func key(_ note: SystemNotification) -> String {
+        "\(note.app)|\(note.title)|\(note.message)"
+            .lowercased()
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A banner, the instant it is drawn. This is what makes the closed notch
+    /// react immediately instead of whenever the database happens to be written,
+    /// and it is the only path that carries iPhone notifications at all.
+    func ingestLive(_ note: SystemNotification) {
+        let noteKey = Self.key(note)
+        prunePopped()
+
+        // Already known from either source — don't duplicate the row, and don't
+        // interrupt twice for one alert.
+        let alreadyKnown = liveNotes.contains { Self.key($0) == noteKey }
+            || poppedKeys[noteKey] != nil
+        guard !alreadyKnown else { return }
+
+        liveNotes.insert(note, at: 0)
+        if liveNotes.count > 60 { liveNotes.removeLast(liveNotes.count - 60) }
+        poppedKeys[noteKey] = Date()
+
+        // A banner IS the arrival, so it always pops — no seeding rule applies
+        // the way it does to the database's backlog. Cleared items are the one
+        // exception; re-interrupting with something already dismissed is how the
+        // feature gets turned off.
+        if isVisible(note) {
+            latest = note
+            latestAt = Date()
+        }
+        publishMerged()
+    }
+
+    private func prunePopped() {
+        let cutoff = Date().addingTimeInterval(-300)
+        poppedKeys = poppedKeys.filter { $0.value > cutoff }
+    }
+
+    /// One list from two sources, newest first, one row per alert.
+    private func publishMerged() {
+        var merged: [SystemNotification] = []
+        var seenKeys = Set<String>()
+        for note in (liveNotes + dbNotes).sorted(by: {
+            ($0.deliveredAt ?? .distantPast) > ($1.deliveredAt ?? .distantPast)
+        }) {
+            let k = Self.key(note)
+            if seenKeys.insert(k).inserted { merged.append(note) }
+        }
+        if merged != notifications { notifications = merged }
+    }
+
     private func ingest(_ found: [SystemNotification]) {
         // Work out what is NEW before publishing, so the collapsed notch can pop
         // an arrival rather than only ever showing a static count. The AX tree
@@ -141,7 +218,13 @@ final class SystemNotificationsService: ObservableObject {
         // is a statement about attention, and re-interrupting with something the
         // user has already dismissed is the fastest way to make them turn the
         // whole feature off.
-        let incoming = found.filter { !seenIDs.contains($0.id) && isVisible($0) }
+        prunePopped()
+        // An alert the banner watcher already popped must not pop again when the
+        // database catches up to it 5-10s later. The two sources give the same
+        // notification different identifiers, so this has to match on content.
+        let incoming = found.filter {
+            !seenIDs.contains($0.id) && isVisible($0) && poppedKeys[Self.key($0)] == nil
+        }
 
         // The first pass after launch seeds the seen set WITHOUT popping.
         // Everything already delivered is new to us but old to the user, and
@@ -157,6 +240,7 @@ final class SystemNotificationsService: ObservableObject {
             if let arrival {
                 latest = arrival
                 latestAt = Date()
+                poppedKeys[Self.key(arrival)] = Date()
             }
         } else {
             hasSeeded = true
@@ -166,9 +250,11 @@ final class SystemNotificationsService: ObservableObject {
         // that is dismissed and posted again counts as new, which it is.
         seenIDs = Set(found.map(\.id))
 
-        // Only publish on change — reassigning identical content every 3s would
-        // redraw the list and fight scrolling.
-        if found != notifications { notifications = found }
+        // Publishing goes through the merge so the database cannot drop the
+        // live-only rows — the iPhone ones exist in no database and would
+        // vanish from the list on the next poll if this assigned directly.
+        dbNotes = found
+        publishMerged()
     }
 
     /// The most recent arrival, and when we noticed it. The collapsed strip uses
@@ -335,8 +421,25 @@ final class NotificationsModule: NotchModule, ObservableObject {
     private let service = SystemNotificationsService.shared
     private var cancellables = Set<AnyCancellable>()
 
+    private let watcher = NotificationBannerWatcher.shared
+
     var headerAccessories: [NotchHeaderAccessory] {
         var out: [NotchHeaderAccessory] = []
+
+        // Only offered once Mira is actually catching banners. A switch that
+        // hides the system's notifications while Mira cannot see them would
+        // silently swallow everything, so it is not reachable until the
+        // accessibility observer is attached and working.
+        if watcher.isWatching {
+            out.append(NotchHeaderAccessory(
+                id: "suppress",
+                systemImage: watcher.suppressBanners ? "bell.slash.fill" : "bell.badge",
+                label: watcher.suppressBanners
+                    ? "Native banners hidden — showing them in the notch instead. Click to let macOS show them again."
+                    : "Hide macOS's own notification banners and show them only in the notch") { [weak self] in
+                self?.watcher.suppressBanners.toggle()
+            })
+        }
 
         if !service.visibleNotifications.isEmpty {
             out.append(NotchHeaderAccessory(id: "clearAll",
@@ -371,9 +474,11 @@ final class NotificationsModule: NotchModule, ObservableObject {
     }
 
     init() {
-        service.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+        for publisher in [service.objectWillChange, watcher.objectWillChange] {
+            publisher
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &cancellables)
+        }
     }
 
     // Faster while the panel is on screen, back to the background cadence when
@@ -390,8 +495,48 @@ private struct NotificationsView: View {
 
     @ObservedObject var service: SystemNotificationsService
     @ObservedObject private var accentSvc = AccentColorService.shared
+    @ObservedObject private var watcher = NotificationBannerWatcher.shared
 
     private var accent: Color { accentSvc.color }
+
+    /// The one control that changes what the rest of the Mac does, so it says
+    /// plainly what it turns off and what happens if Mira isn't running.
+    private var suppressionRow: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: watcher.suppressBanners ? "bell.slash.fill" : "rectangle.on.rectangle")
+                .font(.system(size: 12))
+                .foregroundColor(watcher.suppressBanners ? accent : .white.opacity(0.40))
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(watcher.suppressBanners ? "Banners hidden — shown here instead"
+                                             : "Hide macOS notification banners")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.88))
+                Text(watcher.suppressBanners
+                     ? "macOS's own pop-ups are suppressed while Mira runs. Quit Mira and they come straight back."
+                     : "Stop the pop-up in the corner. Alerts appear in the notch and stay in Notification Center.")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.42))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle("", isOn: Binding(get: { watcher.suppressBanners },
+                                     set: { watcher.suppressBanners = $0 }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .tint(accent)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(Color.white.opacity(watcher.suppressBanners ? 0.09 : 0.05)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Hide macOS notification banners")
+    }
 
     var body: some View {
         Group {
@@ -408,6 +553,7 @@ private struct NotificationsView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 3) {
+                if watcher.isWatching { suppressionRow }
                 ForEach(service.visibleNotifications) { note in
                     row(note)
                 }
@@ -422,9 +568,9 @@ private struct NotificationsView: View {
                 // a different affordance per panel.
                 PermissionPromptView(
                     permission: .fullDisk,
-                    detail: "Notifications are delivered to a database only Full Disk Access can "
-                          + "read. Banners are on screen for a moment and often not at all, so "
-                          + "watching for them misses most of what arrives.")
+                    detail: "New alerts are caught as they arrive without this. Full Disk Access "
+                          + "adds the BACKLOG — the notifications that came in before Mira "
+                          + "started, which are only kept in a database it can't otherwise read.")
             } else if service.visibleNotifications.isEmpty {
                 VStack(spacing: 4) {
                     Image(systemName: "bell.slash")
@@ -488,9 +634,14 @@ private struct NotificationRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(note.app)
+                // App, then sender. Same reason as the collapsed strip: without
+                // the title a row reads as a message from nobody.
+                Text(note.title.isEmpty || note.title.caseInsensitiveCompare(note.app) == .orderedSame
+                     ? note.app
+                     : "\(note.app) · \(note.title)")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.white.opacity(0.55))
+                    .lineLimit(1)
                 Text(note.message)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.88))
