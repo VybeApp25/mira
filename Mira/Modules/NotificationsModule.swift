@@ -37,6 +37,11 @@ struct SystemNotification: Identifiable, Equatable {
     let id: String
     let app: String
     let message: String
+    /// Sender or headline, when the source gives one separately from the body.
+    /// The accessibility path has no such split, so it passes an empty string.
+    var title: String = ""
+    var bundleID: String = ""
+    var deliveredAt: Date?
 
     /// SF Symbol guessed from the posting app, so the list scans by source.
     var icon: String {
@@ -84,8 +89,27 @@ final class SystemNotificationsService: ObservableObject {
         timer = nil
     }
 
+    /// True when the database is readable — i.e. Mira has Full Disk Access.
+    /// Published so the panel can say which source it is on and what is missing.
+    @Published private(set) var hasDatabaseAccess = false
+
     func refresh() {
         isTrusted = AXIsProcessTrusted()
+        hasDatabaseAccess = NotificationCenterStore.isReadable
+
+        // The database FIRST. It is the record of what was actually delivered,
+        // where the accessibility tree only ever shows a banner while it happens
+        // to be on screen — on this Mac that window was so short, and so often
+        // absent entirely, that the AX path returned nothing while texts were
+        // demonstrably arriving.
+        if hasDatabaseAccess {
+            let fromDatabase = NotificationCenterStore.recent()
+            if !fromDatabase.isEmpty {
+                ingest(fromDatabase)
+                return
+            }
+        }
+
         guard isTrusted else { notifications = []; return }
 
         guard let app = NSWorkspace.shared.runningApplications.first(where: {
@@ -100,14 +124,33 @@ final class SystemNotificationsService: ObservableObject {
         for window in Self.attr(ax, kAXWindowsAttribute) as? [AXUIElement] ?? [] {
             Self.collect(window, into: &found, depth: 0)
         }
+        ingest(found)
+    }
+
+    private func ingest(_ found: [SystemNotification]) {
         // Work out what is NEW before publishing, so the collapsed notch can pop
         // an arrival rather than only ever showing a static count. The AX tree
         // is a snapshot of what Notification Center is holding, so "new" is
         // simply an id we have not seen in a previous snapshot.
         let incoming = found.filter { !seenIDs.contains($0.id) }
-        if let arrival = incoming.last {
-            latest = arrival
-            latestAt = Date()
+
+        // The first pass after launch seeds the seen set WITHOUT popping.
+        // Everything already delivered is new to us but old to the user, and
+        // opening a laptop to a three-hour-old text taking over the notch would
+        // be worse than not having the feature.
+        if hasSeeded {
+            // Newest wins. The database returns newest-first while the
+            // accessibility walk returns tree order, so picking positionally
+            // would pop the wrong one depending on which source answered.
+            let arrival = incoming
+                .max { ($0.deliveredAt ?? .distantPast) < ($1.deliveredAt ?? .distantPast) }
+                ?? incoming.first
+            if let arrival {
+                latest = arrival
+                latestAt = Date()
+            }
+        } else {
+            hasSeeded = true
         }
         // Keep the seen set to the ids still present plus what just arrived, so
         // it can't grow without bound over a long uptime — and so a notification
@@ -125,6 +168,7 @@ final class SystemNotificationsService: ObservableObject {
     @Published private(set) var latestAt: Date?
 
     private var seenIDs: Set<String> = []
+    private var hasSeeded = false
 
     /// How long a new notification holds the closed notch before it drops back
     /// to a count. Long enough to read a line, short enough that walking away
@@ -249,7 +293,9 @@ private struct NotificationsView: View {
             .padding(.vertical, 8)
         }
         .overlay {
-            if service.notifications.isEmpty {
+            if service.notifications.isEmpty, !service.hasDatabaseAccess {
+                fullDiskPrompt
+            } else if service.notifications.isEmpty {
                 VStack(spacing: 4) {
                     Image(systemName: "bell.slash")
                         .font(.system(size: 18))
@@ -302,6 +348,44 @@ private struct NotificationsView: View {
                 .foregroundColor(.white.opacity(0.35))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Shown when there is nothing to list AND the database can't be read.
+    ///
+    /// This distinction is the whole point: without Full Disk Access the panel
+    /// used to say "No notifications", which is indistinguishable from a quiet
+    /// morning and is exactly the lie that sent us chasing a bug in the reader
+    /// while texts were arriving normally.
+    var fullDiskPrompt: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "externaldrive.badge.questionmark")
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.30))
+            Text("Full Disk Access needed")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.65))
+            Text("Notifications are delivered to a database only Full Disk Access can read. "
+                 + "Banners are on screen for a moment and often not at all, so watching for "
+                 + "them misses most of what arrives.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.35))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 340)
+
+            Button("Open Full Disk Access") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(.black)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(AccentColorService.shared.color))
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
