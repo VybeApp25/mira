@@ -125,12 +125,16 @@ final class RemoteControlService: ObservableObject {
             "--print",
             "--input-format", "stream-json",
             "--output-format", "stream-json",
-            "--verbose"
+            "--verbose",
+            // REQUIRED, and the first version's omission was a real hole.
+            // --print defaults to permissionMode=bypassPermissions, so leaving
+            // this off meant a notch-controlled session ran every tool with no
+            // approval at all while the panel implied otherwise — confirmed by
+            // running one and watching a Bash execute unasked. `manual` makes
+            // every tool call ask, which is what routes it to the PreToolUse
+            // hook and into the notch as Allow/Deny.
+            "--permission-mode", "manual"
         ]
-        // Deliberately NOT passing --permission-mode. The session keeps the
-        // default, so tool calls go through the PreToolUse hook and land in the
-        // notch as Allow/Deny. Passing bypassPermissions here would make the
-        // notch approval UI decorative while the session did whatever it liked.
 
         var environment = ProcessInfo.processInfo.environment
         // Marks the session as Mira-launched for anything downstream that cares,

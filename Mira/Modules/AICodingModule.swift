@@ -117,7 +117,29 @@ final class AICodingModule: NotchModule, ObservableObject {
         return activeRows.first { $0.isRunning }
     }
 
-    var showsBanner: Bool { bannerRow != nil }
+    var showsBanner: Bool { bannerRow != nil || justConnected }
+
+    /// Briefly held after a successful Connect.
+    ///
+    /// Tre pressed Connect and reported "nothing happened". It had worked —
+    /// script written, five events registered — but the only feedback was the
+    /// banner silently vanishing and the panel shrinking, which reads as the
+    /// thing you clicked dismissing itself. An action that edits the user's own
+    /// config has to say so.
+    @Published private(set) var justConnected = false
+
+    func connect() {
+        installer.install()
+        guard installer.isInstalled else { heightChanged(); return }
+        bridge.start()
+        justConnected = true
+        heightChanged()
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            self?.justConnected = false
+            self?.heightChanged()
+        }
+    }
 
     func dismissBanner(forever: Bool) {
         if forever { bannerSuppressed = true } else { bannerDismissed = true }
@@ -283,7 +305,27 @@ private struct AICodingView: View {
 
     @ViewBuilder
     private var banner: some View {
-        if let row = module.bannerRow {
+        if module.justConnected {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(red: 0.40, green: 0.80, blue: 0.62))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Connected")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.95))
+                    Text("Tool prompts from Claude Code now land here. "
+                         + "Sessions already running keep their own prompts until you restart them.")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 9)
+                .fill(Color(red: 0.40, green: 0.80, blue: 0.62).opacity(0.12)))
+        } else if let row = module.bannerRow {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "bolt.fill")
@@ -306,8 +348,7 @@ private struct AICodingView: View {
 
                 HStack(spacing: 8) {
                     Button {
-                        installer.install()
-                        if installer.isInstalled { bridge.start(); module.heightChanged() }
+                        module.connect()
                     } label: {
                         Text("Connect")
                             .font(.system(size: 11, weight: .semibold))
@@ -415,9 +456,59 @@ private struct AICodingView: View {
 
     // MARK: Remote control conversation
 
+    /// The approval for THIS session, if it's blocked right now. Joined by id,
+    /// same as the list does.
+    private var remotePending: PendingPermission? {
+        guard let id = remote.sessionID else { return nil }
+        return bridge.sessions.first { $0.id == id }?.pending
+    }
+
+    /// Approving has to be possible from inside this view. The first cut only
+    /// rendered Allow/Deny in the session list, so a notch-controlled session
+    /// that asked while you were reading its conversation had no answerable
+    /// prompt anywhere on screen — it sat at "Working…" and then timed out.
+    @ViewBuilder
+    private var remoteApproval: some View {
+        if let pending = remotePending, let id = remote.sessionID {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    ToolChip(name: pending.toolName, accent: accent, emphasized: true)
+                    Text("needs your approval")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                    Spacer(minLength: 0)
+                    CountdownText(deadline: pending.deadline)
+                }
+                if let detail = pending.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 8) {
+                    DecisionButton(title: "Allow", isPrimary: true, accent: accent) {
+                        bridge.respond(sessionID: id, approve: true)
+                    }
+                    DecisionButton(title: "Deny", isPrimary: false, accent: accent) {
+                        bridge.respond(sessionID: id, approve: false)
+                    }
+                }
+            }
+            .padding(9)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(accent.opacity(0.14))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(accent.opacity(0.5), lineWidth: 1))
+            )
+        }
+    }
+
     private var remoteControl: some View {
         VStack(alignment: .leading, spacing: 6) {
             statusStrip
+            remoteApproval
 
             ScrollViewReader { proxy in
                 ScrollView {

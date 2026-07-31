@@ -47,6 +47,21 @@ final class AICodingHookInstaller: ObservableObject {
 
     func refresh() {
         isInstalled = fm.isExecutableFile(atPath: scriptURL.path) && settingsReferenceScript()
+        if isInstalled { updateScriptIfStale() }
+    }
+
+    /// Rewrite the on-disk script whenever Mira ships a new one.
+    ///
+    /// Without this, the script a user gets is frozen at the moment they first
+    /// pressed Connect, and every later fix to it — including the one that made
+    /// notch-controlled sessions deny on silence rather than run unapproved —
+    /// would never reach anyone who had already installed. The settings entry
+    /// points at a stable path, so replacing the file is the whole update.
+    private func updateScriptIfStale() {
+        let current = try? String(contentsOf: scriptURL, encoding: .utf8)
+        guard current != Self.script else { return }
+        try? Self.script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
     }
 
     private func settingsReferenceScript() -> Bool {
@@ -204,11 +219,26 @@ final class AICodingHookInstaller: ObservableObject {
     case "$reply" in
       *'"approved":true'*)
         printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"Approved in Mira"}}'
+        exit 0
         ;;
       *'"approved":false'*)
         printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Denied in Mira"}}'
+        exit 0
         ;;
     esac
+
+    # No answer. What that should mean depends entirely on who owns the session.
+    #
+    # In YOUR terminal, silence must fall through: Claude Code prompts you the
+    # way it always did, and Mira being shut or slow costs you nothing.
+    #
+    # In a session Mira launched there IS no terminal to fall back to — nobody
+    # is watching a prompt Mira failed to show. Falling through there means the
+    # tool just runs unapproved, which is the opposite of what the panel
+    # promises. So a notch-controlled session denies on silence.
+    if [ "$MIRA_REMOTE_CONTROL" = "1" ]; then
+      printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Mira could not ask you in time. Nothing ran."}}'
+    fi
 
     exit 0
     """#
