@@ -139,7 +139,14 @@ final class CodeHostingService: ObservableObject {
     private let host: CodeHost = GitHubHost()
     private var refreshTimer: Timer?
 
-    private init() { hasToken = Self.readToken() != nil }
+    /// Presence only. This runs at app launch, because the module is
+    /// constructed in AppDelegate's registration list, and the previous version
+    /// answered "do I have a token?" by decrypting the token — which makes
+    /// macOS check the keychain ACL and, on a build whose signing identity it
+    /// can't durably match, put up a password prompt on every single launch.
+    /// Reading a secret to test for its existence was wrong regardless of the
+    /// prompt; the prompt just made it obvious.
+    private init() { hasToken = Self.tokenExists() }
 
     // MARK: Token (Keychain)
 
@@ -161,6 +168,24 @@ final class CodeHostingService: ObservableObject {
         SecItemAdd(add as CFDictionary, nil)
     }
 
+    /// Does an item exist, without decrypting it.
+    ///
+    /// `kSecReturnAttributes` with no `kSecReturnData` asks only whether the
+    /// row is there, so the keychain never has to unlock the secret and never
+    /// consults the ACL that triggers the prompt.
+    static func tokenExists() -> Bool {
+        let query: [CFString: Any] = [
+            kSecClass:              kSecClassGenericPassword,
+            kSecAttrService:        kcService,
+            kSecAttrAccount:        kcAccount,
+            kSecAttrSynchronizable: kCFBooleanFalse!,
+            kSecReturnAttributes:   true,
+            kSecReturnData:         false,
+        ]
+        var item: AnyObject?
+        return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
+    }
+
     static func readToken() -> String? {
         let q: [CFString: Any] = [
             kSecClass:              kSecClassGenericPassword,
@@ -179,7 +204,7 @@ final class CodeHostingService: ObservableObject {
 
     func setToken(_ token: String) {
         Self.writeToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
-        hasToken = Self.readToken() != nil
+        hasToken = Self.tokenExists()
         pullRequests = []
         error = nil
         if hasToken { Task { await refresh() } }
