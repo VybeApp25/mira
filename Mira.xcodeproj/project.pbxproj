@@ -194,6 +194,7 @@
 		87BF98768D867ABC8F25FD01 /* narration-wr27r7pv9na4.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6FC63922CE54B40499BB2207 /* narration-wr27r7pv9na4.mp3 */; };
 		88AE58335433FA13E6B5C39C /* ff.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 8833CE70FA4EE5D0937E9725 /* ff.mp3 */; };
 		89AFBF88CAFA03724659FAF3 /* HUDStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB775F6CE844E78162C50C54 /* HUDStateMachine.swift */; };
+		8A05B726463D46E62B65627A /* DropActionsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B45FF8B8A889F69246F622 /* DropActionsModule.swift */; };
 		8A133C5A0C621D99DDBA8C8E /* SuccessObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */; };
 		8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */; };
 		8B4296AB8DE5E2F681CF154E /* QuotaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6D17DC1DC375321372EDEA /* QuotaService.swift */; };
@@ -554,6 +555,7 @@
 		820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDViewModel.swift; sourceTree = "<group>"; };
 		823E45E8C322474B713E0AD7 /* MiraDebugLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDebugLog.swift; sourceTree = "<group>"; };
 		8261E0EB0C3813433E9281F9 /* AnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationController.swift; sourceTree = "<group>"; };
+		82B45FF8B8A889F69246F622 /* DropActionsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropActionsModule.swift; sourceTree = "<group>"; };
 		83B706458B64024088E8769D /* ActionChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipsView.swift; sourceTree = "<group>"; };
 		847AFAFC451130DC3C6A6545 /* MiraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraApp.swift; sourceTree = "<group>"; };
 		8506C01C5CD09C0B3FF5EFB2 /* MiraDockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDockManager.swift; sourceTree = "<group>"; };
@@ -837,6 +839,7 @@
 			children = (
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
+				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
@@ -1484,6 +1487,7 @@
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
 				09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */,
 				D50D8C25DEE71761C7043B7E /* DictationHUDWindowManager.swift in Sources */,
+				8A05B726463D46E62B65627A /* DropActionsModule.swift in Sources */,
 				4CCE5A7EAD281CD7AEE0D9EA /* ElementLocationDetector.swift in Sources */,
 				57555E1B4EA0C23060CE18D9 /* EngineRouter.swift in Sources */,
 				932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */,

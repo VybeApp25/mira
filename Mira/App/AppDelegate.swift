@@ -88,6 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             TodoModule(),
             NotesModule(),
             SnapZoneModule(),
+            DropActionsModule(),
             BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()
