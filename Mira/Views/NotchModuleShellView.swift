@@ -52,6 +52,7 @@ struct NotchModuleShellView: View {
                 // pasted into a slab rather than one object.
                 ZStack(alignment: .top) {
                     content(for: module)
+                    NotchModuleRail()
                     header(for: module)
                 }
                 // Horizontal swipe is the PRIMARY navigation between modules —
@@ -289,6 +290,67 @@ struct NotchModuleDockStrip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .animation(.easeInOut(duration: 0.18), value: registry.selectedID)
+        }
+    }
+}
+
+// MARK: - Right-edge rail
+
+/// A vertical column of small module icons clipped against the slab's right
+/// edge — MacNotch's secondary switcher, and the last shell element from the
+/// parity audit.
+///
+/// It shows a WINDOW of the carousel centred on the current module rather than
+/// every module. With 26 registered, drawing them all would either shrink the
+/// icons to noise or overflow the panel; showing the neighbours communicates the
+/// thing the rail is actually for — that there is more either side of you, and
+/// roughly where you are in the order.
+///
+/// Deliberately peripheral: half-opacity, small, and partially clipped at the
+/// edge exactly as MacNotch's is. It is orientation, not a primary control —
+/// the carousel and the dock are the ways you actually move.
+struct NotchModuleRail: View {
+
+    @ObservedObject private var registry = NotchModuleRegistry.shared
+    @ObservedObject private var accentSvc = AccentColorService.shared
+
+    private var accent: Color { accentSvc.color }
+
+    /// Modules either side of the current one, wrapping.
+    private var window: [(module: AnyNotchModule, isCurrent: Bool)] {
+        let list = registry.visibleModules
+        guard list.count > 1,
+              let idx = list.firstIndex(where: { $0.id == registry.selectedID })
+        else { return [] }
+
+        let span = 2   // two above, two below
+        return (-span...span).map { offset in
+            let i = ((idx + offset) % list.count + list.count) % list.count
+            return (list[i], offset == 0)
+        }
+    }
+
+    var body: some View {
+        if !window.isEmpty {
+            HStack {
+                Spacer()
+                VStack(spacing: 7) {
+                    ForEach(window, id: \.module.id) { entry in
+                        Image(systemName: entry.module.icon)
+                            .font(.system(size: entry.isCurrent ? 10 : 9,
+                                          weight: entry.isCurrent ? .semibold : .regular))
+                            .foregroundColor(entry.isCurrent ? accent : .white.opacity(0.28))
+                            .frame(width: 14, height: 14)
+                    }
+                }
+                // Clipped against the edge: the icons run off the slab rather
+                // than sitting in a tidy inset column.
+                .padding(.trailing, 3)
+            }
+            .frame(maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.20), value: registry.selectedID)
+            .accessibilityHidden(true)   // orientation only; the dock is the control
         }
     }
 }
