@@ -93,6 +93,7 @@
 		3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F52A13C8B02EEA4701166A /* ResponseCardService.swift */; };
 		40B974C02419A2C9A32A6245 /* OutcomeEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */; };
 		41252FE3EF8037AAB0B421EB /* LiveActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1272F960C6DA927A3452D01 /* LiveActivityService.swift */; };
+		4130205434663018B6160601 /* SnapZoneModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3727FB67B7EA11965392716B /* SnapZoneModule.swift */; };
 		41A836A8FF78EF0DF0055710 /* agent-launch.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 34C283A8B11CD4F1E6371C82 /* agent-launch.mp3 */; };
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */; };
@@ -442,6 +443,7 @@
 		34FFDEBB61B4AF55FFBA61E1 /* ThreadsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadsTabView.swift; sourceTree = "<group>"; };
 		3593098536F17182B92491AE /* enter.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = enter.mp3; sourceTree = "<group>"; };
 		3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraIslandWindowManager.swift; sourceTree = "<group>"; };
+		3727FB67B7EA11965392716B /* SnapZoneModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapZoneModule.swift; sourceTree = "<group>"; };
 		376F1CDCA756B5368F057786 /* AgentTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTaskStore.swift; sourceTree = "<group>"; };
 		380708383A28192B655CE505 /* CallTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriptView.swift; sourceTree = "<group>"; };
 		3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityBrowseView.swift; sourceTree = "<group>"; };
@@ -837,6 +839,7 @@
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
+				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
 				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
@@ -1618,6 +1621,7 @@
 				B101A7E87F46F83E807086BE /* SkillCatalog.swift in Sources */,
 				C117552EE76C1FEF99EFCB5E /* SkillStore.swift in Sources */,
 				E29BDEF21A1B2762999F9340 /* SkillsTabView.swift in Sources */,
+				4130205434663018B6160601 /* SnapZoneModule.swift in Sources */,
 				450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */,
 				0D551657558811383B804B93 /* StatusBarController.swift in Sources */,
 				FCA9289DB0963ED16EAC692D /* StreamingMarkdownView.swift in Sources */,

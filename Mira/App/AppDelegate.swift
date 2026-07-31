@@ -87,6 +87,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             CalendarModule(),
             TodoModule(),
             NotesModule(),
+            SnapZoneModule(),
             BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()
@@ -96,6 +97,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // low-battery warning it feeds into the collapsed strip is only useful if
         // it fires when you AREN'T looking at the Bluetooth panel.
         BluetoothService.shared.start()
+
+        // Snap Zones watches for window drags reaching the top of the screen.
+        SnapZoneService.shared.start()
 
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
