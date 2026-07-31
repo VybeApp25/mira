@@ -167,6 +167,7 @@
 		705A9CD000BDFFB117C7E404 /* OnboardingNarrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24B4FD4FFA5539F9EDC9F1DE /* OnboardingNarrator.swift */; };
 		713DA3CACD91572D8939C588 /* CodexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF6665B0465EE94AD47A55B /* CodexService.swift */; };
 		7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1769D3BD6761A819F8B5BDA8 /* AppSecrets.swift */; };
+		732712AE4E6300B515CD425B /* MediaModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F8B7224F44A77FAA8D536B /* MediaModule.swift */; };
 		7347437A0CAED43E1FB58B3F /* CronsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E353B5F50827A17EDA25AB /* CronsTabView.swift */; };
 		73BD6220CE7B146C10160A7E /* polymarket.md in Resources */ = {isa = PBXBuildFile; fileRef = 812EB77420B5DB775E6B68C5 /* polymarket.md */; };
 		7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93237F9C8CE985B51E1E1062 /* TaskAnnouncer.swift */; };
@@ -530,6 +531,7 @@
 		7101F70E0818E0AA673FD29A /* agent-close.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "agent-close.mp3"; sourceTree = "<group>"; };
 		714E5F324015327B7790838A /* SharedStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStatusView.swift; sourceTree = "<group>"; };
 		724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementService.swift; sourceTree = "<group>"; };
+		72F8B7224F44A77FAA8D536B /* MediaModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModule.swift; sourceTree = "<group>"; };
 		73D7BDBCBC87C533A6A5F4F6 /* narration-3w4viw8ko7bx6.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-3w4viw8ko7bx6.mp3"; sourceTree = "<group>"; };
 		7453264472C5BA542F725096 /* ImprovementOutcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImprovementOutcome.swift; sourceTree = "<group>"; };
 		7490BE99AE4331B0DA9BF7BE /* TriggerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TriggerModels.swift; sourceTree = "<group>"; };
@@ -840,6 +842,7 @@
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
+				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
@@ -1535,6 +1538,7 @@
 				EE6A97662B9ED3C7E5487D83 /* LiveTranscriptionStream.swift in Sources */,
 				3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */,
 				292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */,
+				732712AE4E6300B515CD425B /* MediaModule.swift in Sources */,
 				9C5365E19F360C429D3EEAD1 /* MemoryStore.swift in Sources */,
 				B8A30732977529D4BF431B35 /* MenuBarIconManager.swift in Sources */,
 				0C020C4633AE33FE211A9DC6 /* MicLevelMonitor.swift in Sources */,

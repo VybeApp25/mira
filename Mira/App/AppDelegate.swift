@@ -84,6 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // the user's saved order takes over once they reorder anything.
         NotchModuleRegistry.shared.register([
             WeatherModule(),
+            MediaModule(),
             CalendarModule(),
             TodoModule(),
             NotesModule(),
