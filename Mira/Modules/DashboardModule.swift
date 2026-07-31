@@ -26,7 +26,9 @@ final class DashboardModule: NotchModule, ObservableObject {
     /// Two rows need the taller panel; one row fits the standard one. Height is
     /// per-module by construction, and MacNotch stores exactly this as
     /// `dashboardTwoRowsNotchExpandedHeight`.
-    var heightLevel: NotchHeightLevel { store.selected.twoRows ? .tall : .standard }
+    /// One row is a short panel, two rows a tall one. `.standard` left a third
+    /// of the panel empty under a single row of cards.
+    var heightLevel: NotchHeightLevel { store.selected.twoRows ? .tall : .compact }
     let allowsTallMode = false
 
     private let store = DashboardProfileStore.shared
@@ -123,17 +125,32 @@ private struct DashboardView: View {
         let slots = profile.visibleSlots
         let rows = profile.twoRows ? 2 : 1
 
-        return VStack(spacing: 8) {
-            ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: 8) {
-                    ForEach(0..<4, id: \.self) { column in
-                        let index = row * 4 + column
-                        SlotCard(widget: index < slots.count ? slots[index] : nil,
-                                 accent: profile.color)
+        // Widths are computed, not negotiated. Left to an HStack, each card
+        // takes its content's ideal width first, so Pomodoro's big 25:00 made
+        // its column twice the width of Notes' and the row stopped reading as
+        // a grid. A slot is a quarter of the panel whatever is in it.
+        return GeometryReader { geo in
+            let spacing: CGFloat = 8
+            let cardWidth = max(40, (geo.size.width - spacing * 3) / 4)
+
+            VStack(spacing: spacing) {
+                ForEach(0..<rows, id: \.self) { row in
+                    HStack(spacing: spacing) {
+                        ForEach(0..<4, id: \.self) { column in
+                            let index = row * 4 + column
+                            SlotCard(widget: index < slots.count ? slots[index] : nil,
+                                     accent: profile.color)
+                                .frame(width: cardWidth)
+                                // The dock widgets carry an intrinsic width
+                                // larger than a quarter-panel — Pomodoro's
+                                // 25:00 is set at 24pt — and drew straight
+                                // over their neighbours without this.
+                                .clipped()
+                        }
                     }
                 }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
     }
 
@@ -205,7 +222,12 @@ private struct SlotCard: View {
                 .fill(Color.white.opacity(0.05))
 
             if let widget {
+                // Every card anchors its content to the top. The dock widgets
+                // centre themselves, which is right in a short dock tile and
+                // wrong in a tall grid cell — mixing the two made the row read
+                // as content floating at random heights rather than as a grid.
                 content(for: widget)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(7)
             } else {
                 // An empty slot is a real state, not a bug — say so quietly
