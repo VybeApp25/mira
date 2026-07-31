@@ -42,6 +42,35 @@ enum DockWidgetType: String, CaseIterable, Identifiable {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Sharing widgets with the Dashboard module
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One entry point to the widget views, so the Dashboard can host them without
+/// every widget struct in this file becoming internal.
+///
+/// The nine dock widgets took real work to get right — Now Playing's artwork
+/// handling, the battery source, the launcher — and rebuilding them at a
+/// different size for the Dashboard would mean two versions of each drifting
+/// apart. The Dashboard supplies its own card chrome and puts these inside it.
+@MainActor
+enum DockWidgetFactory {
+    @ViewBuilder
+    static func view(for type: DockWidgetType) -> some View {
+        switch type {
+        case .clock:       ClockWidget()
+        case .weather:     WeatherWidget()
+        case .nowPlaying:  NowPlayingWidget()
+        case .battery:     BatteryWidget()
+        case .appLauncher: AppLauncherWidget()
+        case .pomodoro:    PomodoroWidget()
+        case .toggles:     QuickTogglesWidget()
+        case .soundMeter:  SoundMeterWidget()
+        case .systemStats: SystemStatsWidget()
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Widget order persistence
 // ─────────────────────────────────────────────────────────────────────────────
 

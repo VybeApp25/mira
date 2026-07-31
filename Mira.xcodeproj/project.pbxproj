@@ -94,6 +94,7 @@
 		3FDD1117C1E6D7B88437055D /* CallAudioCaptures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF4D36984622D43BDC26EF2 /* CallAudioCaptures.swift */; };
 		3FF94BFAEB99BBB0D83E4B11 /* imessage_read.py in Resources */ = {isa = PBXBuildFile; fileRef = B5E2AB3312D5C5AA3C6DE821 /* imessage_read.py */; };
 		3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F52A13C8B02EEA4701166A /* ResponseCardService.swift */; };
+		405D3A05C84E5EEE7DFCC6BA /* DashboardModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7E9AEEB9C06278460466850 /* DashboardModule.swift */; };
 		40B974C02419A2C9A32A6245 /* OutcomeEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */; };
 		41252FE3EF8037AAB0B421EB /* LiveActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1272F960C6DA927A3452D01 /* LiveActivityService.swift */; };
 		4130205434663018B6160601 /* SnapZoneModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3727FB67B7EA11965392716B /* SnapZoneModule.swift */; };
@@ -101,6 +102,7 @@
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */; };
 		435235FBB96512337D08237E /* IntegrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */; };
+		442F102DD6A49D8BD0BF9EFF /* DashboardProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1292CA4CF806B361B668E31 /* DashboardProfile.swift */; };
 		44C5603AADFCC901107E40EE /* narration-2poocvt5yla18.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = CC4757965DB5A1F44360BDBA /* narration-2poocvt5yla18.mp3 */; };
 		450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */; };
 		452762C067D50B0C991CF939 /* ComputerUseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01ACF9118D36B54D9E00146F /* ComputerUseService.swift */; };
@@ -612,6 +614,7 @@
 		9F2FBF93E03147782BB5FBF5 /* HandoffService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffService.swift; sourceTree = "<group>"; };
 		9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIService.swift; sourceTree = "<group>"; };
 		A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDockView.swift; sourceTree = "<group>"; };
+		A1292CA4CF806B361B668E31 /* DashboardProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardProfile.swift; sourceTree = "<group>"; };
 		A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceService.swift; sourceTree = "<group>"; };
 		A266BE527831F1DF05489050 /* StripePurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripePurchaseService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
@@ -716,6 +719,7 @@
 		E60A3BC0F1CEC3BC60BC98A7 /* WorkspaceReviewAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReviewAgent.swift; sourceTree = "<group>"; };
 		E631734099EB92C31D4A0F8E /* NotchSnoozeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchSnoozeService.swift; sourceTree = "<group>"; };
 		E7CC8948A6B01CB2781B9B00 /* findmy.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = findmy.md; sourceTree = "<group>"; };
+		E7E9AEEB9C06278460466850 /* DashboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModule.swift; sourceTree = "<group>"; };
 		E814E13E9DB836D50FA2620E /* AgentHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDView.swift; sourceTree = "<group>"; };
 		E8970CEC5FCF54756B314E53 /* ActuationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActuationRouter.swift; sourceTree = "<group>"; };
 		E8E353B5F50827A17EDA25AB /* CronsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronsTabView.swift; sourceTree = "<group>"; };
@@ -867,6 +871,7 @@
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				467A71ED5E2C1DD0226F33C0 /* CodeHostingModule.swift */,
+				E7E9AEEB9C06278460466850 /* DashboardModule.swift */,
 				62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */,
 				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
 				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
@@ -1162,6 +1167,7 @@
 				BADFDB17A53387AA9FBC4867 /* CorrelationInsight.swift */,
 				BC9CF063FC8B8DFB1344B119 /* CronModels.swift */,
 				F9B4A19539539B3B6D18DDD0 /* CursorCompanionModels.swift */,
+				A1292CA4CF806B361B668E31 /* DashboardProfile.swift */,
 				6B0C9E1FD8F90CE47EF00C91 /* GuidanceModels.swift */,
 				F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */,
 				E5298E4DE78C50A514F1EF15 /* HoverInsightModel.swift */,
@@ -1527,6 +1533,8 @@
 				55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */,
 				604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */,
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
+				405D3A05C84E5EEE7DFCC6BA /* DashboardModule.swift in Sources */,
+				442F102DD6A49D8BD0BF9EFF /* DashboardProfile.swift in Sources */,
 				295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
