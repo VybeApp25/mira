@@ -88,6 +88,7 @@
 		36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */; };
 		373C68AA6EF019FE3AC80567 /* WorkspaceReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77428E1C00142D230E8329 /* WorkspaceReview.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
+		37C7A4CDB99978FDC0302B0A /* MeetingAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3464A7EB2E37AB63158ED41B /* MeetingAlertView.swift */; };
 		39A20B41E671B958232ED793 /* AgentJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A402B112ABE83ADE3C4489E6 /* AgentJob.swift */; };
 		3ADC97CF9DB4AB48A05F2624 /* StripePurchaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A266BE527831F1DF05489050 /* StripePurchaseService.swift */; };
 		3C096114A2F525A597968FB3 /* Skills in Resources */ = {isa = PBXBuildFile; fileRef = 18A4F3CB8B14BD7FB49CEE7D /* Skills */; };
@@ -294,6 +295,7 @@
 		C63AC7A1618A13A8A530831E /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111B0BAA1F242F751DD35E6D /* PaywallView.swift */; };
 		C983D5ECE5849519EC072872 /* HoverPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8712738938AEA845880976 /* HoverPreferences.swift */; };
 		C99D98F0FAE42E17ABC22272 /* AccentColorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F3AE6AECF82F219A7C1A4 /* AccentColorService.swift */; };
+		C9E16A1E364A91CEF84AF9E3 /* MeetingAlertService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A77BF5FC07BA9D86500A16 /* MeetingAlertService.swift */; };
 		CA5453014B3E1EDCC1A67073 /* RecommendationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15A43ED2C5A66B0C6E5B2F88 /* RecommendationEngine.swift */; };
 		CA63D9AFDC3D4C6971488A9B /* ProjectModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F1B30EBD78983473632ED6 /* ProjectModels.swift */; };
 		CCAC15D7F188ADCDCEA50065 /* NotchCameraTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCBC84F4F403ECD055D720E /* NotchCameraTabView.swift */; };
@@ -457,6 +459,7 @@
 		3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessObserver.swift; sourceTree = "<group>"; };
 		326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationAnywhereService.swift; sourceTree = "<group>"; };
 		343088C0DAB912C0E3A3D9DA /* AccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountService.swift; sourceTree = "<group>"; };
+		3464A7EB2E37AB63158ED41B /* MeetingAlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingAlertView.swift; sourceTree = "<group>"; };
 		3465E66B867774E10F24114C /* clicky-surprised.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-surprised.wav"; sourceTree = "<group>"; };
 		34C283A8B11CD4F1E6371C82 /* agent-launch.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "agent-launch.mp3"; sourceTree = "<group>"; };
 		34FFDEBB61B4AF55FFBA61E1 /* ThreadsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadsTabView.swift; sourceTree = "<group>"; };
@@ -551,6 +554,7 @@
 		70F49814EE23560DC880AF05 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		7101F70E0818E0AA673FD29A /* agent-close.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "agent-close.mp3"; sourceTree = "<group>"; };
 		714E5F324015327B7790838A /* SharedStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStatusView.swift; sourceTree = "<group>"; };
+		71A77BF5FC07BA9D86500A16 /* MeetingAlertService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingAlertService.swift; sourceTree = "<group>"; };
 		724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntitlementService.swift; sourceTree = "<group>"; };
 		72F8B7224F44A77FAA8D536B /* MediaModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaModule.swift; sourceTree = "<group>"; };
 		73D7BDBCBC87C533A6A5F4F6 /* narration-3w4viw8ko7bx6.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-3w4viw8ko7bx6.mp3"; sourceTree = "<group>"; };
@@ -1083,6 +1087,7 @@
 				69651A1F761E1E1338C095AA /* LiveTranscriptionStream.swift */,
 				C3ABA2178F03DB65559DB946 /* MediaControls.swift */,
 				4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */,
+				71A77BF5FC07BA9D86500A16 /* MeetingAlertService.swift */,
 				1D67D51F8B863530212BE3B1 /* MenuBarIconManager.swift */,
 				86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */,
 				B91346EA30D1B31122573AE9 /* MiraBackend.swift */,
@@ -1244,6 +1249,7 @@
 				40FEF1E1BFDF6375CB62E426 /* KnowledgeImportView.swift */,
 				94C2D7EBEB08D7C2F8FE0193 /* LabsTabView.swift */,
 				2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */,
+				3464A7EB2E37AB63158ED41B /* MeetingAlertView.swift */,
 				A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */,
 				54D4739EA771EF0C39908A69 /* MiraIslandView.swift */,
 				6AAB411962D3D66F94EE5483 /* MiraPanel.swift */,
@@ -1595,6 +1601,8 @@
 				3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */,
 				292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */,
 				732712AE4E6300B515CD425B /* MediaModule.swift in Sources */,
+				C9E16A1E364A91CEF84AF9E3 /* MeetingAlertService.swift in Sources */,
+				37C7A4CDB99978FDC0302B0A /* MeetingAlertView.swift in Sources */,
 				9C5365E19F360C429D3EEAD1 /* MemoryStore.swift in Sources */,
 				B8A30732977529D4BF431B35 /* MenuBarIconManager.swift in Sources */,
 				0C020C4633AE33FE211A9DC6 /* MicLevelMonitor.swift in Sources */,

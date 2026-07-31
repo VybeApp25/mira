@@ -42,9 +42,18 @@ struct NotchModuleShellView: View {
 
     private var accent: Color { accentSvc.color }
 
+    @ObservedObject private var meetings = MeetingAlertService.shared
+
     var body: some View {
         Group {
-            if let module = registry.selected {
+            // A meeting starting pre-empts the module. Drawn INSTEAD of it
+            // rather than over it, which is what makes it read as an
+            // interruption rather than a banner — and means the module
+            // underneath keeps its own state for when the alert is gone.
+            if let alert = meetings.alert {
+                MeetingAlertView(service: meetings, alert: alert)
+                    .transition(.opacity)
+            } else if let module = registry.selected {
                 // Header OVERLAYS the content rather than sitting in a row above
                 // it. A module's backdrop (the weather sky, say) then runs the
                 // full height of the panel instead of being boxed below a black

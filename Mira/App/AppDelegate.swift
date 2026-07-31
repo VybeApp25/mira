@@ -117,6 +117,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // preference has existed for a while but only one window honoured it.
         ScreenCapturePrivacyService.shared.start()
 
+        // Meeting alerts have to be watching before you open the notch — the
+        // whole point is that it interrupts you.
+        MeetingAlertService.shared.start()
+
         // AI Coding has two halves with different costs, so they start on
         // different terms.
         //
