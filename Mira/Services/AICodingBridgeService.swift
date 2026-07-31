@@ -290,9 +290,34 @@ final class AICodingBridgeService: ObservableObject {
     /// The one field of a tool input worth a single line.
     static func summarize(_ input: [String: Any]?) -> String? {
         guard let input else { return nil }
-        for key in ["command", "file_path", "path", "pattern", "url", "description"] {
+        for key in ["command", "file_path", "path", "pattern", "query", "url", "description"] {
             if let value = input[key] as? String, !value.isEmpty {
                 return value.replacingOccurrences(of: "\n", with: " ")
+            }
+        }
+
+        // MCP tools carry none of those keys — `computer_batch` takes `actions`,
+        // `zoom` takes `region` — so every such step rendered blank and a list of
+        // them looked broken. Fall back to shape rather than nothing: the count
+        // for a collection, the value for a scalar.
+        for key in input.keys.sorted() {
+            switch input[key] {
+            case let array as [Any]:
+                // A short array of scalars is usually a coordinate or a range,
+                // and its VALUES are the information — rendering `zoom` as
+                // "4 region" says nothing and reads like a miscount. Longer
+                // arrays are collections of work, where the count is the point.
+                let scalars = array.compactMap { $0 as? NSNumber }
+                if scalars.count == array.count, array.count <= 4, !array.isEmpty {
+                    return "\(key) \(scalars.map(\.stringValue).joined(separator: ", "))"
+                }
+                return "\(array.count) \(key)"
+            case let number as NSNumber:
+                return "\(key) \(number)"
+            case let string as String where !string.isEmpty:
+                return "\(key) \(string.replacingOccurrences(of: "\n", with: " "))"
+            default:
+                continue
             }
         }
         return nil

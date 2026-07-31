@@ -350,10 +350,14 @@ private struct AICodingView: View {
                 ForEach(row.steps.suffix(5).reversed()) { step in
                     HStack(alignment: .top, spacing: 6) {
                         ToolChip(name: step.toolName, accent: accent, emphasized: false)
-                        Text(step.detail ?? "—")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.6))
-                            .lineLimit(1)
+                        // No placeholder when there's nothing to say. A column of
+                        // em dashes reads as data that failed to load.
+                        if let detail = step.detail, !detail.isEmpty {
+                            Text(detail)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
                         Spacer(minLength: 0)
                     }
                 }
