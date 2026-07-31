@@ -350,6 +350,7 @@
 		F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */; };
 		F74BDDCA2F6C86B24F6E213C /* googlesheets.md in Resources */ = {isa = PBXBuildFile; fileRef = E0C3193DA00933B0BD1B5B4E /* googlesheets.md */; };
 		F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */; };
+		F7F4FB408A8BFD4826939A7B /* BluetoothModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CC06F43C9819E4894E14159 /* BluetoothModule.swift */; };
 		F84804BC8E9238CA2534CC14 /* AgentRecommendation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC35A0516A020B690B3C1904 /* AgentRecommendation.swift */; };
 		F8DA8ED87428CC67DCC7B272 /* TeachingHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E725D6F6415478DAE245772 /* TeachingHUD.swift */; };
 		F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */; };
@@ -403,6 +404,7 @@
 		17B535DE12D73CC125D81565 /* ActionChipService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionChipService.swift; sourceTree = "<group>"; };
 		18A4F3CB8B14BD7FB49CEE7D /* Skills */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Skills; path = Mira/Resources/Skills; sourceTree = SOURCE_ROOT; };
 		1C001C9B6B16CA61BC508320 /* ToolTraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceView.swift; sourceTree = "<group>"; };
+		1CC06F43C9819E4894E14159 /* BluetoothModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothModule.swift; sourceTree = "<group>"; };
 		1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseTabView.swift; sourceTree = "<group>"; };
 		1D67D51F8B863530212BE3B1 /* MenuBarIconManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconManager.swift; sourceTree = "<group>"; };
 		1F3971B5E467CC08CB2DB4FE /* BatteryStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryStatus.swift; sourceTree = "<group>"; };
@@ -829,6 +831,7 @@
 		503EC2541417075E485E2BB5 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
+				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
@@ -1418,6 +1421,7 @@
 				941D5549A8E31FC3B610A41F /* AuthView.swift in Sources */,
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				D9D5ADB021219BC46EF5AE86 /* BatteryStatus.swift in Sources */,
+				F7F4FB408A8BFD4826939A7B /* BluetoothModule.swift in Sources */,
 				769170EE3461B805DB4ABE15 /* BriefingView.swift in Sources */,
 				987107B1EEA0CAC6FD1D2384 /* BrightnessControl.swift in Sources */,
 				12EC8F5AB9E2C753C4A66BE3 /* BrowserService.swift in Sources */,

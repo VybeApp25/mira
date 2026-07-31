@@ -114,11 +114,26 @@ final class LiveActivityService: ObservableObject {
     private func activeActivities() -> [LiveActivity] {
         var out: [LiveActivity] = []
 
+        if let bt    = bluetoothActivity()   { out.append(bt)    }
         if let media = mediaActivity()       { out.append(media) }
         if let pom   = pomodoroActivity()    { out.append(pom)   }
         if let event = nextEventActivity()   { out.append(event) }
 
         return out.sorted { $0.kind.rawValue < $1.kind.rawValue }
+    }
+
+    /// Only surfaces a LOW battery, never a healthy one. MacNotch lists Bluetooth
+    /// as a rotation source, but "AirPods 82%" in a strip you glance at is noise —
+    /// the actionable state is the one that will strand you mid-call.
+    private func bluetoothActivity() -> LiveActivity? {
+        let low = BluetoothService.shared.devices
+            .filter { $0.isConnected && $0.isLowBattery && $0.batteryPercent != nil }
+            .min { ($0.batteryPercent ?? 100) < ($1.batteryPercent ?? 100) }
+        guard let device = low, let pct = device.batteryPercent else { return nil }
+        return LiveActivity(kind: .bluetooth,
+                            icon: device.icon,
+                            text: "\(device.name) \(pct)%",
+                            tint: Color(red: 1.0, green: 0.45, blue: 0.45))
     }
 
     // MARK: - Sources

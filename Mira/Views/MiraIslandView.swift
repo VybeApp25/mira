@@ -74,7 +74,6 @@ struct MiraIslandView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var selectedTab: IslandTab = .home
     @StateObject private var pillState = PillStateModel()
     // Agent flight burst — pulsing ring that fires on job launch
     @State private var showBurst       = false
@@ -682,7 +681,7 @@ struct MiraIslandView: View {
                     Button {
                         let prompt = ProjectEngine.shared.buildResumePrompt(for: project)
                         engine.dismissContinuation()
-                        selectedTab = .home
+                        moduleRegistry.select("home")
                         NotificationCenter.default.post(
                             name: .miraChipPromptSelected,
                             object: nil,
@@ -745,8 +744,8 @@ struct MiraIslandView: View {
                 result: result,
                 chipService: chipService,
                 onChipTapped: { prompt in
-                    // Fix 3: route chip prompt into the chat tab
-                    selectedTab = .home
+                    // Fix 3: route chip prompt into the home module
+                    moduleRegistry.select("home")
                     animController.clearHUD()
                     NotificationCenter.default.post(
                         name: .miraChipPromptSelected,
@@ -831,145 +830,6 @@ struct MiraIslandView: View {
         .padding(.vertical, 7)
     }
 
-    // MARK: - Inline nav bar
-
-    private var navBar: some View {
-        HStack(spacing: 4) {
-            navTab(icon: "house.fill",         label: "Home",     tab: .home)
-            navTab(icon: "message.fill",       label: "Chat",     tab: .chat)
-            navTab(icon: "tray.full",          label: "Shelf",    tab: .shelf)
-            navTab(icon: "camera.fill",        label: "Camera",   tab: .camera)
-            navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
-            navTab(icon: "sparkles",           label: "Labs",     tab: .labs)
-            navTab(icon: "puzzlepiece.extension.fill", label: "Skills", tab: .skills)
-            navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
-            navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
-            navTab(icon: "square.grid.2x2.fill", label: "Modules", tab: .modules)
-
-            Spacer()
-
-            if hudVM.state.isActive {
-                Button { hudVM.send(.cancelRequested) } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(red: 1.0, green: 0.35, blue: 0.35))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Stop agent")
-            }
-
-            if !miraState.isPro {
-                Text("\(miraState.dailyUsageCount)/\(MiraState.freeLimit)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
-                    .padding(.trailing, 2)
-            }
-
-            NotchBatteryIndicator()
-                .padding(.trailing, 2)
-
-            // Pinned to the far right, clear of the physical notch (the center
-            // gap created by the Spacer above is where the notch sits).
-            navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 38)
-    }
-
-    private func navTab(icon: String, label: String, tab: IslandTab) -> some View {
-        let selected = selectedTab == tab
-        let accent   = DS.Colors.accent
-        return Button {
-            withAnimation(reduceMotion
-                ? .easeInOut(duration: 0.10)
-                : .spring(response: 0.25, dampingFraction: 0.80)
-            ) { selectedTab = tab }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: selected ? 11 : 12, weight: .semibold))
-                    .accessibilityHidden(true)
-                if selected {
-                    Text(label)
-                        .font(.system(size: 12, weight: .semibold))
-                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
-                }
-            }
-            .foregroundColor(selected ? .white : .white.opacity(0.35))
-            .padding(.horizontal, selected ? 10 : 7)
-            .padding(.vertical, 5)
-            .background(selected ? accent.opacity(0.22) : Color.clear)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(PressScaleButtonStyle())
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    // MARK: - Battery indicator (compact — plain % + charging glyph, matches
-    // TheBoringNotch's reference layout; the dock's ring gauge doesn't fit
-    // this cramped nav-bar space)
-
-
-    // MARK: - Tab content
-
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
-        case .home:
-            NotchHomeTabView()
-        case .modules:
-            // Phase 0 shell. The module supplies content; NotchModuleShellView
-            // draws the header, back chip, and collapse affordance around it.
-            // The pinned dock strip sits below the panel, detached, matching
-            // MacNotch's floating circular row.
-            // 21pt gap measured from MacNotch: its dock strip floats detached
-            // below the slab rather than being attached to it.
-            VStack(spacing: 21) {
-                NotchModuleShellView(notchBandHeight: 30) {
-                    animController.collapse()
-                }
-                NotchModuleDockStrip()
-            }
-        case .chat:
-            IslandChatView(
-                miraState: miraState,
-                overlay:   overlay,
-                capture:   capture,
-                voice:     voice,
-                wakeWord:  wakeWord
-            )
-        case .agents:
-            AgentsTabView(
-                taskStore: taskStore,
-                miraState: miraState,
-                overlay:   overlay,
-                capture:   capture,
-                voice:     voice
-            )
-        case .shelf:
-            FileShelfLabsView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .camera:
-            NotchCameraTabView()
-        case .labs:
-            LabsTabView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .skills:
-            SkillsTabView(miraState: miraState)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .learn:
-            LessonsTabView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .crons:
-            CronsTabView()
-        case .settings:
-            SettingsView(state: miraState, embedded: true)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
 }
 
 private struct NotchBatteryIndicator: View {

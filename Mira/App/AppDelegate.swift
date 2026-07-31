@@ -86,9 +86,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             WeatherModule(),
             CalendarModule(),
             TodoModule(),
+            BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()
         ])
+
+        // Bluetooth polls independently of its module being visible, because the
+        // low-battery warning it feeds into the collapsed strip is only useful if
+        // it fires when you AREN'T looking at the Bluetooth panel.
+        BluetoothService.shared.start()
 
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
