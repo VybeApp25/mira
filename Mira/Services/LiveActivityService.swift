@@ -45,6 +45,32 @@ final class LiveActivityService: ObservableObject {
     /// The activity currently on screen, or nil when there is nothing to show.
     @Published private(set) var current: LiveActivity?
 
+    /// Everything with something to say right now, in priority order. Published
+    /// so the expanded panel can list what the strip is rotating through —
+    /// previously this was computed privately on each tick and thrown away, so
+    /// the only way to learn what was active was to watch the strip cycle.
+    @Published private(set) var active: [LiveActivity] = []
+
+    /// Pinned activity. While set the strip stops rotating and shows only this
+    /// one — MacNotch's per-activity Focus toggle. Nil is the normal rotation.
+    @Published private(set) var focusedKind: LiveActivity.Kind?
+
+    private let focusKey = "mira_live_activity_focus_v1"
+
+    /// Pin an activity, or unpin it if it is already pinned. Focusing something
+    /// that then goes quiet falls back to the rotation rather than leaving the
+    /// strip blank — a pin is a preference about attention, not a promise that
+    /// the source will keep talking.
+    func toggleFocus(_ kind: LiveActivity.Kind) {
+        focusedKind = (focusedKind == kind) ? nil : kind
+        if let focusedKind {
+            UserDefaults.standard.set(focusedKind.rawValue, forKey: focusKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: focusKey)
+        }
+        refresh(advance: false)
+    }
+
     /// Seconds each activity holds before rotating. MacNotch widens briefly on a
     /// track change; a fixed dwell is the honest first version of that.
     private static let dwell: TimeInterval = 4.0
@@ -58,6 +84,10 @@ final class LiveActivityService: ObservableObject {
     private let calendar   = CalendarTodayService.shared
 
     private init() {
+        if let raw = UserDefaults.standard.object(forKey: "mira_live_activity_focus_v1") as? Int {
+            focusedKind = LiveActivity.Kind(rawValue: raw)
+        }
+
         // Recompute immediately when a source changes rather than waiting for the
         // next tick — a track change should be visible now, not up to 4s later.
         for publisher in [nowPlaying.objectWillChange,
@@ -95,11 +125,22 @@ final class LiveActivityService: ObservableObject {
     /// one; a source change refreshes in place so the strip doesn't skip ahead.
     private func refresh(advance: Bool) {
         let active = activeActivities()
+        if active != self.active { self.active = active }
+
         guard !active.isEmpty else {
             current = nil
             rotationIndex = 0
             return
         }
+
+        // A focused activity holds the strip for as long as it has something to
+        // say. If it goes quiet the rotation resumes rather than the strip
+        // sitting empty, and the pin is kept for when it comes back.
+        if let focusedKind, let pinned = active.first(where: { $0.kind == focusedKind }) {
+            if pinned != current { current = pinned }
+            return
+        }
+
         if advance {
             rotationIndex = (rotationIndex + 1) % active.count
         } else if rotationIndex >= active.count {

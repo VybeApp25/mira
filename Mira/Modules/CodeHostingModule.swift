@@ -150,8 +150,8 @@ final class CodeHostingService: ObservableObject {
 
     // MARK: Token (Keychain)
 
-    private static let kcService = "mira.codehosting"
-    private static let kcAccount = "github_pat"
+    nonisolated private static let kcService = "mira.codehosting"
+    nonisolated private static let kcAccount = "github_pat"
 
     static func writeToken(_ token: String) {
         let base: [CFString: Any] = [
@@ -186,7 +186,10 @@ final class CodeHostingService: ObservableObject {
         return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
     }
 
-    static func readToken() -> String? {
+    /// `nonisolated` so it can be called off the main actor — see `refresh()`
+    /// for why it must be. It touches no actor state; the Keychain query is
+    /// built from constants.
+    nonisolated static func readToken() -> String? {
         let q: [CFString: Any] = [
             kSecClass:              kSecClassGenericPassword,
             kSecAttrService:        kcService,
@@ -213,7 +216,18 @@ final class CodeHostingService: ObservableObject {
     // MARK: Fetch
 
     func refresh() async {
-        guard let token = Self.readToken() else {
+        // Read the token OFF the main thread. SecItemCopyMatching decrypts the
+        // item, and a decrypt can block for as long as the Keychain wants —
+        // indefinitely, if it is waiting behind an authorisation prompt. This
+        // service is @MainActor, so calling it directly froze the entire app:
+        // a sample taken while the UI was unresponsive showed the main thread
+        // parked in readToken → SecItemCopyMatching → CSSM_DecryptDataFinal,
+        // and the module carousel had stopped responding to anything.
+        let token = await Task.detached(priority: .userInitiated) {
+            Self.readToken()
+        }.value
+
+        guard let token else {
             hasToken = false
             return
         }

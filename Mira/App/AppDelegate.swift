@@ -100,6 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AICodingModule(),
             NotificationsModule(),
             BluetoothModule(),
+            LiveActivitiesModule(),
             SystemModule(),
             ModuleBrowserModule()
         ])

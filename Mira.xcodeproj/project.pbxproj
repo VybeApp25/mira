@@ -291,6 +291,7 @@
 		C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */; };
 		C3F5CA4D3E6727EBBB54E5DF /* CalendarTodayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93490CFC9E751F8742BD6C34 /* CalendarTodayService.swift */; };
 		C40BCBB02ECED949CBC4CCC9 /* PomodoroModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695559EF51163B24E442B232 /* PomodoroModule.swift */; };
+		C57AA22DE1CB1F338CD0256B /* LiveActivitiesModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACB0B22BE52C19AEE66C64A7 /* LiveActivitiesModule.swift */; };
 		C5BF65EFC345902777F0F8CD /* computer-use.md in Resources */ = {isa = PBXBuildFile; fileRef = CECF49A88AB42C914BD34504 /* computer-use.md */; };
 		C63AC7A1618A13A8A530831E /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111B0BAA1F242F751DD35E6D /* PaywallView.swift */; };
 		C983D5ECE5849519EC072872 /* HoverPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8712738938AEA845880976 /* HoverPreferences.swift */; };
@@ -640,6 +641,7 @@
 		AAC4FD2846DA1EEBA136C9D7 /* ErrorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorService.swift; sourceTree = "<group>"; };
 		ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishingAgent.swift; sourceTree = "<group>"; };
 		AC3BE420BD2D4BCA710F3EE4 /* VisionStateVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionStateVerifier.swift; sourceTree = "<group>"; };
+		ACB0B22BE52C19AEE66C64A7 /* LiveActivitiesModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivitiesModule.swift; sourceTree = "<group>"; };
 		AE6854B359F14D11ED97A532 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsTabView.swift; sourceTree = "<group>"; };
 		AE9E1DFF7D815C5E623E1EDD /* clicky-text-open.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-text-open.wav"; sourceTree = "<group>"; };
@@ -882,6 +884,7 @@
 				E7E9AEEB9C06278460466850 /* DashboardModule.swift */,
 				62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */,
 				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
+				ACB0B22BE52C19AEE66C64A7 /* LiveActivitiesModule.swift */,
 				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
@@ -1596,6 +1599,7 @@
 				2D1B1E425C97F6E5434DE441 /* LearnerModel.swift in Sources */,
 				DFBA868E9D4B37E9423DC076 /* LessonScaffolder.swift in Sources */,
 				96DA4EC7CA3502A4B936BFAA /* LessonsTabView.swift in Sources */,
+				C57AA22DE1CB1F338CD0256B /* LiveActivitiesModule.swift in Sources */,
 				41252FE3EF8037AAB0B421EB /* LiveActivityService.swift in Sources */,
 				EE6A97662B9ED3C7E5487D83 /* LiveTranscriptionStream.swift in Sources */,
 				3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */,
