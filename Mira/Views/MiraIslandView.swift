@@ -568,10 +568,11 @@ struct MiraIslandView: View {
                 AgentsTabView(taskStore: taskStore, miraState: miraState,
                               overlay: overlay, capture: capture, voice: voice)
             },
-            ViewModule(id: "shelf", title: "Shelf", icon: "tray.full",
-                       heightLevel: .standard) {
-                FileShelfLabsView()
-            },
+            // Shelf is a real NotchModule now (ShelfModule), registered in
+            // AppDelegate with the rest. Leaving the ViewModule wrapper here
+            // would put two Shelves in the carousel — the old vertical list and
+            // the carousel — both writing to the same FileShelfService.
+            // FileShelfLabsView still backs the Labs tab.
             ViewModule(id: "camera", title: "Camera", icon: "camera.fill",
                        heightLevel: .standard) {
                 NotchCameraTabView()

@@ -92,6 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PomodoroModule(),
             SnapZoneModule(),
             DropActionsModule(),
+            ShelfModule(),
             ScreenTimeModule(),
             DayProgressModule(),
             TranslationModule(),

@@ -223,6 +223,7 @@
 		999F596800BE317B7DD15FB4 /* CorrelationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D5BB4ABB1EFCD6F34122C /* CorrelationEngine.swift */; };
 		99C4AE57D626422B87B1FAD3 /* TelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA51C6434233B46081A0496 /* TelemetryService.swift */; };
 		9B6E32161890CF6E42E3B2A1 /* EventTapThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F23C4512D86ECC6F0FFA52 /* EventTapThread.swift */; };
+		9B7C2E81834444152C92E1A3 /* ShelfModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD78BE916FB9A1963E253C2 /* ShelfModule.swift */; };
 		9C5365E19F360C429D3EEAD1 /* MemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0F1519F33A72F226CCB6D8 /* MemoryStore.swift */; };
 		9D95DC35830EBC1989F2837C /* ResponseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21822F4B90B50BBAF783859 /* ResponseCardView.swift */; };
 		9DDE53DE302ADE1888FFCE9C /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F49814EE23560DC880AF05 /* SupabaseService.swift */; };
@@ -563,6 +564,7 @@
 		7A684DFA80C324D18C0D0EB5 /* notion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = notion.md; sourceTree = "<group>"; };
 		7C46953D1361F747CFB25E28 /* FailureMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureMemory.swift; sourceTree = "<group>"; };
 		7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemModule.swift; sourceTree = "<group>"; };
+		7DD78BE916FB9A1963E253C2 /* ShelfModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModule.swift; sourceTree = "<group>"; };
 		7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeBridge.swift; sourceTree = "<group>"; };
 		7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJobStore.swift; sourceTree = "<group>"; };
 		7EABAFC55507CAA7A38F7F58 /* narration-32avewxye1iet.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-32avewxye1iet.mp3"; sourceTree = "<group>"; };
@@ -880,6 +882,7 @@
 				F0477E60D71EFDC71275E785 /* NotificationsModule.swift */,
 				695559EF51163B24E442B232 /* PomodoroModule.swift */,
 				4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */,
+				7DD78BE916FB9A1963E253C2 /* ShelfModule.swift */,
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
@@ -1678,6 +1681,7 @@
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */,
 				BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */,
+				9B7C2E81834444152C92E1A3 /* ShelfModule.swift in Sources */,
 				29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */,
 				F475A643D809B6C48228CC55 /* SidecarSuggestionService.swift in Sources */,
 				D34592F90B205AA8D4F63700 /* SkillBundle.swift in Sources */,
