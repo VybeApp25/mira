@@ -29,7 +29,29 @@ final class CalendarModule: NotchModule, ObservableObject {
     private let service = CalendarTodayService.shared
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Drill-in
+    //
+    // First use of the shell's detail contract. The panel pushes IN PLACE — the
+    // shell swaps its title for a `‹ Calendar` chip and calls popDetail() when
+    // tapped. No new window, ever: MacNotch pushes detail inside the slab and
+    // opening one would break the illusion that the notch is a single object.
+
+    @Published var detailEvent: EKEvent?
+
+    /// Non-nil tells the shell to render the back chip. The text is where you
+    /// return TO, not where you are.
+    var detailTitle: String? { detailEvent == nil ? nil : "Calendar" }
+
+    func popDetail() { detailEvent = nil }
+
+    func show(_ event: EKEvent) { detailEvent = event }
+
     var subtitle: NotchHeaderSubtitle? {
+        // In detail, the subtitle names what you drilled into — matching
+        // MacNotch's "‹ Back  [context pill]" header shape.
+        if let e = detailEvent {
+            return NotchHeaderSubtitle(text: e.title ?? "Event", isPill: true)
+        }
         let fmt = DateFormatter()
         fmt.dateFormat = "MMMM yyyy"
         return NotchHeaderSubtitle(text: fmt.string(from: service.selectedDate))
@@ -53,7 +75,14 @@ final class CalendarModule: NotchModule, ObservableObject {
 
     func didAppear() { service.requestAccess() }
 
-    func makeContent() -> AnyView { AnyView(CalendarModuleView(service: service)) }
+    func makeContent() -> AnyView {
+        if let event = detailEvent {
+            return AnyView(CalendarEventDetail(event: event))
+        }
+        return AnyView(CalendarModuleView(service: service, onSelect: { [weak self] in
+            self?.show($0)
+        }))
+    }
 }
 
 // MARK: - View
@@ -61,6 +90,7 @@ final class CalendarModule: NotchModule, ObservableObject {
 private struct CalendarModuleView: View {
 
     @ObservedObject var service: CalendarTodayService
+    let onSelect: (EKEvent) -> Void
     @ObservedObject private var accentSvc = AccentColorService.shared
 
     private var accent: Color { accentSvc.color }
@@ -181,6 +211,11 @@ private struct CalendarModuleView: View {
     }
 
     private func eventRow(_ event: EKEvent) -> some View {
+        Button { onSelect(event) } label: { eventRowBody(event) }
+            .buttonStyle(.plain)
+    }
+
+    private func eventRowBody(_ event: EKEvent) -> some View {
         HStack(alignment: .top, spacing: 8) {
             // Calendar colour bar — the only place the user's own colour coding
             // survives, so worth carrying through.
@@ -243,5 +278,107 @@ private struct CalendarModuleView: View {
                 .foregroundColor(.white.opacity(0.35))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Event detail (drill-in)
+
+/// Pushed IN PLACE by the shell — the header swaps to a `‹ Calendar` chip plus
+/// a pill naming the event. No window is opened, which is the whole point of
+/// the detail contract.
+private struct CalendarEventDetail: View {
+
+    let event: EKEvent
+    @ObservedObject private var accentSvc = AccentColorService.shared
+    private var accent: Color { accentSvc.color }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 9) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(nsColor: event.calendar.color ?? .systemBlue))
+                        .frame(width: 4, height: 34)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(event.title ?? "Untitled")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.95))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(event.calendar.title)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                field("clock", "When", whenText)
+                if let loc = event.location, !loc.isEmpty { field("mappin", "Where", loc) }
+                if let notes = event.notes, !notes.isEmpty { field("text.alignleft", "Notes", notes) }
+
+                // Join button only when the invite actually carries a URL —
+                // MacNotch shows "Join Microsoft Teams"; offering Join with
+                // nothing to open would be worse than not offering it.
+                if let url = meetingURL {
+                    Button { NSWorkspace.shared.open(url) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "video.fill").font(.system(size: 10))
+                            Text("Join").font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(accent.opacity(0.16)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.top, NotchModuleShellView.headerHeight)
+        .background(Color.black)
+    }
+
+    private var whenText: String {
+        if event.isAllDay {
+            return event.startDate.formatted(date: .complete, time: .omitted) + " · All day"
+        }
+        let d = DateFormatter(); d.dateFormat = "EEEE d MMMM"
+        let t = DateFormatter(); t.dateFormat = "h:mm a"
+        return "\(d.string(from: event.startDate))  ·  \(t.string(from: event.startDate)) – \(t.string(from: event.endDate))"
+    }
+
+    /// EventKit puts conference links in `url`, or buried in notes. Checking
+    /// both is why this finds Zoom/Meet/Teams invites that only set one.
+    private var meetingURL: URL? {
+        if let u = event.url { return u }
+        guard let notes = event.notes else { return nil }
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(notes.startIndex..., in: notes)
+        return detector?.firstMatch(in: notes, range: range)?.url
+    }
+
+    private func field(_ icon: String, _ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.35))
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label.uppercased())
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.35))
+                Text(value)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
