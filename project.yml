@@ -58,6 +58,7 @@ targets:
         NSScreenCaptureUsageDescription: "Mira sees your screen to show you exactly where to click."
         NSCalendarsUsageDescription: "Mira shows your upcoming events in the Home tab."
         NSRemindersUsageDescription: "Mira shows and completes your reminders in the notch's Todo module."
+        NSBluetoothAlwaysUsageDescription: "Mira shows your connected Bluetooth devices and their battery levels in the notch."
         NSAppleEventsUsageDescription: "Mira reads your active browser tab to provide context-aware assistance."
         NSLocationWhenInUseUsageDescription: "Mira uses your location to show local weather on the Home tab."
         NSLocationUsageDescription: "Mira uses your location to show local weather on the Home tab."

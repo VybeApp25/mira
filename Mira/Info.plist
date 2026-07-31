@@ -35,6 +35,8 @@
 	<false/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Mira reads your active browser tab to provide context-aware assistance.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Mira shows your connected Bluetooth devices and their battery levels in the notch.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Mira shows your upcoming events in the Home tab.</string>
 	<key>NSCameraUsageDescription</key>

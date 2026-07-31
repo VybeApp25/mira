@@ -86,6 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             WeatherModule(),
             CalendarModule(),
             TodoModule(),
+            NotesModule(),
             BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()

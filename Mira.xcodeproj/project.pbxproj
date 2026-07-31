@@ -137,6 +137,7 @@
 		5C76BF8209E6648033DAEB47 /* FileShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53D32F98D47AABE99933FAA /* FileShelf.swift */; };
 		5D0080E0C41DFD6B2A1E43B5 /* eshop.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 6BA8022B07E7E98EB0CCFBD2 /* eshop.mp3 */; };
 		5E5F201BE9E564EB2D147B66 /* CallCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC64DB121D54E7644A08018 /* CallCaptureService.swift */; };
+		5F123B9F932F284C2C21F744 /* NotesModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC327A8BBA40C7A8146F130 /* NotesModule.swift */; };
 		604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B4A19539539B3B6D18DDD0 /* CursorCompanionModels.swift */; };
 		61613FB579F0EB03230277BC /* HUDService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7FDDF0CA6E6F4084A0B4D6 /* HUDService.swift */; };
 		61FAC17EC4E49CC1BF9CBC5B /* HoverInsightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41806DE60A2909E73385AE1 /* HoverInsightManager.swift */; };
@@ -679,6 +680,7 @@
 		DD2C73BB04A46AD3A823F5A9 /* GuidanceEvidenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceEvidenceService.swift; sourceTree = "<group>"; };
 		DD309491F3423590AAC1CBC3 /* CallDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetector.swift; sourceTree = "<group>"; };
 		DF1DAA7C22977CB338F58CE2 /* SystemHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemHUDView.swift; sourceTree = "<group>"; };
+		DFC327A8BBA40C7A8146F130 /* NotesModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesModule.swift; sourceTree = "<group>"; };
 		E03C7457034E97EA40219216 /* PillStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PillStateModel.swift; sourceTree = "<group>"; };
 		E0C3193DA00933B0BD1B5B4E /* googlesheets.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googlesheets.md; sourceTree = "<group>"; };
 		E139A522A1A860AEA8E7C64B /* CalendarModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModule.swift; sourceTree = "<group>"; };
@@ -834,6 +836,7 @@
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
+				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
 				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
@@ -1558,6 +1561,7 @@
 				582E90CC743C8FAA717885B7 /* NotchModuleShellView.swift in Sources */,
 				AC57AB563CEFA28AF69D5B15 /* NotchOnboardingManager.swift in Sources */,
 				8553F364B94786B1DBB37B20 /* NotchOnboardingView.swift in Sources */,
+				5F123B9F932F284C2C21F744 /* NotesModule.swift in Sources */,
 				6838F39F36AA4FAE607F4585 /* NowPlayingService.swift in Sources */,
 				54CD8C2E16FA6C1653F4BF9E /* OffscreenRenderer.swift in Sources */,
 				55BCED4E29F6C38F138C653C /* OnboardingDemoOverlay.swift in Sources */,
