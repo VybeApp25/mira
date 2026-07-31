@@ -98,6 +98,10 @@ final class NotchModuleRegistry: ObservableObject {
         for module in visibleModules where !seen.contains(module.id) {
             seen.insert(module.id)
             changed = true
+            // The browser is never auto-pinned: the dock draws a permanent
+            // trailing button for it, and letting it eat one of the twelve slots
+            // it exists to manage would be self-defeating.
+            guard module.id != ModuleBrowserModule.moduleID else { continue }
             if pinnedIDs.count < Self.maxPinned, !pinnedIDs.contains(module.id) {
                 pinnedIDs.append(module.id)
             }

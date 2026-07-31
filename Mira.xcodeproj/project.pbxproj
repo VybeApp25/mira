@@ -10,6 +10,7 @@
 		00017FA4FF8357F9197DE794 /* FloatingAgentChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB14652282A427EDD30C1E09 /* FloatingAgentChipView.swift */; };
 		00A95EDCC39057E3E0D58A2F /* FailureMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C46953D1361F747CFB25E28 /* FailureMemory.swift */; };
 		01FDB941359698A35F78ED88 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */; };
+		02BBE7748613838E54E75E0A /* ModuleBrowserModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */; };
 		03C43899FB9A47220E81DBEA /* TodoModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50BCFB8024EFE9453C52FCB /* TodoModule.swift */; };
 		05EDBE12F4486D35010C5330 /* apple-notes.md in Resources */ = {isa = PBXBuildFile; fileRef = 140C79E08FEE4FC0BC1B9A6F /* apple-notes.md */; };
 		067778D54B4392682C898082 /* imessage.md in Resources */ = {isa = PBXBuildFile; fileRef = 569D921EDA2E4519F8512B35 /* imessage.md */; };
@@ -557,6 +558,7 @@
 		8833CE70FA4EE5D0937E9725 /* ff.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = ff.mp3; sourceTree = "<group>"; };
 		8887E72ED18B616336B6B36E /* diagram_gen.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = diagram_gen.py; sourceTree = "<group>"; };
 		8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIStreamingService.swift; sourceTree = "<group>"; };
+		8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleBrowserModule.swift; sourceTree = "<group>"; };
 		8BE4187651AAE648F8751542 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherModule.swift; sourceTree = "<group>"; };
 		8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolicyWeightStore.swift; sourceTree = "<group>"; };
@@ -828,6 +830,7 @@
 			isa = PBXGroup;
 			children = (
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
+				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
 				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
@@ -1536,6 +1539,7 @@
 				ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */,
 				D8073BE19A4C0DE91AD55BF7 /* MiraToolService.swift in Sources */,
 				633E12D061864B837775754C /* MisoTTSService.swift in Sources */,
+				02BBE7748613838E54E75E0A /* ModuleBrowserModule.swift in Sources */,
 				24C340E30867418C85FA2608 /* MultiCopyQueueService.swift in Sources */,
 				19F7569B1FE5CE3D77761A9F /* MusicControlService.swift in Sources */,
 				CCAC15D7F188ADCDCEA50065 /* NotchCameraTabView.swift in Sources */,

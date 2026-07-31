@@ -222,7 +222,7 @@ struct NotchModuleDockStrip: View {
         // A single circle floating alone in black reads as a rendering artifact,
         // not as a switcher. The strip only earns its space once there's
         // somewhere to switch TO.
-        if pinned.count > 1 {
+        if pinned.count > 1 || registry.visibleModules.count > pinned.count {
             HStack(spacing: 6) {
                 ForEach(pinned) { module in
                     let isCurrent = module.id == registry.selectedID
@@ -256,6 +256,35 @@ struct NotchModuleDockStrip: View {
                     .accessibilityLabel(module.title)
                     .accessibilityAddTraits(isCurrent ? [.isSelected] : [])
                 }
+
+                // Permanent trailing button into the browser. Not a pinned
+                // module — with the dock capped at 12 and more than that
+                // registered, this is the only guaranteed route to the rest.
+                let browsing = registry.selectedID == ModuleBrowserModule.moduleID
+                Button {
+                    registry.select(ModuleBrowserModule.moduleID)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(browsing ? accent : .white.opacity(0.55))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            ZStack {
+                                Circle().fill(Color.black)
+                                if browsing { Circle().fill(accent.opacity(0.22)) }
+                            }
+                        )
+                        .overlay(
+                            Circle().strokeBorder(
+                                browsing ? accent.opacity(0.45) : Color.white.opacity(0.08),
+                                lineWidth: 1
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+                }
+                .buttonStyle(.plain)
+                .help("All modules")
+                .accessibilityLabel("All modules")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)

@@ -86,7 +86,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             WeatherModule(),
             CalendarModule(),
             TodoModule(),
-            SystemModule()
+            SystemModule(),
+            ModuleBrowserModule()
         ])
 
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
