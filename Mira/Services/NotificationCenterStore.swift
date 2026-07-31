@@ -71,13 +71,39 @@ struct NotificationCenterStore {
         return fm.fileExists(atPath: destination.path) ? destination : nil
     }
 
-    static func modifiedAt() -> Date? {
-        try? FileManager.default
-            .attributesOfItem(atPath: databaseURL.path)[.modificationDate] as? Date
+    /// Cheap fingerprint of the database's on-disk state.
+    ///
+    /// Deliberately includes the `-wal`, and that is the whole point: the main
+    /// file's modification date on this Mac is weeks old because SQLite has not
+    /// checkpointed, so watching `db` alone would say "nothing has changed"
+    /// forever while every notification of the day landed in the write-ahead
+    /// log beside it.
+    static func signature() -> String {
+        let fm = FileManager.default
+        var parts: [String] = []
+        for suffix in ["", "-wal"] {
+            let path = databaseURL.path + suffix
+            guard let attrs = try? fm.attributesOfItem(atPath: path) else { continue }
+            let size = (attrs[.size] as? Int) ?? 0
+            let modified = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            parts.append("\(size)@\(modified)")
+        }
+        return parts.joined(separator: "|")
     }
+
+    /// Last signature we actually parsed, and what it produced.
+    private nonisolated(unsafe) static var cachedSignature = ""
+    private nonisolated(unsafe) static var cachedResult: [SystemNotification] = []
 
     /// Most recent deliveries, newest first.
     static func recent(limit: Int = 12) -> [SystemNotification] {
+        // Copying and parsing a 2.5 MB database every tick is what forced a slow
+        // poll, and a slow poll is why a notification could take ten seconds to
+        // reach the notch. Comparing a stat is free, so the expensive path only
+        // runs when something actually landed — which lets the caller poll fast.
+        let current = signature()
+        if current == cachedSignature, !cachedResult.isEmpty { return cachedResult }
+
         guard let path = snapshot() else { return [] }
 
         var db: OpaquePointer?
@@ -112,6 +138,12 @@ struct NotificationCenterStore {
             guard let parsed = parse(data, bundleID: bundleID, delivered: delivered) else { continue }
             out.append(parsed)
         }
+
+        // Record what this signature produced. Without this the early return
+        // above could never fire and the cache would be dead code — the copy
+        // and parse would still run on every single tick.
+        cachedSignature = current
+        cachedResult = out
         return out
     }
 

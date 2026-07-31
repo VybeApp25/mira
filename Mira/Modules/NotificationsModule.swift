@@ -71,13 +71,18 @@ final class SystemNotificationsService: ObservableObject {
     private var timer: Timer?
     private init() { loadCleared() }
 
-    func start() {
-        guard timer == nil else { return }
+    /// Poll for arrivals.
+    ///
+    /// Runs from app launch and NEVER stops while Mira is running. An earlier
+    /// version stopped it in the module's didDisappear, which meant Mira watched
+    /// for notifications only while you had the Notifications panel open — the
+    /// exact opposite of what the feature is for. Nothing popped on the closed
+    /// notch because nothing was looking.
+    func start(interval: TimeInterval = 2) {
+        // Restart rather than bail, so a cadence change takes effect.
+        timer?.invalidate()
         refresh()
-        // Notification Center's tree only changes when something arrives or is
-        // dismissed; 3s is responsive without walking another process's AX tree
-        // constantly.
-        let t = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
         RunLoop.main.add(t, forMode: .common)
@@ -204,7 +209,7 @@ final class SystemNotificationsService: ObservableObject {
         notifications.filter { isVisible($0) }
     }
 
-    private func isVisible(_ note: SystemNotification) -> Bool {
+    func isVisible(_ note: SystemNotification) -> Bool {
         if clearedIDs.contains(note.id) { return false }
         if let clearedBefore, let delivered = note.deliveredAt, delivered <= clearedBefore {
             return false
@@ -267,7 +272,7 @@ final class SystemNotificationsService: ObservableObject {
     /// How long a new notification holds the closed notch before it drops back
     /// to a count. Long enough to read a line, short enough that walking away
     /// from the Mac doesn't leave it pinned there.
-    static let popDuration: TimeInterval = 6
+    static let popDuration: TimeInterval = 10
 
     var isPopping: Bool {
         guard let latestAt else { return false }
@@ -371,8 +376,10 @@ final class NotificationsModule: NotchModule, ObservableObject {
             .store(in: &cancellables)
     }
 
-    func didAppear()    { service.start() }
-    func didDisappear() { service.stop() }
+    // Faster while the panel is on screen, back to the background cadence when
+    // it isn't — but never stopped. Stopping is what broke the pop.
+    func didAppear()    { service.start(interval: 1.5) }
+    func didDisappear() { service.start(interval: 2) }
 
     func makeContent() -> AnyView { AnyView(NotificationsView(service: service)) }
 }

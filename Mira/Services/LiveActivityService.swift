@@ -216,22 +216,23 @@ final class LiveActivityService: ObservableObject {
         let service = SystemNotificationsService.shared
         guard service.isTrusted else { return nil }
 
-        if service.isPopping, let latest = service.latest {
-            return LiveActivity(kind: .notification,
-                                icon: latest.icon,
-                                text: "\(latest.app) · \(latest.message)",
-                                tint: Color(red: 0.55, green: 0.70, blue: 1.0),
-                                appName: latest.app)
+        // A notification takes the closed notch ONLY while it is fresh, and only
+        // if it hasn't been cleared. Then the notch goes back to whatever it
+        // normally shows.
+        //
+        // An earlier version left a standing "N notifications" count sitting
+        // there. That is a badge, not a notification: once you have seen the
+        // thing, a permanent reminder that it happened is just the notch
+        // refusing to go quiet. The count still lives in the panel, where you go
+        // when you actually want the list.
+        guard service.isPopping, let latest = service.latest, service.isVisible(latest) else {
+            return nil
         }
-
-        // Cleared ones don't count. A badge that keeps reporting a backlog you
-        // have dealt with is exactly the thing Clear exists to stop.
-        let count = service.visibleNotifications.count
-        guard count > 0 else { return nil }
         return LiveActivity(kind: .notification,
-                            icon: "bell.fill",
-                            text: count == 1 ? "1 notification" : "\(count) notifications",
-                            tint: Color(red: 0.55, green: 0.70, blue: 1.0))
+                            icon: latest.icon,
+                            text: "\(latest.app) · \(latest.message)",
+                            tint: Color(red: 0.55, green: 0.70, blue: 1.0),
+                            appName: latest.app)
     }
 
     private func pomodoroActivity() -> LiveActivity? {
