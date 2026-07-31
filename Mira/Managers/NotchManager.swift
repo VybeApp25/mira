@@ -125,6 +125,25 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.expandForShortcut() }
         }
+
+        // Snooze turning ON collapses the island immediately.
+        //
+        // The guard inside hoverManager.onEnter only fires on a TRANSITION into
+        // the hover zone, so snoozing while the panel was already open did
+        // nothing visible — you got "snoozed" while staring at an open panel,
+        // which is incoherent, and it also meant the setting appeared broken
+        // until you happened to move away and back. Collapsing on the state
+        // change is what makes the mode legible.
+        NotificationCenter.default.addObserver(forName: .miraSnoozeChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard NotchSnoozeService.shared.isSnoozed else { return }
+                self.collapseWork?.cancel()
+                self.collapseWork = nil
+                self.animController.collapse()
+                self.hoverManager.update(activationRect: self.collapsedZone())
+            }
+        }
         // A file drag entered the notch drop zone — open the island straight to
         // the Shelf tab so the user can see where the file is about to land.
         // queue: nil + DispatchQueue.main.async (not .main OperationQueue) so this
