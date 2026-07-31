@@ -90,6 +90,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NotesModule(),
             SnapZoneModule(),
             DropActionsModule(),
+            ScreenTimeModule(),
             BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()
@@ -98,6 +99,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Bluetooth polls independently of its module being visible, because the
         // low-battery warning it feeds into the collapsed strip is only useful if
         // it fires when you AREN'T looking at the Bluetooth panel.
+        // Screen Time must run from LAUNCH, not from didAppear: usage cannot be
+        // backfilled, so a minute not recorded is gone.
+        ScreenTimeService.shared.start()
+
         BluetoothService.shared.start()
 
         // Snap Zones watches for window drags reaching the top of the screen.

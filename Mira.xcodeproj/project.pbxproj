@@ -199,6 +199,7 @@
 		8A133C5A0C621D99DDBA8C8E /* SuccessObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3239A88CD3FB5DF63AE45B2F /* SuccessObserver.swift */; };
 		8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */; };
 		8B4296AB8DE5E2F681CF154E /* QuotaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6D17DC1DC375321372EDEA /* QuotaService.swift */; };
+		8E30B2EFB4859FED732920DF /* ScreenTimeModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */; };
 		8EA66D11C2AD39CDA20B37F7 /* NotchHomeIdleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED495D330DD96DD442A6B01C /* NotchHomeIdleView.swift */; };
 		91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */; };
 		932C2A5F8604C96FB24FD0AB /* EntitlementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724F4A7C7AD60E6213F9F4C4 /* EntitlementService.swift */; };
@@ -471,6 +472,7 @@
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
 		499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthService.swift; sourceTree = "<group>"; };
 		4A77428E1C00142D230E8329 /* WorkspaceReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReview.swift; sourceTree = "<group>"; };
+		4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeModule.swift; sourceTree = "<group>"; };
 		4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundScheduler.swift; sourceTree = "<group>"; };
 		4CAAB7B0DB774E838E5A9148 /* ClarificationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationCard.swift; sourceTree = "<group>"; };
 		4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaKeyInterceptService.swift; sourceTree = "<group>"; };
@@ -845,6 +847,7 @@
 				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
+				4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */,
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
@@ -1620,6 +1623,7 @@
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
 				78DC18E55F5011C56CFEE6F9 /* ScreenDrawController.swift in Sources */,
+				8E30B2EFB4859FED732920DF /* ScreenTimeModule.swift in Sources */,
 				D8D8269A9A004BD4883CB39E /* SettingsView.swift in Sources */,
 				516595E42269B2C813D6111B /* SharedStatusView.swift in Sources */,
 				BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */,
