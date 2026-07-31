@@ -76,8 +76,31 @@ final class AICodingModule: NotchModule, ObservableObject {
     /// list down to a single visible row, so the panel advertised a session it
     /// then hid. Height is per-module by construction (NotchModule.swift), and
     /// this is exactly the case that was for.
-    var heightLevel: NotchHeightLevel { showsBanner ? .tall : .standard }
+    var heightLevel: NotchHeightLevel { (showsBanner || showingRemote) ? .tall : .standard }
     let allowsTallMode = true
+
+    // MARK: Remote control
+
+    private let remote = RemoteControlService.shared
+
+    /// True while the notch-controlled conversation is on screen.
+    @Published private(set) var showingRemote = false
+
+    /// Where a new session should start. The folder you were last working in
+    /// beats the home directory, which is almost never what you meant.
+    var launchDirectory: String {
+        watcher.transcripts.first(where: { !$0.cwd.isEmpty })?.cwd
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
+    }
+
+    func launchRemote() {
+        remote.launch(in: launchDirectory)
+        showingRemote = true
+        heightChanged()
+    }
+
+    func openRemote()  { showingRemote = true;  heightChanged() }
+    func closeRemote() { showingRemote = false; heightChanged() }
 
     // MARK: Detection banner
 
@@ -115,8 +138,14 @@ final class AICodingModule: NotchModule, ObservableObject {
 
     @Published private(set) var detailSessionID: String?
 
-    var detailTitle: String? { detailSessionID == nil ? nil : "AI Coding" }
-    func popDetail() { detailSessionID = nil }
+    var detailTitle: String? {
+        (detailSessionID != nil || showingRemote) ? "AI Coding" : nil
+    }
+
+    func popDetail() {
+        if showingRemote { closeRemote() } else { detailSessionID = nil }
+    }
+
     func show(_ id: String) { detailSessionID = id }
 
     /// Transcript sessions with any live permission ask merged in by id. The
@@ -157,6 +186,9 @@ final class AICodingModule: NotchModule, ObservableObject {
     var recentRows: [AICodingRow] { rows.filter { !$0.isActive } }
 
     var subtitle: NotchHeaderSubtitle? {
+        if showingRemote {
+            return NotchHeaderSubtitle(text: "Notch-controlled", isPill: true)
+        }
         if let id = detailSessionID, let row = rows.first(where: { $0.id == id }) {
             return NotchHeaderSubtitle(text: row.folder, isPill: true)
         }
@@ -175,7 +207,8 @@ final class AICodingModule: NotchModule, ObservableObject {
     private var lastShowsBanner = false
 
     init() {
-        for p in [watcher.objectWillChange, bridge.objectWillChange, installer.objectWillChange] {
+        for p in [watcher.objectWillChange, bridge.objectWillChange,
+                  installer.objectWillChange, remote.objectWillChange] {
             p.sink { [weak self] _ in
                 guard let self else { return }
                 self.objectWillChange.send()
@@ -209,7 +242,8 @@ final class AICodingModule: NotchModule, ObservableObject {
     }
 
     func makeContent() -> AnyView {
-        AnyView(AICodingView(module: self, watcher: watcher, bridge: bridge, installer: installer))
+        AnyView(AICodingView(module: self, watcher: watcher, bridge: bridge,
+                             installer: installer, remote: remote))
     }
 }
 
@@ -221,13 +255,19 @@ private struct AICodingView: View {
     @ObservedObject var watcher: ClaudeCodeSessionWatcher
     @ObservedObject var bridge: AICodingBridgeService
     @ObservedObject var installer: AICodingHookInstaller
+    @ObservedObject var remote: RemoteControlService
     @ObservedObject private var accentSvc = AccentColorService.shared
+
+    @State private var composer = ""
+    @FocusState private var composerFocused: Bool
 
     private var accent: Color { accentSvc.color }
 
     var body: some View {
         Group {
-            if let id = module.detailSessionID, let row = module.rows.first(where: { $0.id == id }) {
+            if module.showingRemote {
+                remoteControl
+            } else if let id = module.detailSessionID, let row = module.rows.first(where: { $0.id == id }) {
                 detail(row)
             } else {
                 list
@@ -314,6 +354,186 @@ private struct AICodingView: View {
         }
     }
 
+    // MARK: Remote control entry
+
+    /// The one row that starts a session Mira owns end to end. Gated on the
+    /// hook, because a --print session has no terminal to fall back to: without
+    /// the hook there is nowhere for a tool prompt to be answered, and the run
+    /// would stall on the first Bash call with no explanation.
+    @ViewBuilder
+    private var remoteControlEntry: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionLabel("Remote control")
+
+            Button {
+                if remote.phase.isLive { module.openRemote() } else { module.launchRemote() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: remote.phase.isLive ? "bolt.fill" : "plus.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(accent)
+                        .frame(width: 16)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(remote.phase.isLive ? "Notch-controlled session" : "Launch new session")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.92))
+                        Text(remote.phase.isLive
+                             ? "Open the conversation"
+                             : "Open Claude Code with notch control in \(URL(fileURLWithPath: module.launchDirectory).lastPathComponent)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.45))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.30))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.05)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!installer.isInstalled || !remote.isAvailable)
+            .opacity((installer.isInstalled && remote.isAvailable) ? 1 : 0.4)
+
+            if !remote.isAvailable {
+                Text("Claude Code isn't installed on this Mac.")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.35))
+            } else if !installer.isInstalled {
+                Text("Connect first — a notch-controlled session has no terminal to ask in, "
+                     + "so it needs the hook to approve tools.")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: Remote control conversation
+
+    private var remoteControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            statusStrip
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(remote.messages) { message in
+                            RemoteMessageRow(message: message, accent: accent)
+                        }
+                        Color.clear.frame(height: 1).id("bottom")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .onChange(of: remote.messages.count) { _, _ in
+                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+            }
+
+            composerBar
+        }
+    }
+
+    private var statusStrip: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(remote.phase == .working ? accent : Color(red: 0.40, green: 0.80, blue: 0.62))
+                .frame(width: 5, height: 5)
+
+            Text(statusText)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+
+            if let model = remote.model {
+                Chip(text: model.replacingOccurrences(of: "claude-", with: ""),
+                     tint: Color(red: 0.98, green: 0.62, blue: 0.30))
+            }
+
+            Spacer(minLength: 0)
+
+            if remote.costUSD > 0 {
+                Text(String(format: "$%.3f", remote.costUSD))
+                    .font(.system(size: 9))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.35))
+            }
+
+            // Hands the conversation back rather than abandoning it — resumes
+            // this same session id in Terminal.
+            if remote.sessionID != nil, remote.phase.isLive {
+                Button("Continue in Terminal") { remote.continueInTerminal(); module.closeRemote() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+
+            if remote.phase.isLive {
+                Button("Stop") { remote.stop() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.45))
+            } else {
+                Button("Relaunch") { module.launchRemote() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+        }
+    }
+
+    private var statusText: String {
+        switch remote.phase {
+        case .idle:              return "Not running"
+        case .launching:         return "Starting Claude Code…"
+        case .ready:             return "Ready"
+        case .working:           return "Working…"
+        case .ended(let reason): return reason ?? "Session ended"
+        }
+    }
+
+    private var composerBar: some View {
+        HStack(spacing: 7) {
+            TextField("Ask Claude Code…", text: $composer, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.92))
+                .lineLimit(1...3)
+                .focused($composerFocused)
+                .onSubmit(sendComposer)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.07)))
+
+            Button(action: sendComposer) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(accent))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .opacity(canSend ? 1 : 0.35)
+        }
+        .opacity(remote.phase.isLive ? 1 : 0.4)
+        .disabled(!remote.phase.isLive)
+    }
+
+    private var canSend: Bool {
+        remote.phase.isLive && !composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func sendComposer() {
+        guard canSend else { return }
+        remote.send(composer)
+        composer = ""
+        composerFocused = true
+    }
+
     // MARK: List
 
     private var list: some View {
@@ -331,6 +551,7 @@ private struct AICodingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 7) {
                     banner
+                    remoteControlEntry
 
                     if !module.activeRows.isEmpty {
                         SectionLabel("Active")
@@ -609,6 +830,56 @@ private struct SessionRow: View {
         case ..<86400:   return "\(Int(seconds / 3600))h"
         case ..<2592000: return "\(Int(seconds / 86400))d"
         default:         return "\(Int(seconds / 2592000)) mths"
+        }
+    }
+}
+
+// MARK: - Remote message
+
+private struct RemoteMessageRow: View {
+
+    let message: RemoteControlService.Message
+    let accent: Color
+
+    var body: some View {
+        switch message.role {
+        case .user:
+            // Right-aligned and tinted, so your own turns are findable when
+            // scrolling back through a long run of tool calls.
+            HStack {
+                Spacer(minLength: 40)
+                Text(message.text)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.92))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(0.22)))
+            }
+
+        case .assistant:
+            Text(message.text)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.85))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+        case .tool:
+            HStack(spacing: 6) {
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.system(size: 8))
+                    .foregroundColor(.white.opacity(0.35))
+                Text(message.text)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.45))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+
+        case .system:
+            Text(message.text)
+                .font(.system(size: 10))
+                .foregroundColor(Color(red: 0.95, green: 0.55, blue: 0.45))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

@@ -228,6 +228,7 @@
 		A034A43B8C5DBCB732AE694B /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16778FFCF54471FB1ABBB110 /* VoiceService.swift */; };
 		A141C1C9AFCD0C73632B9FBB /* AgentActivityChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 261149E01726C1DC29E227B7 /* AgentActivityChipView.swift */; };
 		A1B55B66B48FB225945A0B20 /* pptx_rw.py in Resources */ = {isa = PBXBuildFile; fileRef = A782277C3717512EB6C03900 /* pptx_rw.py */; };
+		A1ED5A14879B8B4C88AC2814 /* RemoteControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F88DE432AA1C2672DCE9C021 /* RemoteControlService.swift */; };
 		A203B2E97FF34162072AC381 /* ProposalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE89AA4E41C972A58C582686 /* ProposalStore.swift */; };
 		A207BDA0F69204FBCB1CFA9C /* FloatingButtonService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30DBCAAD8D19FFE4F04F3375 /* FloatingButtonService.swift */; };
 		A27ED327A6F5061ED6D27309 /* CodexHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */; };
@@ -744,6 +745,7 @@
 		F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeService.swift; sourceTree = "<group>"; };
 		F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		F861FAC8802E2F2125CE93E4 /* MiraSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraSkill.swift; sourceTree = "<group>"; };
+		F88DE432AA1C2672DCE9C021 /* RemoteControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControlService.swift; sourceTree = "<group>"; };
 		F98E0CF4B55EE1130EF104B1 /* HoverHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverHistoryStore.swift; sourceTree = "<group>"; };
 		F9B4A19539539B3B6D18DDD0 /* CursorCompanionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionModels.swift; sourceTree = "<group>"; };
 		FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingDrawnContextService.swift; sourceTree = "<group>"; };
@@ -1109,6 +1111,7 @@
 				6677D006849F37389D64A610 /* RadialLauncher.swift */,
 				A1459E7A50AC74837CCEFF93 /* RealtimeVoiceService.swift */,
 				15A43ED2C5A66B0C6E5B2F88 /* RecommendationEngine.swift */,
+				F88DE432AA1C2672DCE9C021 /* RemoteControlService.swift */,
 				63F52A13C8B02EEA4701166A /* ResponseCardService.swift */,
 				39B2C1A5B3D357A621F2541F /* RouterService.swift */,
 				BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */,
@@ -1657,6 +1660,7 @@
 				56208420154FBA430E9411B9 /* RealtimeVoiceService.swift in Sources */,
 				CA5453014B3E1EDCC1A67073 /* RecommendationEngine.swift in Sources */,
 				45DCD1E11E23C428C1E23DEC /* ReliabilityDashboardView.swift in Sources */,
+				A1ED5A14879B8B4C88AC2814 /* RemoteControlService.swift in Sources */,
 				3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */,
 				9D95DC35830EBC1989F2837C /* ResponseCardView.swift in Sources */,
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
