@@ -281,6 +281,7 @@
 		C35EC43AC73ACA71607F8539 /* VisionStateVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3BE420BD2D4BCA710F3EE4 /* VisionStateVerifier.swift */; };
 		C397B4C5A2E72FD3BEB2A8F7 /* CodexMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80220D9902D3AB8A604D1296 /* CodexMCPClient.swift */; };
 		C3F5CA4D3E6727EBBB54E5DF /* CalendarTodayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93490CFC9E751F8742BD6C34 /* CalendarTodayService.swift */; };
+		C40BCBB02ECED949CBC4CCC9 /* PomodoroModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695559EF51163B24E442B232 /* PomodoroModule.swift */; };
 		C5BF65EFC345902777F0F8CD /* computer-use.md in Resources */ = {isa = PBXBuildFile; fileRef = CECF49A88AB42C914BD34504 /* computer-use.md */; };
 		C63AC7A1618A13A8A530831E /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111B0BAA1F242F751DD35E6D /* PaywallView.swift */; };
 		C983D5ECE5849519EC072872 /* HoverPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8712738938AEA845880976 /* HoverPreferences.swift */; };
@@ -520,6 +521,7 @@
 		6688CC8565B3DE43E7FDD327 /* WorkspaceDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDashboardView.swift; sourceTree = "<group>"; };
 		688E6384F043AE808602588A /* findmy_devices.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = findmy_devices.py; sourceTree = "<group>"; };
 		689C90C43741638A1900574C /* ChatWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatWidgetView.swift; sourceTree = "<group>"; };
+		695559EF51163B24E442B232 /* PomodoroModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroModule.swift; sourceTree = "<group>"; };
 		69651A1F761E1E1338C095AA /* LiveTranscriptionStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranscriptionStream.swift; sourceTree = "<group>"; };
 		6995F4FEBB36CE47DC199EA1 /* EventToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventToastView.swift; sourceTree = "<group>"; };
 		69D1A19C98BFF6EDB3B69816 /* claude-code.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "claude-code.md"; sourceTree = "<group>"; };
@@ -860,6 +862,7 @@
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
 				DFC327A8BBA40C7A8146F130 /* NotesModule.swift */,
 				F0477E60D71EFDC71275E785 /* NotificationsModule.swift */,
+				695559EF51163B24E442B232 /* PomodoroModule.swift */,
 				4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */,
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
@@ -1619,6 +1622,7 @@
 				5BC999BCDF2CB2E5859ED059 /* PolicyEngine.swift in Sources */,
 				75CB230870D4445F41C4E423 /* PolicyRecommendation.swift in Sources */,
 				BE920249C6E6429E497C7954 /* PolicyWeightStore.swift in Sources */,
+				C40BCBB02ECED949CBC4CCC9 /* PomodoroModule.swift in Sources */,
 				825330BA14EA4E341A1E7CDE /* PomodoroService.swift in Sources */,
 				956F2F42D976FA6EC4E2E24C /* PostHogService.swift in Sources */,
 				2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */,

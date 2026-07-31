@@ -88,6 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             CalendarModule(),
             TodoModule(),
             NotesModule(),
+            PomodoroModule(),
             SnapZoneModule(),
             DropActionsModule(),
             ScreenTimeModule(),
