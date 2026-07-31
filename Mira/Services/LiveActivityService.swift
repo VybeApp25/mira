@@ -145,6 +145,27 @@ final class LiveActivityService: ObservableObject {
             return
         }
 
+        // A NOTIFICATION TAKES THE STRIP THE MOMENT IT LANDS, jumping the
+        // rotation to it rather than waiting its turn.
+        //
+        // Without this the strip showed whatever `rotationIndex` already pointed
+        // at. With two other sources active and the index sitting at 1, an
+        // arriving text waited a full dwell to appear; at index 2 it waited two,
+        // so a notification could be up to eight seconds late to the one place
+        // it is supposed to be immediate. It looked correct in testing only
+        // because a single competing source keeps the index pinned at 0.
+        //
+        // Safe to do unconditionally: notificationActivity() returns nil outside
+        // the pop window, so `.notification` being present already MEANS fresh,
+        // and the strip returns to the rotation on its own when it expires.
+        // Deliberately above the focus pin — pinning is a standing preference
+        // about ambient sources, not an instruction to sit on an alert.
+        if let index = active.firstIndex(where: { $0.kind == .notification }) {
+            rotationIndex = index
+            if active[index] != current { current = active[index] }
+            return
+        }
+
         // A focused activity holds the strip for as long as it has something to
         // say. If it goes quiet the rotation resumes rather than the strip
         // sitting empty, and the pin is kept for when it comes back.
@@ -314,7 +335,11 @@ struct LiveActivityStrip: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            .frame(maxWidth: 200, alignment: .leading)
+            // A cap, not a reservation — the parent pill still truncates to
+            // whatever it actually has. Raised from 200 because a notification
+            // now carries the sender as well as the message, and the pill widens
+            // to match; the shorter sources are unaffected.
+            .frame(maxWidth: 300, alignment: .leading)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
             .animation(.easeInOut(duration: 0.28), value: activity)
             .accessibilityElement(children: .combine)

@@ -96,6 +96,20 @@ struct MiraIslandView: View {
 
     /// True when the rotating strip's current item is media AND Mira has nothing
     /// of its own to say — media then renders in the ears rather than below.
+    /// A notification inside its brief pop window.
+    ///
+    /// This exists to let an arriving alert outrank the agent-task COUNT and the
+    /// pointing badge in the collapsed pill. Those are ambient — a task badge can
+    /// sit there for the length of a build — and while one was showing, a text
+    /// did not merely arrive late, it never appeared in the closed notch at all.
+    ///
+    /// Deliberately does NOT outrank voice state or the HUD status text. The pill
+    /// is how you know Mira is listening, thinking or speaking, and that is not
+    /// something to paper over for ten seconds. Those two still win.
+    private var isNotificationPop: Bool {
+        liveActivity.current?.kind == .notification
+    }
+
     private var isMediaActivity: Bool {
         liveActivity.current?.kind == .media
             && hudVM.statusText.isEmpty
@@ -120,6 +134,11 @@ struct MiraIslandView: View {
             // a track title.
             return geometry.notchWidth + (trackChange.justChanged ? 271 : 96)
         }
+        // A notification gets more room than the other collapsed states. It is
+        // replacing a macOS banner, which shows sender AND message in full, so
+        // truncating to "Marcus Webb: ho..." would make the notch a worse
+        // version of the thing it just suppressed.
+        if isNotificationPop { return geometry.notchWidth + 200 }
         return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
 
@@ -466,7 +485,7 @@ struct MiraIslandView: View {
                         .foregroundColor(.white.opacity(0.80))
                         .lineLimit(1)
                         .transition(.opacity)
-                } else if !taskStore.tasks.isEmpty {
+                } else if !taskStore.tasks.isEmpty && !isNotificationPop {
                     Text("\(taskStore.tasks.count)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
@@ -474,7 +493,7 @@ struct MiraIslandView: View {
                         .background(DS.Colors.accent)
                         .clipShape(Capsule())
                         .transition(.opacity)
-                } else if pointTo.isActive {
+                } else if pointTo.isActive && !isNotificationPop {
                     HStack(spacing: 5) {
                         Image(systemName: "triangle.fill")
                             .font(.system(size: 7, weight: .bold))
@@ -491,7 +510,7 @@ struct MiraIslandView: View {
                         .foregroundColor(collapsedAccent.opacity(0.9))
                         .lineLimit(1)
                         .transition(.opacity)
-                } else if !isMediaActivity {
+                } else if isNotificationPop || !isMediaActivity {
                     // Nothing of Mira's own to report — rotate live activities
                     // (timer / next event) the way MacNotch's collapsed strip
                     // does. Deliberately LAST in this chain: voice state, agent
