@@ -225,6 +225,13 @@ struct MiraIslandView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
             moduleRegistry.select("labs")
         }
+        // ⌃⌥← / ⌃⌥→ walk the carousel without the mouse.
+        .onReceive(NotificationCenter.default.publisher(for: .miraModulePrev)) { _ in
+            moduleRegistry.advance(by: -1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miraModuleNext)) { _ in
+            moduleRegistry.advance(by: 1)
+        }
         // Keep the hover zone in sync with the panel + dock. Switching modules
         // changes the height, and the dock appearing or disappearing changes how
         // far below the panel the island still counts as "hovered".

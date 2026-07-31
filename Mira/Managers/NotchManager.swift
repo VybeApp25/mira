@@ -281,6 +281,10 @@ final class NotchManager {
                 NSLog("[Mira] hoverManager.onEnter suppressed — PTT active")
                 return
             }
+            // Snoozed: stop opening on the cursor. Voice, agents and the
+            // collapsed strip all keep running — this is "stop opening on me",
+            // not "stop working".
+            guard !NotchSnoozeService.shared.isSnoozed else { return }
             collapseGeneration += 1   // invalidate any pending collapse retries
             collapseWork?.cancel()
             collapseWork = nil
