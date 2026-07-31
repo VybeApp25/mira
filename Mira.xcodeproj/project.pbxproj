@@ -64,6 +64,7 @@
 		277DAE431BD25B27F7A1CF08 /* server.js in Resources */ = {isa = PBXBuildFile; fileRef = 2401A65BD01B1E1859DD4B36 /* server.js */; };
 		29244464ED38F66686D379A5 /* ShortcutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2084E82EF60E010D5EBDE10 /* ShortcutConfig.swift */; };
 		292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */; };
+		295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */; };
 		2984C9424D7B8E9A636ADAE5 /* AgentOutputsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42036566FF695AD6554E8E01 /* AgentOutputsView.swift */; };
 		2AC0A79B1C9F25ACE71A1EBF /* gmail.md in Resources */ = {isa = PBXBuildFile; fileRef = 44B3A75742D4282073152A2A /* gmail.md */; };
 		2BC76E2CC98B202D34533CAE /* ActionChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B706458B64024088E8769D /* ActionChipsView.swift */; };
@@ -505,6 +506,7 @@
 		600F7145CE2FE8AF6E86A44C /* airtable.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = airtable.md; sourceTree = "<group>"; };
 		6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingManager.swift; sourceTree = "<group>"; };
 		628102BEE400C46C78DD6B66 /* MiraCursorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraCursorManager.swift; sourceTree = "<group>"; };
+		62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayProgressModule.swift; sourceTree = "<group>"; };
 		63E5F50DC2B24AA3C2040141 /* BrightnessControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrightnessControl.swift; sourceTree = "<group>"; };
 		63F52A13C8B02EEA4701166A /* ResponseCardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCardService.swift; sourceTree = "<group>"; };
 		63F62EF0A7935CCBCF8CA55E /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
@@ -843,6 +845,7 @@
 			children = (
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
+				62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */,
 				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
 				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
 				8AD6E4F8844B4900F8816E56 /* ModuleBrowserModule.swift */,
@@ -1489,6 +1492,7 @@
 				55052CB28E9562E6F10B744A /* CursorCompanionManager.swift in Sources */,
 				604B601CB9DBBD0E12F5505B /* CursorCompanionModels.swift in Sources */,
 				1346A12566CB8673304FE0D4 /* CursorCompanionView.swift in Sources */,
+				295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
 				09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */,
