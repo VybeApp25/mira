@@ -250,6 +250,9 @@ final class AICodingModule: NotchModule, ObservableObject {
 
     func didAppear() {
         installer.refresh()
+        // Resumable history changes on the scale of hours, so it's read when
+        // the panel opens rather than on the live poll.
+        watcher.refreshResumable()
         // Poll harder while the panel is on screen; the background cadence set
         // at launch is deliberately lazy.
         watcher.stop()
@@ -662,11 +665,67 @@ private struct AICodingView: View {
                                        onAllow: {}, onDeny: {})
                         }
                     }
+
+                    resumeList
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             footer
+        }
+    }
+
+    // MARK: Resume in Terminal
+
+    /// Older work, one row per project, handed back to a real terminal rather
+    /// than reopened here. Resuming into the notch would mean two owners of one
+    /// session — the CLI refuses that, and it isn't what you want anyway when
+    /// you're going back to something you were mid-way through.
+    @ViewBuilder
+    private var resumeList: some View {
+        if !watcher.resumable.isEmpty {
+            SectionLabel("Resume in Terminal")
+            ForEach(watcher.resumable) { session in
+                Button {
+                    RemoteControlService.resumeInTerminal(sessionID: session.id,
+                                                          directory: session.cwd)
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(width: 22, height: 22)
+                            .overlay(Image(systemName: "terminal")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.5)))
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(session.displayName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.88))
+                                .lineLimit(1)
+                            Text(session.lastPrompt
+                                 ?? "Last active \(SessionRow.relative(session.lastActivity)) ago")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 6)
+
+                        Text(SessionRow.relative(session.lastActivity))
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.35))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.28))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Resume in Terminal — \(session.cwd)")
+            }
         }
     }
 

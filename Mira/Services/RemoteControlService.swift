@@ -234,21 +234,26 @@ final class RemoteControlService: ObservableObject {
     /// again from nothing.
     func continueInTerminal() {
         guard let sessionID, let directory else { return }
-        let command = "cd \(Self.shellQuoted(directory)) && claude --resume \(sessionID)"
+        Self.resumeInTerminal(sessionID: sessionID, directory: directory)
+        // The CLI refuses to resume a session that is still open elsewhere, so
+        // let go of it here rather than leaving two owners of one session.
+        stop()
+    }
+
+    /// Open Terminal on a session by id. Shared with the panel's "Resume in
+    /// Terminal" list, which needs exactly this and nothing else.
+    static func resumeInTerminal(sessionID: String, directory: String) {
+        let command = "cd \(shellQuoted(directory)) && claude --resume \(sessionID)"
         let script = """
         tell application "Terminal"
             activate
-            do script "\(Self.appleScriptEscaped(command))"
+            do script "\(appleScriptEscaped(command))"
         end tell
         """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", script]
         try? process.run()
-
-        // The CLI refuses to resume a session that is still open elsewhere, so
-        // let go of it here rather than leaving two owners of one session.
-        stop()
     }
 
     static func shellQuoted(_ value: String) -> String {

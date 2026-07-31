@@ -141,6 +141,103 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
         init(transcript: ClaudeCodeTranscript) { self.transcript = transcript }
     }
 
+    // MARK: - Resumable sessions
+
+    /// A past session you can pick back up in a terminal.
+    ///
+    /// Separate from `transcripts` because it answers a different question.
+    /// `transcripts` is "what is happening now" — a 12-hour window, fully
+    /// parsed, polled every few seconds. This is "what could I go back to" —
+    /// every project, however old, one row each, parsed once when the panel
+    /// opens. Running the live watcher over months of history to populate a
+    /// list nobody watches change would be pure waste.
+    struct ResumableSession: Identifiable, Equatable {
+        let id: String          // session id == transcript filename
+        let folderName: String
+        let cwd: String
+        let title: String?
+        let lastPrompt: String?
+        let lastActivity: Date
+
+        var displayName: String {
+            if let title, !title.isEmpty { return title }
+            return folderName.isEmpty ? "Claude Code" : folderName
+        }
+    }
+
+    @Published private(set) var resumable: [ResumableSession] = []
+
+    /// Newest session per project. One row each — five sessions in one repo is
+    /// a list of five identical folder names, and the one you want is almost
+    /// always the last one you touched.
+    func refreshResumable(limit: Int = 8) {
+        let fm = FileManager.default
+        guard let projects = try? fm.contentsOfDirectory(
+            at: projectsDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]) else { resumable = []; return }
+
+        var out: [ResumableSession] = []
+
+        for project in projects {
+            guard let files = try? fm.contentsOfDirectory(
+                at: project,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]) else { continue }
+
+            let newest = files
+                .filter { $0.pathExtension == "jsonl" }
+                .compactMap { url -> (URL, Date)? in
+                    guard let date = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                            .contentModificationDate else { return nil }
+                    return (url, date)
+                }
+                .max { $0.1 < $1.1 }
+
+            guard let (url, modified) = newest,
+                  let summary = Self.summarize(url, modifiedAt: modified) else { continue }
+            out.append(summary)
+        }
+
+        resumable = out.sorted { $0.lastActivity > $1.lastActivity }.prefix(limit).map { $0 }
+    }
+
+    /// Read only the tail. A session's title and last prompt are near the end by
+    /// definition, and these files reach tens of megabytes.
+    private static func summarize(_ url: URL, modifiedAt: Date) -> ResumableSession? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        let size = (try? handle.seekToEnd()) ?? 0
+        guard size > 0 else { return nil }
+        let window: UInt64 = 128 * 1024
+        try? handle.seek(toOffset: size > window ? size - window : 0)
+        guard let data = try? handle.readToEnd() else { return nil }
+
+        var cwd = "", title: String?, prompt: String?
+
+        // Reverse order: the newest values win, and most lines never need to be
+        // looked at because the fields we want appear late.
+        for line in data.split(separator: 0x0A).reversed() {
+            guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any]
+            else { continue }
+            if cwd.isEmpty, let value = object["cwd"] as? String { cwd = value }
+            if title == nil, let value = object["aiTitle"] as? String, !value.isEmpty { title = value }
+            if prompt == nil, let value = object["lastPrompt"] as? String, !value.isEmpty {
+                prompt = value.replacingOccurrences(of: "\n", with: " ")
+            }
+            if !cwd.isEmpty && title != nil && prompt != nil { break }
+        }
+
+        guard !cwd.isEmpty else { return nil }
+        return ResumableSession(id: url.deletingPathExtension().lastPathComponent,
+                                folderName: URL(fileURLWithPath: cwd).lastPathComponent,
+                                cwd: cwd,
+                                title: title,
+                                lastPrompt: prompt,
+                                lastActivity: modifiedAt)
+    }
+
     private var projectsDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/projects", isDirectory: true)
