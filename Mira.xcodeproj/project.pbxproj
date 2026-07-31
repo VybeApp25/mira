@@ -18,6 +18,7 @@
 		08EA69FF4B019157EB41B6F1 /* linear.md in Resources */ = {isa = PBXBuildFile; fileRef = E8F844AF7574D2B2A262D065 /* linear.md */; };
 		098B421200BD04B8A0FE21AB /* claude-design.md in Resources */ = {isa = PBXBuildFile; fileRef = 518104F61E166A1846E07781 /* claude-design.md */; };
 		09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */; };
+		0A561B614439BB4DDB82A142 /* AICodingHookInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = D73278851B4A9186CFAFF3F6 /* AICodingHookInstaller.swift */; };
 		0A78352870E74D4CA1A985FB /* CommunityBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */; };
 		0AF830434EA77952F5C4D82C /* AnnotationCanvasService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */; };
 		0C020C4633AE33FE211A9DC6 /* MicLevelMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86E99A81501C803BD81A8D33 /* MicLevelMonitor.swift */; };
@@ -77,6 +78,7 @@
 		2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16910211171E9C8F0190DBD8 /* SystemStats.swift */; };
 		2FDF8D290B3689B7EB3F13AE /* MiraBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91346EA30D1B31122573AE9 /* MiraBackend.swift */; };
 		3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */; };
+		330EFAF058D348734E5A7337 /* AICodingBridgeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */; };
 		337C3FC5FE2A1271016E1791 /* googledrive.md in Resources */ = {isa = PBXBuildFile; fileRef = 088180F819F6CAD079F973DB /* googledrive.md */; };
 		3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3ABA2178F03DB65559DB946 /* MediaControls.swift */; };
 		344D95E382740D9C5F18B221 /* MiraMCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */; };
@@ -358,6 +360,7 @@
 		F475A643D809B6C48228CC55 /* SidecarSuggestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78AD9EA6F1C38CE13EED661 /* SidecarSuggestionService.swift */; };
 		F4C438FD9FCF988C30566786 /* narration-2v0r3sry9rppt.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BD597A4677787DFD04D9856B /* narration-2v0r3sry9rppt.mp3 */; };
 		F589FCE7A2CF1542A4DA073B /* youtube-content.md in Resources */ = {isa = PBXBuildFile; fileRef = 92504D55469DFD30F82D1CE6 /* youtube-content.md */; };
+		F59FA3ADA506EEDC79237077 /* AICodingModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA8375C96D2C61D6BE2EA91 /* AICodingModule.swift */; };
 		F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */; };
 		F74BDDCA2F6C86B24F6E213C /* googlesheets.md in Resources */ = {isa = PBXBuildFile; fileRef = E0C3193DA00933B0BD1B5B4E /* googlesheets.md */; };
 		F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */; };
@@ -617,6 +620,7 @@
 		A7D395FD4C0671CFD0AD98DB /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
 		A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverSummaryService.swift; sourceTree = "<group>"; };
 		A87E9511523BE886A2FCD84F /* WebhookServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookServer.swift; sourceTree = "<group>"; };
+		A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICodingBridgeService.swift; sourceTree = "<group>"; };
 		AA4E11CF5B42FCB584B4C8A2 /* ocr-and-documents.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "ocr-and-documents.md"; sourceTree = "<group>"; };
 		AA5914547C8201C6C6241551 /* MiraState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraState.swift; sourceTree = "<group>"; };
 		AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalMetricsView.swift; sourceTree = "<group>"; };
@@ -690,6 +694,7 @@
 		D50BCFB8024EFE9453C52FCB /* TodoModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoModule.swift; sourceTree = "<group>"; };
 		D589CE01ED3B0EC9E026A052 /* HUDModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDModels.swift; sourceTree = "<group>"; };
 		D6A379AF3382596E92921264 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D73278851B4A9186CFAFF3F6 /* AICodingHookInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICodingHookInstaller.swift; sourceTree = "<group>"; };
 		D74433F31D3AC43D9E8F2B4F /* apple-reminders.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "apple-reminders.md"; sourceTree = "<group>"; };
 		D74C6F980E7BDECA9B16AAEA /* NotchHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchHUDView.swift; sourceTree = "<group>"; };
 		D89EEAEAD06E19F2837F64F4 /* youtube_transcript.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = youtube_transcript.py; sourceTree = "<group>"; };
@@ -748,6 +753,7 @@
 		FE89AA4E41C972A58C582686 /* ProposalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalStore.swift; sourceTree = "<group>"; };
 		FF06F27DEBFA930ADF8EA0F5 /* polymarket.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = polymarket.py; sourceTree = "<group>"; };
 		FF788FBB333028F7D29FFFA6 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		FFA8375C96D2C61D6BE2EA91 /* AICodingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICodingModule.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -853,6 +859,7 @@
 		503EC2541417075E485E2BB5 /* Modules */ = {
 			isa = PBXGroup;
 			children = (
+				FFA8375C96D2C61D6BE2EA91 /* AICodingModule.swift */,
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
 				467A71ED5E2C1DD0226F33C0 /* CodeHostingModule.swift */,
@@ -992,6 +999,8 @@
 				2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */,
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				B54C5F3494EE98B7199C6D7E /* AgentTaskManager.swift */,
+				A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */,
+				D73278851B4A9186CFAFF3F6 /* AICodingHookInstaller.swift */,
 				CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */,
 				6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */,
 				9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */,
@@ -1417,6 +1426,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				330EFAF058D348734E5A7337 /* AICodingBridgeService.swift in Sources */,
+				0A561B614439BB4DDB82A142 /* AICodingHookInstaller.swift in Sources */,
+				F59FA3ADA506EEDC79237077 /* AICodingModule.swift in Sources */,
 				76C7F035A150D5CE197652A7 /* AXActuationService.swift in Sources */,
 				C99D98F0FAE42E17ABC22272 /* AccentColorService.swift in Sources */,
 				246CD9DE07245F8D216E9905 /* AccessibilityService.swift in Sources */,

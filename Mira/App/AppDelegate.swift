@@ -95,6 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DayProgressModule(),
             TranslationModule(),
             CodeHostingModule(),
+            AICodingModule(),
             NotificationsModule(),
             BluetoothModule(),
             SystemModule(),
@@ -109,6 +110,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenTimeService.shared.start()
 
         BluetoothService.shared.start()
+
+        // The AI Coding socket listens from launch, but ONLY once the CLI hook
+        // exists — otherwise every user pays for a socket server for a feature
+        // they never set up. It has to be running before the module is opened:
+        // a permission ask arrives while you're in the terminal, and the whole
+        // point is that the notch lights up without you going looking for it.
+        if AICodingHookInstaller.shared.isInstalled {
+            AICodingBridgeService.shared.start()
+        }
 
         // Snap Zones watches for window drags reaching the top of the screen.
         SnapZoneService.shared.start()
