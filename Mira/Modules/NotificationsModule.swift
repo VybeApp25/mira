@@ -69,7 +69,7 @@ final class SystemNotificationsService: ObservableObject {
     @Published private(set) var isTrusted = AXIsProcessTrusted()
 
     private var timer: Timer?
-    private init() {}
+    private init() { loadCleared() }
 
     func start() {
         guard timer == nil else { return }
@@ -132,7 +132,11 @@ final class SystemNotificationsService: ObservableObject {
         // an arrival rather than only ever showing a static count. The AX tree
         // is a snapshot of what Notification Center is holding, so "new" is
         // simply an id we have not seen in a previous snapshot.
-        let incoming = found.filter { !seenIDs.contains($0.id) }
+        // Cleared items never pop, even if the source re-reports them. Clearing
+        // is a statement about attention, and re-interrupting with something the
+        // user has already dismissed is the fastest way to make them turn the
+        // whole feature off.
+        let incoming = found.filter { !seenIDs.contains($0.id) && isVisible($0) }
 
         // The first pass after launch seeds the seen set WITHOUT popping.
         // Everything already delivered is new to us but old to the user, and
@@ -169,6 +173,96 @@ final class SystemNotificationsService: ObservableObject {
 
     private var seenIDs: Set<String> = []
     private var hasSeeded = false
+
+    // MARK: - Clearing
+    //
+    // Mira CANNOT dismiss another app's notification from macOS. There is no
+    // API for it — UNUserNotificationCenter only removes what your own app
+    // posted — and the alternative, deleting rows from Notification Center's
+    // database, is both blocked by TCC and a fine way to corrupt a system file
+    // that a daemon has open. Clicking the notification in Notification Center
+    // is still the only thing that clears it system-wide.
+    //
+    // So clearing here is Mira's own view of the list. That is genuinely what
+    // was needed: the source is a rolling log of everything delivered, so
+    // without this the panel shows the same backlog forever and a new arrival
+    // is just one more line in it.
+
+    /// Everything delivered at or before this is hidden. One timestamp handles
+    /// "clear all" no matter how large the backlog, where storing every id
+    /// would grow without bound.
+    @Published private(set) var clearedBefore: Date?
+
+    /// Individually dismissed items delivered after the watermark.
+    @Published private(set) var clearedIDs: Set<String> = []
+
+    private let clearedBeforeKey = "mira_notifications_cleared_before_v1"
+    private let clearedIDsKey    = "mira_notifications_cleared_ids_v1"
+
+    /// What the panel and the collapsed count should actually use.
+    var visibleNotifications: [SystemNotification] {
+        notifications.filter { isVisible($0) }
+    }
+
+    private func isVisible(_ note: SystemNotification) -> Bool {
+        if clearedIDs.contains(note.id) { return false }
+        if let clearedBefore, let delivered = note.deliveredAt, delivered <= clearedBefore {
+            return false
+        }
+        return true
+    }
+
+    func clear(_ note: SystemNotification) {
+        clearedIDs.insert(note.id)
+        persistCleared()
+    }
+
+    func clearAll() {
+        // Watermark at the newest thing we can see rather than at `now`, so a
+        // notification that lands in the same second as the tap isn't silently
+        // swallowed by it.
+        let newest = notifications.compactMap(\.deliveredAt).max()
+        clearedBefore = newest ?? Date()
+        clearedIDs.removeAll()
+        persistCleared()
+    }
+
+    /// Bring the backlog back. Nothing was destroyed — the source still has
+    /// everything — so undoing a clear costs one line.
+    func restoreCleared() {
+        clearedBefore = nil
+        clearedIDs.removeAll()
+        persistCleared()
+    }
+
+    var hasCleared: Bool { clearedBefore != nil || !clearedIDs.isEmpty }
+
+    private func persistCleared() {
+        let defaults = UserDefaults.standard
+        if let clearedBefore {
+            defaults.set(clearedBefore.timeIntervalSince1970, forKey: clearedBeforeKey)
+        } else {
+            defaults.removeObject(forKey: clearedBeforeKey)
+        }
+        // Only ids newer than the watermark are worth keeping; the rest are
+        // already covered by it.
+        let pruned = clearedIDs.filter { id in
+            guard let clearedBefore,
+                  let match = notifications.first(where: { $0.id == id }),
+                  let delivered = match.deliveredAt else { return true }
+            return delivered > clearedBefore
+        }
+        clearedIDs = pruned
+        defaults.set(Array(pruned), forKey: clearedIDsKey)
+    }
+
+    private func loadCleared() {
+        let defaults = UserDefaults.standard
+        if let stamp = defaults.object(forKey: clearedBeforeKey) as? Double {
+            clearedBefore = Date(timeIntervalSince1970: stamp)
+        }
+        clearedIDs = Set(defaults.stringArray(forKey: clearedIDsKey) ?? [])
+    }
 
     /// How long a new notification holds the closed notch before it drops back
     /// to a count. Long enough to read a line, short enough that walking away
@@ -236,17 +330,39 @@ final class NotificationsModule: NotchModule, ObservableObject {
     private let service = SystemNotificationsService.shared
     private var cancellables = Set<AnyCancellable>()
 
-    var subtitle: NotchHeaderSubtitle? {
-        let n = service.notifications.count
-        guard n > 0 else { return nil }
-        return NotchHeaderSubtitle(text: "\(n)", isPill: true)
+    var headerAccessories: [NotchHeaderAccessory] {
+        var out: [NotchHeaderAccessory] = []
+
+        if !service.visibleNotifications.isEmpty {
+            out.append(NotchHeaderAccessory(id: "clearAll",
+                                            systemImage: "xmark.bin",
+                                            label: "Clear all — hides them here, "
+                                                 + "they stay in Notification Center") { [weak self] in
+                self?.service.clearAll()
+            })
+        }
+
+        // Only offered while there is something to bring back, so it isn't a
+        // permanent button that usually does nothing.
+        if service.hasCleared {
+            out.append(NotchHeaderAccessory(id: "restore",
+                                            systemImage: "arrow.uturn.backward",
+                                            label: "Show cleared notifications again") { [weak self] in
+                self?.service.restoreCleared()
+            })
+        }
+
+        out.append(NotchHeaderAccessory(id: "refresh", systemImage: "arrow.clockwise",
+                                        label: "Refresh notifications") { [weak self] in
+            self?.service.refresh()
+        })
+        return out
     }
 
-    var headerAccessories: [NotchHeaderAccessory] {
-        [NotchHeaderAccessory(id: "refresh", systemImage: "arrow.clockwise",
-                              label: "Refresh notifications") { [weak self] in
-            self?.service.refresh()
-        }]
+    var subtitle: NotchHeaderSubtitle? {
+        let count = service.visibleNotifications.count
+        if count == 0 { return service.hasCleared ? NotchHeaderSubtitle(text: "cleared") : nil }
+        return NotchHeaderSubtitle(text: count == 1 ? "1 new" : "\(count) new")
     }
 
     init() {
@@ -285,7 +401,7 @@ private struct NotificationsView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 3) {
-                ForEach(service.notifications) { note in
+                ForEach(service.visibleNotifications) { note in
                     row(note)
                 }
             }
@@ -293,7 +409,7 @@ private struct NotificationsView: View {
             .padding(.vertical, 8)
         }
         .overlay {
-            if service.notifications.isEmpty, !service.hasDatabaseAccess {
+            if service.visibleNotifications.isEmpty, !service.hasDatabaseAccess {
                 // The shared prompt, not a bespoke one. Every feature that is
                 // blocked on a grant should ask the same way, or the user learns
                 // a different affordance per panel.
@@ -302,45 +418,31 @@ private struct NotificationsView: View {
                     detail: "Notifications are delivered to a database only Full Disk Access can "
                           + "read. Banners are on screen for a moment and often not at all, so "
                           + "watching for them misses most of what arrives.")
-            } else if service.notifications.isEmpty {
+            } else if service.visibleNotifications.isEmpty {
                 VStack(spacing: 4) {
                     Image(systemName: "bell.slash")
                         .font(.system(size: 18))
                         .foregroundColor(.white.opacity(0.22))
-                    Text("No notifications")
+                    // Distinguishes an empty inbox from one you emptied. The
+                    // second has an undo and the first does not, and saying
+                    // "No notifications" for both hides that.
+                    Text(service.hasCleared ? "All clear" : "No notifications")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white.opacity(0.50))
+                    if service.hasCleared {
+                        Text("Cleared here — still in Notification Center")
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.30))
+                    }
                 }
             }
         }
     }
 
     private func row(_ note: SystemNotification) -> some View {
-        HStack(alignment: .top, spacing: 9) {
-            Image(systemName: note.icon)
-                .font(.system(size: 12))
-                .foregroundColor(accent.opacity(0.85))
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(note.app)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.55))
-                Text(note.message)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.88))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(Color.white.opacity(0.05)))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(note.app): \(note.message)")
+        NotificationRow(note: note, accent: accent) { service.clear(note) }
     }
+
 
     private var permissionPrompt: some View {
         VStack(spacing: 5) {
@@ -359,4 +461,60 @@ private struct NotificationsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+}
+
+// MARK: - Row
+
+private struct NotificationRow: View {
+
+    let note: SystemNotification
+    let accent: Color
+    let onClear: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: note.icon)
+                .font(.system(size: 12))
+                .foregroundColor(accent.opacity(0.85))
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(note.app)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.55))
+                Text(note.message)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.88))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
+
+            Spacer(minLength: 0)
+
+            // Revealed on hover rather than always drawn: a column of crosses
+            // down a list of messages reads as a list of things to delete,
+            // which is not what a notification list is for.
+            if hovering {
+                Button(action: onClear) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white.opacity(0.55))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color.white.opacity(0.10)))
+                }
+                .buttonStyle(.plain)
+                .help("Clear from Mira")
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(Color.white.opacity(hovering ? 0.08 : 0.05)))
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(note.app): \(note.message)")
+    }
 }

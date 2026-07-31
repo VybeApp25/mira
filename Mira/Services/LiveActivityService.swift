@@ -224,7 +224,9 @@ final class LiveActivityService: ObservableObject {
                                 appName: latest.app)
         }
 
-        let count = service.notifications.count
+        // Cleared ones don't count. A badge that keeps reporting a backlog you
+        // have dealt with is exactly the thing Clear exists to stop.
+        let count = service.visibleNotifications.count
         guard count > 0 else { return nil }
         return LiveActivity(kind: .notification,
                             icon: "bell.fill",
