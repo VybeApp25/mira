@@ -107,9 +107,17 @@ private func miraHotKeyHandler(
             if !isRelease {
                 NotificationCenter.default.post(name: .miraToggleCursorCompanion, object: nil)
             }
-        case 7: NotificationCenter.default.post(name: .miraModulePrev,   object: nil)
-        case 8: NotificationCenter.default.post(name: .miraModuleNext,   object: nil)
-        case 9: NotificationCenter.default.post(name: .miraToggleSnooze, object: nil)
+        // These three are edge-triggered, so they MUST ignore the release.
+        // This handler is installed for pressed AND released (push-to-talk needs
+        // both), so an unguarded case fires twice per keypress: the carousel
+        // skipped every other module, and ⌃⌥Z toggled snooze on and then
+        // straight back off, which read as the shortcut being dead.
+        case 7:
+            if !isRelease { NotificationCenter.default.post(name: .miraModulePrev,   object: nil) }
+        case 8:
+            if !isRelease { NotificationCenter.default.post(name: .miraModuleNext,   object: nil) }
+        case 9:
+            if !isRelease { NotificationCenter.default.post(name: .miraToggleSnooze, object: nil) }
         default: break
         }
     }

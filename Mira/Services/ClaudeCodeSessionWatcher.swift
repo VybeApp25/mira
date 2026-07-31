@@ -51,6 +51,17 @@ struct ClaudeCodeTranscript: Identifiable, Equatable {
 
     let id: String            // sessionId
     var cwd: String
+    /// Directory name under ~/.claude/projects — Claude Code's slug for the
+    /// project root. Used to match a transcript to a running process; see
+    /// `ClaudeCodeSessionWatcher.slug(for:)` for why this direction and not the
+    /// other.
+    var projectSlug: String = ""
+    /// The app hosting the terminal this session is running in ("Terminal",
+    /// "iTerm2", "Ghostty"…). Nil when the session isn't running, or when the
+    /// process tree doesn't reach a GUI app.
+    var host: String?
+    /// Whether a `claude` process for this project is alive right now.
+    var isRunning = false
     var gitBranch: String?
     /// Claude Code's own generated title for the session, when it has written
     /// one. Much better than a folder name, which is identical across the four
@@ -63,12 +74,39 @@ struct ClaudeCodeTranscript: Identifiable, Equatable {
     /// True when the newest entry is an assistant tool_use with no matching
     /// result yet — the CLI is mid-tool.
     var isMidTool: Bool
+    /// The user's most recent prompt, which Claude Code records outright as a
+    /// `last-prompt` entry. This is what makes a row identifiable at a glance —
+    /// a title tells you the topic, the prompt tells you where you left off.
+    var lastPrompt: String?
+    /// User and assistant turns seen. Tail-accurate on large transcripts, like
+    /// the token totals, for the same reason.
+    var messageCount = 0
+
+    /// Short model name for a chip: `claude-opus-5` becomes `Opus`.
+    var modelLabel: String? {
+        guard let model else { return nil }
+        let parts = model.components(separatedBy: "-")
+        guard let family = parts.first(where: {
+            ["opus", "sonnet", "haiku", "fable"].contains($0.lowercased())
+        }) else { return model }
+        return family.capitalized
+    }
 
     var folderName: String { URL(fileURLWithPath: cwd).lastPathComponent }
 
     var displayName: String {
         if let title, !title.isEmpty { return title }
         return folderName.isEmpty ? "Claude Code" : folderName
+    }
+
+    /// What the session IS, in the words someone would use out loud —
+    /// "Claude Code in Terminal". Falls back gracefully as knowledge runs out:
+    /// a running session with no resolvable host is still Claude Code, and a
+    /// session that has exited is described by where it ran.
+    var sourceLabel: String {
+        guard isRunning else { return folderName }
+        guard let host, !host.isEmpty else { return "Claude Code" }
+        return "Claude Code in \(host)"
     }
 }
 
@@ -136,11 +174,35 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
 
         for url in files { ingest(url) }
 
-        transcripts = cursors.values
+        var all = cursors.values
             .map(\.transcript)
             .sorted { $0.lastActivity > $1.lastActivity }
 
-        liveProcessCount = Self.runningClaudeProcessCount()
+        // Attach liveness and host app by matching each running process's real
+        // cwd to the project slug its transcripts live under.
+        let processes = Self.runningClaudeProcesses()
+        liveProcessCount = processes.count
+
+        var bySlug: [String: RunningProcess] = [:]
+        for process in processes {
+            guard let cwd = process.cwd else { continue }
+            bySlug[Self.slug(for: cwd)] = process
+        }
+
+        var claimed = Set<String>()
+        for index in all.indices {
+            let slug = all[index].projectSlug
+            guard let process = bySlug[slug], !claimed.contains(slug) else { continue }
+            // Several sessions can share a project directory, but only one
+            // process is running there. Give it to the most recently active
+            // transcript — `all` is already sorted, so the first match wins and
+            // the rest correctly read as finished.
+            claimed.insert(slug)
+            all[index].isRunning = true
+            all[index].host = process.host
+        }
+
+        transcripts = all
     }
 
     /// `~/.claude/projects/<slug>/<uuid>.jsonl`, touched recently.
@@ -186,7 +248,10 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
             cursor = existing
         } else {
             cursor = Cursor(transcript: ClaudeCodeTranscript(
-                id: sessionID, cwd: "", gitBranch: nil, title: nil,
+                id: sessionID, cwd: "",
+                projectSlug: url.deletingLastPathComponent().lastPathComponent,
+                host: nil, isRunning: false,
+                gitBranch: nil, title: nil,
                 lastActivity: .distantPast, steps: [], tokens: .init(),
                 model: nil, isMidTool: false))
             cursors[url.path] = cursor
@@ -243,6 +308,12 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
         if let cwd = object["cwd"] as? String, !cwd.isEmpty { t.cwd = cwd }
         if let branch = object["gitBranch"] as? String, !branch.isEmpty { t.gitBranch = branch }
         if let title = object["aiTitle"] as? String, !title.isEmpty { t.title = title }
+        if let prompt = object["lastPrompt"] as? String, !prompt.isEmpty {
+            t.lastPrompt = prompt.replacingOccurrences(of: "\n", with: " ")
+        }
+        if type == "user" || type == "assistant", (object["isMeta"] as? Bool) != true {
+            t.messageCount += 1
+        }
         if let stamp = object["timestamp"] as? String,
            let date = Self.isoFormatter.date(from: stamp) {
             t.lastActivity = max(t.lastActivity, date)
@@ -299,7 +370,15 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
 
     // MARK: Processes
 
-    /// How many `claude` CLI processes are running.
+    /// A live `claude` CLI process, with enough context to name it in the UI.
+    struct RunningProcess {
+        let pid: pid_t
+        let cwd: String?
+        /// Bundle name of the GUI app the process tree leads back to.
+        let host: String?
+    }
+
+    /// Every running `claude` CLI process.
     ///
     /// libproc rather than shelling out to `pgrep`. The first version used
     /// pgrep and reported zero while a session was demonstrably running — under
@@ -307,28 +386,95 @@ final class ClaudeCodeSessionWatcher: ObservableObject {
     /// names it matches against, so every name query comes back empty and the
     /// failure is silent. libproc asks the kernel directly, spawns nothing, and
     /// costs microseconds.
-    static func runningClaudeProcessCount() -> Int {
+    static func runningClaudeProcesses() -> [RunningProcess] {
         let capacity = proc_listallpids(nil, 0)
-        guard capacity > 0 else { return 0 }
+        guard capacity > 0 else { return [] }
 
         var pids = [pid_t](repeating: 0, count: Int(capacity))
         let byteCount = Int32(pids.count * MemoryLayout<pid_t>.size)
         let written = pids.withUnsafeMutableBufferPointer {
             proc_listallpids($0.baseAddress, byteCount)
         }
-        guard written > 0 else { return 0 }
+        guard written > 0 else { return [] }
 
-        var count = 0
-        var path = [CChar](repeating: 0, count: 4096)
-        let capacityBytes = UInt32(path.count)
+        var out: [RunningProcess] = []
         for pid in pids.prefix(Int(written)) where pid > 0 {
-            let n = path.withUnsafeMutableBufferPointer {
-                proc_pidpath(pid, $0.baseAddress, capacityBytes)
-            }
-            guard n > 0, isClaudeCodeExecutable(String(cString: path)) else { continue }
-            count += 1
+            guard let path = executablePath(pid), isClaudeCodeExecutable(path) else { continue }
+            out.append(RunningProcess(pid: pid,
+                                      cwd: workingDirectory(pid),
+                                      host: hostApplication(of: pid)))
         }
-        return count
+        return out
+    }
+
+    static func executablePath(_ pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let capacity = UInt32(buffer.count)
+        let n = buffer.withUnsafeMutableBufferPointer {
+            proc_pidpath(pid, $0.baseAddress, capacity)
+        }
+        return n > 0 ? String(cString: buffer) : nil
+    }
+
+    static func workingDirectory(_ pid: pid_t) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        let n = withUnsafeMutablePointer(to: &info) {
+            proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, $0, size)
+        }
+        guard n == size else { return nil }
+        let path = withUnsafeBytes(of: &info.pvi_cdir.vip_path) { raw -> String in
+            guard let base = raw.bindMemory(to: CChar.self).baseAddress else { return "" }
+            return String(cString: base)
+        }
+        return path.isEmpty ? nil : path
+    }
+
+    /// Walk up the process tree until we hit something inside a .app bundle,
+    /// and report that bundle's name — "Terminal", "iTerm2", "Ghostty".
+    ///
+    /// Deliberately generic rather than a list of known terminals: the chain for
+    /// a stock setup is claude → zsh → login → Terminal.app, and any terminal
+    /// emulator ends the same way. A hardcoded list would silently fail on
+    /// whatever the user actually uses.
+    static func hostApplication(of pid: pid_t) -> String? {
+        var current = pid
+        // Bounded because a corrupt ppid chain could otherwise loop forever.
+        for _ in 0..<16 {
+            guard let parent = parentPID(current), parent > 1 else { return nil }
+            if let path = executablePath(parent),
+               let range = path.range(of: ".app/Contents/MacOS/") {
+                let bundle = String(path[path.startIndex..<range.lowerBound])
+                return (bundle as NSString).lastPathComponent
+            }
+            current = parent
+        }
+        return nil
+    }
+
+    /// Short BSD info, not the full struct. `login` sits between the shell and
+    /// the terminal app and is owned by root; PROC_PIDTBSDINFO on it fails for
+    /// an unprivileged caller, which broke the walk one step short of the
+    /// answer every single time. PROC_PIDT_SHORTBSDINFO is readable across
+    /// users and carries the ppid, which is all this needs.
+    static func parentPID(_ pid: pid_t) -> pid_t? {
+        var info = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
+        let n = withUnsafeMutablePointer(to: &info) {
+            proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, $0, size)
+        }
+        return n == size ? pid_t(info.pbsi_ppid) : nil
+    }
+
+    /// Claude Code's directory name for a project root: the absolute path with
+    /// every separator replaced by a dash, so /Users/tre becomes -Users-tre.
+    ///
+    /// Computed in THIS direction only. Going back the other way is ambiguous —
+    /// `-Users-tre-ai-website-cloner` could be `ai-website-cloner` or
+    /// `ai/website/cloner`, and there is no way to tell from the slug. Deriving
+    /// the slug from a process's real cwd is exact.
+    static func slug(for path: String) -> String {
+        path.replacingOccurrences(of: "/", with: "-")
     }
 
     /// Whether an executable path belongs to the Claude Code CLI.

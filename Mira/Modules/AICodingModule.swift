@@ -6,19 +6,15 @@
 //
 //   • ClaudeCodeSessionWatcher reads the transcripts Claude Code already writes
 //     to ~/.claude/projects. This needs NOTHING installed, and it is where the
-//     session list, titles, tool steps and token counts come from.
+//     session list, titles, prompts, tool steps and token counts come from.
 //   • AICodingBridgeService receives hook events over a Unix socket. It
 //     contributes exactly one thing the filesystem cannot: a permission request
 //     that is still blocked, and therefore still answerable.
 //
-// The first cut of this module had only the second source and required the
-// hook, so a running session was invisible until the user edited their own
-// settings.json. MacNotch's own copy says it the right way round — "Works via
-// file monitoring, hooks are optional for faster event notifications."
-//
-// The panel is deliberately dull when nothing needs you. A waiting session is
-// the only state that gets color, because a permission prompt you scroll past
-// is a permission prompt you approve without reading.
+// Layout follows MacNotch's: a detection banner when a live session is found
+// and Mira can't act on it yet, then Active, then Recent. Each row carries the
+// prompt you left off on, model and source chips, and its message and token
+// cost — a title alone doesn't tell you which of four sessions you're looking at.
 
 import SwiftUI
 import Combine
@@ -31,8 +27,14 @@ struct AICodingRow: Identifiable, Equatable {
     let id: String
     let title: String
     let folder: String
+    /// "Claude Code in Terminal" while running, the folder name once it's over.
+    let source: String
+    let isRunning: Bool
+    let host: String?
     let branch: String?
-    let model: String?
+    let modelLabel: String?
+    let lastPrompt: String?
+    let messageCount: Int
     let steps: [ClaudeCodeTranscript.Step]
     let tokens: ClaudeCodeTranscript.Tokens
     let lastActivity: Date
@@ -43,9 +45,20 @@ struct AICodingRow: Identifiable, Equatable {
 
     var status: Status {
         if pending != nil { return .waiting }
+        guard isRunning else { return .idle }
         let age = Date().timeIntervalSince(lastActivity)
-        if age < ClaudeCodeSessionWatcher.activeWindow { return .working }
-        return .idle
+        return age < ClaudeCodeSessionWatcher.activeWindow ? .working : .idle
+    }
+
+    /// Active means the process is alive. A session that exited is history even
+    /// if it wrote a second ago.
+    var isActive: Bool { isRunning || pending != nil }
+
+    /// The tool it is running right now, if it's mid-tool. Shown in monospace
+    /// under the prompt, the way the CLI itself would name it.
+    var currentTool: String? {
+        guard isMidTool, let last = steps.last else { return nil }
+        return last.toolName
     }
 }
 
@@ -58,8 +71,42 @@ final class AICodingModule: NotchModule, ObservableObject {
     let title = "AI Coding"
     let icon  = "chevron.left.forwardslash.chevron.right"
 
-    let heightLevel: NotchHeightLevel = .standard
+    /// Grows when the panel is carrying something big. The detection banner is
+    /// four lines and two buttons; at the standard height it pushed the session
+    /// list down to a single visible row, so the panel advertised a session it
+    /// then hid. Height is per-module by construction (NotchModule.swift), and
+    /// this is exactly the case that was for.
+    var heightLevel: NotchHeightLevel { showsBanner ? .tall : .standard }
     let allowsTallMode = true
+
+    // MARK: Detection banner
+
+    /// Dismissed for this launch only. `bannerSuppressed` is the persistent one.
+    @Published private(set) var bannerDismissed = false
+
+    @AppStorage("mira_aicoding_banner_suppressed") var bannerSuppressed = false
+
+    /// Only when all three hold: something is genuinely running, Mira can't act
+    /// on it yet, and the user hasn't waved it away. A banner offering to
+    /// connect to nothing is just chrome.
+    var bannerRow: AICodingRow? {
+        guard !installer.isInstalled, !bannerDismissed, !bannerSuppressed else { return nil }
+        return activeRows.first { $0.isRunning }
+    }
+
+    var showsBanner: Bool { bannerRow != nil }
+
+    func dismissBanner(forever: Bool) {
+        if forever { bannerSuppressed = true } else { bannerDismissed = true }
+        heightChanged()
+    }
+
+    /// The island sizes its hover zone from the panel height, so a height change
+    /// that isn't announced leaves the panel collapsing when the cursor moves
+    /// into the area that just appeared.
+    func heightChanged() {
+        NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
+    }
 
     private let watcher   = ClaudeCodeSessionWatcher.shared
     private let bridge    = AICodingBridgeService.shared
@@ -86,8 +133,13 @@ final class AICodingModule: NotchModule, ObservableObject {
             AICodingRow(id: t.id,
                         title: t.displayName,
                         folder: t.folderName,
+                        source: t.sourceLabel,
+                        isRunning: t.isRunning,
+                        host: t.host,
                         branch: t.gitBranch,
-                        model: t.model,
+                        modelLabel: t.modelLabel,
+                        lastPrompt: t.lastPrompt,
+                        messageCount: t.messageCount,
                         steps: t.steps,
                         tokens: t.tokens,
                         lastActivity: t.lastActivity,
@@ -95,12 +147,14 @@ final class AICodingModule: NotchModule, ObservableObject {
                         isMidTool: t.isMidTool)
         }
         .sorted { a, b in
-            // Anything blocked on a human outranks recency: it is the only row
-            // with a deadline attached.
             if (a.status == .waiting) != (b.status == .waiting) { return a.status == .waiting }
+            if a.isActive != b.isActive { return a.isActive }
             return a.lastActivity > b.lastActivity
         }
     }
+
+    var activeRows: [AICodingRow] { rows.filter(\.isActive) }
+    var recentRows: [AICodingRow] { rows.filter { !$0.isActive } }
 
     var subtitle: NotchHeaderSubtitle? {
         if let id = detailSessionID, let row = rows.first(where: { $0.id == id }) {
@@ -111,15 +165,31 @@ final class AICodingModule: NotchModule, ObservableObject {
             return NotchHeaderSubtitle(text: waiting == 1 ? "1 waiting" : "\(waiting) waiting",
                                        isPill: true)
         }
-        let working = rows.filter { $0.status == .working }.count
-        if working > 0 { return NotchHeaderSubtitle(text: "\(working) active") }
+        let active = activeRows.count
+        if active > 0 { return NotchHeaderSubtitle(text: "\(active) active") }
         return NotchHeaderSubtitle(text: rows.isEmpty ? "no sessions" : "\(rows.count) recent")
     }
 
+    /// Last announced banner state, so a session appearing or ending while the
+    /// panel is open resizes it once rather than on every poll tick.
+    private var lastShowsBanner = false
+
     init() {
         for p in [watcher.objectWillChange, bridge.objectWillChange, installer.objectWillChange] {
-            p.sink { [weak self] _ in self?.objectWillChange.send() }
-             .store(in: &cancellables)
+            p.sink { [weak self] _ in
+                guard let self else { return }
+                self.objectWillChange.send()
+                // Deferred: these fire in objectWillChange, before the source's
+                // own state has settled, so reading `showsBanner` here would
+                // decide on the previous values.
+                DispatchQueue.main.async {
+                    let shows = self.showsBanner
+                    guard shows != self.lastShowsBanner else { return }
+                    self.lastShowsBanner = shows
+                    self.heightChanged()
+                }
+            }
+            .store(in: &cancellables)
         }
     }
 
@@ -153,16 +223,12 @@ private struct AICodingView: View {
     @ObservedObject var installer: AICodingHookInstaller
     @ObservedObject private var accentSvc = AccentColorService.shared
 
-    @State private var showingSetup = false
-
     private var accent: Color { accentSvc.color }
 
     var body: some View {
         Group {
             if let id = module.detailSessionID, let row = module.rows.first(where: { $0.id == id }) {
                 detail(row)
-            } else if showingSetup {
-                setup
             } else {
                 list
             }
@@ -173,10 +239,85 @@ private struct AICodingView: View {
         .background(Color.black)
     }
 
+    // MARK: Detection banner
+
+    @ViewBuilder
+    private var banner: some View {
+        if let row = module.bannerRow {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Claude Code detected in \(row.host ?? "Terminal")")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.95))
+                        // Says exactly what pressing the button changes. The
+                        // one thing this must not do is imply Mira will take
+                        // over the session — it only answers prompts.
+                        Text("Running \(row.folder). Allow and deny its prompts from the notch? "
+                             + "Mira adds a hook to ~/.claude/settings.json and changes nothing else.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.55))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        installer.install()
+                        if installer.isInstalled { bridge.start(); module.heightChanged() }
+                    } label: {
+                        Text("Connect")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(accent))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        module.dismissBanner(forever: false)
+                    } label: {
+                        Text("Not now")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.white.opacity(0.10)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button("Don't ask again") { module.dismissBanner(forever: true) }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity)
+
+                if let error = installer.lastError {
+                    Text(error)
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(red: 0.95, green: 0.45, blue: 0.45))
+                        .lineLimit(2)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(accent.opacity(0.10))
+                    .overlay(RoundedRectangle(cornerRadius: 9)
+                        .stroke(accent.opacity(0.55), lineWidth: 1))
+            )
+        }
+    }
+
     // MARK: List
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
             if module.rows.isEmpty {
                 Text(watcher.isAvailable
                      ? "No Claude Code sessions in the last 12 hours. Start one in a terminal and it shows up here."
@@ -188,13 +329,26 @@ private struct AICodingView: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(module.rows) { row in
-                        SessionRow(row: row,
-                                   accent: accent,
-                                   onOpen: { module.show(row.id) },
-                                   onAllow: { bridge.respond(sessionID: row.id, approve: true) },
-                                   onDeny:  { bridge.respond(sessionID: row.id, approve: false) })
+                VStack(alignment: .leading, spacing: 7) {
+                    banner
+
+                    if !module.activeRows.isEmpty {
+                        SectionLabel("Active")
+                        ForEach(module.activeRows) { row in
+                            SessionRow(row: row, accent: accent,
+                                       onOpen: { module.show(row.id) },
+                                       onAllow: { bridge.respond(sessionID: row.id, approve: true) },
+                                       onDeny:  { bridge.respond(sessionID: row.id, approve: false) })
+                        }
+                    }
+
+                    if !module.recentRows.isEmpty {
+                        SectionLabel("Recent")
+                        ForEach(module.recentRows) { row in
+                            SessionRow(row: row, accent: accent,
+                                       onOpen: { module.show(row.id) },
+                                       onAllow: {}, onDeny: {})
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -214,18 +368,9 @@ private struct AICodingView: View {
                                             : Color.white.opacity(0.25))
                 .frame(width: 5, height: 5)
 
-            Text(installer.isInstalled
-                 ? "Allow/Deny enabled"
-                 : "Read-only — turn on Allow/Deny to answer prompts here")
+            Text(installer.isInstalled ? "Allow/Deny enabled" : "Read-only")
                 .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.40))
-
-            if !installer.isInstalled {
-                Button("Set up") { showingSetup = true }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(accent)
-            }
 
             Spacer(minLength: 0)
 
@@ -234,59 +379,6 @@ private struct AICodingView: View {
                     .font(.system(size: 9))
                     .foregroundColor(.white.opacity(0.30))
             }
-        }
-    }
-
-    // MARK: Setup
-
-    private var setup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Answer Claude Code from the notch")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.92))
-
-            Text("Sessions already show up without this. To also allow or deny a command "
-                 + "from here, Mira installs a hook script and adds it to ~/.claude/settings.json.")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.55))
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Your other hooks are left alone. Nothing is sent anywhere — the hook talks "
-                 + "to Mira over a local socket only you can read, and if Mira isn't running "
-                 + "your CLI prompts exactly as it does today.")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Button {
-                    installer.install()
-                    if installer.isInstalled { bridge.start(); showingSetup = false }
-                } label: {
-                    Text("Enable Allow/Deny")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(accent))
-                }
-                .buttonStyle(.plain)
-
-                Button("Not now") { showingSetup = false }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.5))
-
-                if let error = installer.lastError {
-                    Text(error)
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 0.95, green: 0.45, blue: 0.45))
-                        .lineLimit(2)
-                }
-            }
-            .padding(.top, 2)
-
-            Spacer(minLength: 0)
         }
     }
 
@@ -329,13 +421,12 @@ private struct AICodingView: View {
                 }
 
                 HStack(spacing: 10) {
+                    Label(row.source, systemImage: "terminal")
                     if let branch = row.branch, branch != "HEAD" {
                         Label(branch, systemImage: "arrow.triangle.branch")
                     }
-                    if let model = row.model {
-                        Label(model, systemImage: "cpu")
-                    }
-                    Label("\(Self.compact(row.tokens.billable)) tokens", systemImage: "number")
+                    Label("\(row.messageCount) msgs · \(Self.compact(row.tokens.billable)) tok",
+                          systemImage: "number")
                 }
                 .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.40))
@@ -379,6 +470,20 @@ private struct AICodingView: View {
     }
 }
 
+// MARK: - Section label
+
+private struct SectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(.white.opacity(0.32))
+            .padding(.top, 2)
+    }
+}
+
 // MARK: - Row
 
 private struct SessionRow: View {
@@ -394,31 +499,53 @@ private struct SessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Button(action: onOpen) {
-                HStack(spacing: 7) {
-                    StatusDot(status: row.status, accent: accent)
+                HStack(alignment: .top, spacing: 8) {
+                    icon
 
-                    Text(row.title)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 5) {
+                            Text(row.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.92))
+                                .lineLimit(1)
 
-                    Text(row.folder)
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.35))
-                        .lineLimit(1)
+                            if row.status == .waiting {
+                                Chip(text: "Waiting", tint: accent, filled: true)
+                            }
+                            if let model = row.modelLabel {
+                                Chip(text: model, tint: Color(red: 0.98, green: 0.62, blue: 0.30))
+                            }
+                            Chip(text: "CLI", tint: .white.opacity(0.45))
+                        }
 
-                    Spacer(minLength: 4)
+                        // Where you left off. Falls back to the source line so
+                        // a session with no recorded prompt still says what and
+                        // where it is.
+                        Text(row.lastPrompt ?? row.source)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.55))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
 
-                    if let last = row.steps.last, row.status != .waiting {
-                        Text(last.toolName)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.42))
+                        if let tool = row.currentTool {
+                            Text(tool)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.38))
+                                .lineLimit(1)
+                        }
                     }
 
-                    Text(AICodingView.compact(row.tokens.billable))
-                        .font(.system(size: 9))
-                        .monospacedDigit()
-                        .foregroundColor(.white.opacity(0.28))
+                    Spacer(minLength: 6)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(Self.relative(row.lastActivity))
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.42))
+                        Text("\(row.messageCount) msgs · \(AICodingView.compact(row.tokens.billable)) tok")
+                            .font(.system(size: 9))
+                            .foregroundColor(.white.opacity(0.28))
+                    }
+                    .fixedSize()
                 }
             }
             .buttonStyle(.plain)
@@ -437,7 +564,7 @@ private struct SessionRow: View {
                     DecisionButton(title: "Allow", isPrimary: true, accent: accent, action: onAllow)
                     DecisionButton(title: "Deny", isPrimary: false, accent: accent, action: onDeny)
                 }
-                .padding(.leading, 12)
+                .padding(.leading, 28)
             }
         }
         .padding(.horizontal, 8)
@@ -447,24 +574,59 @@ private struct SessionRow: View {
                                          : (hovering ? Color.white.opacity(0.05) : .clear)))
         .onHover { hovering = $0 }
     }
+
+    /// Terminal glyph with a liveness dot, so the row reads as a running thing
+    /// before any text is parsed.
+    private var icon: some View {
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.white.opacity(0.08))
+                .frame(width: 22, height: 22)
+                .overlay(
+                    Image(systemName: "terminal")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
+                )
+            if row.status != .idle {
+                Circle()
+                    .fill(row.status == .waiting ? accent
+                                                 : Color(red: 0.40, green: 0.80, blue: 0.62))
+                    .frame(width: 6, height: 6)
+                    .overlay(Circle().stroke(Color.black, lineWidth: 1.2))
+                    .offset(x: 2, y: 2)
+            }
+        }
+    }
+
+    /// Coarse and short — this column is 60pt wide and "4 mths" is as much as
+    /// anyone needs from a session they finished in April.
+    static func relative(_ date: Date) -> String {
+        let seconds = Date().timeIntervalSince(date)
+        switch seconds {
+        case ..<10:      return "now"
+        case ..<60:      return "\(Int(seconds))s"
+        case ..<3600:    return "\(Int(seconds / 60))m"
+        case ..<86400:   return "\(Int(seconds / 3600))h"
+        case ..<2592000: return "\(Int(seconds / 86400))d"
+        default:         return "\(Int(seconds / 2592000)) mths"
+        }
+    }
 }
 
 // MARK: - Pieces
 
-private struct StatusDot: View {
-    let status: AICodingRow.Status
-    let accent: Color
+private struct Chip: View {
+    let text: String
+    var tint: Color = .white
+    var filled: Bool = false
 
     var body: some View {
-        Circle().fill(color).frame(width: 5, height: 5)
-    }
-
-    private var color: Color {
-        switch status {
-        case .waiting: return accent
-        case .working: return Color(red: 0.40, green: 0.80, blue: 0.62)
-        case .idle:    return .white.opacity(0.28)
-        }
+        Text(text)
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundColor(filled ? .black : tint)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(Capsule().fill(filled ? tint : tint.opacity(0.16)))
     }
 }
 
