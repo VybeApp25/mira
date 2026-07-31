@@ -2,13 +2,29 @@ import Foundation
 import SwiftUI
 import CoreGraphics
 import AVFoundation
+import EventKit
+import CoreBluetooth
 
 // MARK: - Permission model
 
 enum MiraPermission: String, CaseIterable, Identifiable {
+    // Onboarding asks for these three, because they are what the first-run
+    // demo actually exercises.
     case microphone
     case screenRecording
     case accessibility
+    // The rest are requested LATER, by whichever feature needs them, which is
+    // how MacNotch does it ("only when the matching feature is enabled"). They
+    // live on the same enum so Settings, onboarding and an in-panel prompt can
+    // never disagree about what Mira asks for or why.
+    case fullDisk
+    case camera
+    case calendars
+    case reminders
+    case bluetooth
+
+    /// The subset first-run onboarding walks through.
+    static var onboarding: [MiraPermission] { [.microphone, .screenRecording, .accessibility] }
 
     var id: String { rawValue }
 
@@ -17,6 +33,11 @@ enum MiraPermission: String, CaseIterable, Identifiable {
         case .microphone:      return "Microphone"
         case .screenRecording: return "Screen Recording"
         case .accessibility:   return "Accessibility"
+        case .fullDisk:        return "Full Disk Access"
+        case .camera:          return "Camera"
+        case .calendars:       return "Calendars"
+        case .reminders:       return "Reminders"
+        case .bluetooth:       return "Bluetooth"
         }
     }
 
@@ -25,6 +46,11 @@ enum MiraPermission: String, CaseIterable, Identifiable {
         case .microphone:      return "mic.fill"
         case .screenRecording: return "rectangle.on.rectangle"
         case .accessibility:   return "accessibility"
+        case .fullDisk:        return "externaldrive"
+        case .camera:          return "camera.fill"
+        case .calendars:       return "calendar"
+        case .reminders:       return "checklist"
+        case .bluetooth:       return "wave.3.right"
         }
     }
 
@@ -38,6 +64,16 @@ enum MiraPermission: String, CaseIterable, Identifiable {
             return "So Mira can see your screen and point to things."
         case .accessibility:
             return "So background agents can type and click for you."
+        case .fullDisk:
+            return "So Mira can read your notifications, which macOS keeps in a protected database."
+        case .camera:
+            return "So the camera panel can show a preview."
+        case .calendars:
+            return "So Mira can show today's events, Day Progress and meeting alerts."
+        case .reminders:
+            return "So the Todo module can sync with Reminders."
+        case .bluetooth:
+            return "So Mira can show device battery levels and warn you before something dies."
         }
     }
 
@@ -61,6 +97,30 @@ enum MiraPermission: String, CaseIterable, Identifiable {
                 "Click the + button and drag Mira into the Accessibility list.",
                 "Make sure the toggle next to Mira is on.",
             ]
+        case .fullDisk:
+            return [
+                "Click \"Open System Settings\" below.",
+                "Click the + button and add Mira to the Full Disk Access list.",
+                "macOS will ask you to quit and reopen Mira — do that and come back.",
+            ]
+        default:
+            return [
+                "Click \"Allow\" when macOS asks.",
+                "If you don't see a prompt, turn Mira on in System Settings → Privacy.",
+            ]
+        }
+    }
+
+    /// Whether macOS lets an app ask directly, or whether System Settings is
+    /// the only route. The distinction matters in the UI: a button labelled
+    /// "Allow" that silently opens Settings — or does nothing, because the user
+    /// already said no — is how a permissions screen loses people.
+    var isRequestableInApp: Bool {
+        switch self {
+        case .microphone, .camera, .calendars, .reminders, .bluetooth, .accessibility:
+            return true
+        case .fullDisk, .screenRecording:
+            return false
         }
     }
 
@@ -72,6 +132,19 @@ enum MiraPermission: String, CaseIterable, Identifiable {
             return CGPreflightScreenCaptureAccess()
         case .accessibility:
             return AXIsProcessTrusted()
+        case .fullDisk:
+            // No API exists for this. The only honest check is to try reading
+            // something only Full Disk Access can read — which is exactly what
+            // the feature needing it does anyway.
+            return NotificationCenterStore.isReadable
+        case .camera:
+            return AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        case .calendars:
+            return [.fullAccess, .authorized].contains(EKEventStore.authorizationStatus(for: .event))
+        case .reminders:
+            return [.fullAccess, .authorized].contains(EKEventStore.authorizationStatus(for: .reminder))
+        case .bluetooth:
+            return CBManager.authorization == .allowedAlways
         }
     }
 
@@ -81,10 +154,20 @@ enum MiraPermission: String, CaseIterable, Identifiable {
         case .microphone:      return URL(string: base + "Privacy_Microphone")
         case .screenRecording: return URL(string: base + "Privacy_ScreenCapture")
         case .accessibility:   return URL(string: base + "Privacy_Accessibility")
+        case .fullDisk:        return URL(string: base + "Privacy_AllFiles")
+        case .camera:          return URL(string: base + "Privacy_Camera")
+        case .calendars:       return URL(string: base + "Privacy_Calendars")
+        case .reminders:       return URL(string: base + "Privacy_Reminders")
+        case .bluetooth:       return URL(string: base + "Privacy_Bluetooth")
         }
     }
 
-    var needsRelaunch: Bool { self == .screenRecording }
+    /// macOS only re-reads these grants at launch, so the app has to be
+    /// restarted before the feature actually starts working. Saying so beats
+    /// leaving the user staring at a panel that hasn't changed.
+    var needsRelaunch: Bool {
+        self == .screenRecording || self == .fullDisk || self == .accessibility
+    }
 }
 
 // MARK: - Voice persona

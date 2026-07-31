@@ -102,6 +102,7 @@ struct SettingsView: View {
                         settingsGroup("General", icon: "gearshape.fill") {
                             accountSection
                             accentColorSection
+                            permissionsSection
                             appearanceSection
                             updatesSection
                         }
@@ -2198,6 +2199,28 @@ struct SettingsView: View {
     private func levelColor(_ level: Float) -> Color {
         level < 0.6 ? Color(red: 0.20, green: 0.84, blue: 0.29)
                     : Color(red: 1.0,  green: 0.60, blue: 0.20)
+    }
+
+    // MARK: - Permissions section
+
+    /// The whole picture in one place. Individual features still ask at the
+    /// moment they're used — that's the behaviour worth copying from MacNotch —
+    /// but there has to be somewhere that answers "what does Mira have access
+    /// to, and what is switched off because it doesn't?".
+    private var permissionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Permissions", systemImage: "hand.raised.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            Text("Mira asks for each of these when a feature needs it, not up front. "
+                 + "Anything not granted just means that feature stays off.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.40))
+                .fixedSize(horizontal: false, vertical: true)
+
+            PermissionsListView()
+        }
     }
 
     // MARK: - Appearance section (Cat Mode + Transparent panes)

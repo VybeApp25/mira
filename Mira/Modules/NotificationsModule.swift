@@ -294,7 +294,14 @@ private struct NotificationsView: View {
         }
         .overlay {
             if service.notifications.isEmpty, !service.hasDatabaseAccess {
-                fullDiskPrompt
+                // The shared prompt, not a bespoke one. Every feature that is
+                // blocked on a grant should ask the same way, or the user learns
+                // a different affordance per panel.
+                PermissionPromptView(
+                    permission: .fullDisk,
+                    detail: "Notifications are delivered to a database only Full Disk Access can "
+                          + "read. Banners are on screen for a moment and often not at all, so "
+                          + "watching for them misses most of what arrives.")
             } else if service.notifications.isEmpty {
                 VStack(spacing: 4) {
                     Image(systemName: "bell.slash")
@@ -352,41 +359,4 @@ private struct NotificationsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Shown when there is nothing to list AND the database can't be read.
-    ///
-    /// This distinction is the whole point: without Full Disk Access the panel
-    /// used to say "No notifications", which is indistinguishable from a quiet
-    /// morning and is exactly the lie that sent us chasing a bug in the reader
-    /// while texts were arriving normally.
-    var fullDiskPrompt: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "externaldrive.badge.questionmark")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.30))
-            Text("Full Disk Access needed")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-            Text("Notifications are delivered to a database only Full Disk Access can read. "
-                 + "Banners are on screen for a moment and often not at all, so watching for "
-                 + "them misses most of what arrives.")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.35))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 340)
-
-            Button("Open Full Disk Access") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(.black)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(AccentColorService.shared.color))
-            .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }

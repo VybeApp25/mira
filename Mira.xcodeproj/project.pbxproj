@@ -217,6 +217,7 @@
 		94682DCB56A8A83B033DB022 /* ExternalTriggerRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C538A7CDB7D083498C2377 /* ExternalTriggerRunner.swift */; };
 		95261BA19D29EFC4576A90FA /* hatching.wav in Resources */ = {isa = PBXBuildFile; fileRef = 2F3CF04D89D09EF7D66A6A2E /* hatching.wav */; };
 		956F2F42D976FA6EC4E2E24C /* PostHogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C651FB15781FEA6544A06C24 /* PostHogService.swift */; };
+		95B686CD024B5AD69C9124D0 /* PermissionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E991A8DC4162F3A41A38A8 /* PermissionsService.swift */; };
 		95ED4DD4EE959FC8D5F9BC02 /* HomeTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79790F66243B041B7E65898D /* HomeTabView.swift */; };
 		95F87A68B83C57A85CFDDB0D /* HoverSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */; };
 		96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C400D8B3A69E6FAB293BB651 /* ClipboardItem.swift */; };
@@ -341,6 +342,7 @@
 		E0DD59CC9433DCECAFF424C8 /* OnboardingDemoRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111490EEF9590BCD876A568C /* OnboardingDemoRunner.swift */; };
 		E14FBAF9DC017FE43C87FCA7 /* IslandChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */; };
 		E1A23111FB0BBE1CC4A86CB1 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B324BC14AED4E3627AA2C7 /* Carbon.framework */; };
+		E1B9DFE262E318F830AB41CF /* PermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499F4BE5F3F58DA794474216 /* PermissionsView.swift */; };
 		E2033DB811A3BCAAC7112C02 /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D949CA7680302004BA6CCC /* OverlayWindowController.swift */; };
 		E252A123B7A3227BA1BDE86A /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065D4FF184832F7FE6C46673 /* CameraPreviewView.swift */; };
 		E29BDEF21A1B2762999F9340 /* SkillsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A431A7E053E44BF6BCF3CC6 /* SkillsTabView.swift */; };
@@ -437,6 +439,7 @@
 		2092349BB2AA496891F90AE4 /* notes_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = notes_rw.py; sourceTree = "<group>"; };
 		216189A0F0FB6DEF096C0C03 /* googledocs.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = googledocs.md; sourceTree = "<group>"; };
 		21A7D9D513B1CB993680D6A8 /* StreamingMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownView.swift; sourceTree = "<group>"; };
+		22E991A8DC4162F3A41A38A8 /* PermissionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsService.swift; sourceTree = "<group>"; };
 		2401A65BD01B1E1859DD4B36 /* server.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = server.js; sourceTree = "<group>"; };
 		2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentProcessManager.swift; sourceTree = "<group>"; };
 		2468A8247C0139235C04D794 /* ReliabilityDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReliabilityDashboardView.swift; sourceTree = "<group>"; };
@@ -493,6 +496,7 @@
 		479ABA35C69E7426DBC580D5 /* NotchOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingView.swift; sourceTree = "<group>"; };
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
 		499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthService.swift; sourceTree = "<group>"; };
+		499F4BE5F3F58DA794474216 /* PermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsView.swift; sourceTree = "<group>"; };
 		4A77428E1C00142D230E8329 /* WorkspaceReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReview.swift; sourceTree = "<group>"; };
 		4B94FFDB2219161CA664643F /* ScreenTimeModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTimeModule.swift; sourceTree = "<group>"; };
 		4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundScheduler.swift; sourceTree = "<group>"; };
@@ -1116,6 +1120,7 @@
 				55A8E996A100B9CDBF3EA300 /* OutcomeEvaluator.swift */,
 				556FE075FEBF1DA1129BA4C8 /* OutputStore.swift */,
 				FABC83A4B4927FF3F9C1D983 /* PendingDrawnContextService.swift */,
+				22E991A8DC4162F3A41A38A8 /* PermissionsService.swift */,
 				8F96CCF45A8D3B78F9F3DDC7 /* PointFollowUpService.swift */,
 				F71BBE7E8D7EEA7B8AE4D74C /* PointToService.swift */,
 				B06B0C92C98D179DE8BF3C3D /* PolicyEngine.swift */,
@@ -1269,6 +1274,7 @@
 				FD96AD74487529E2CEF249FB /* OutputDetailView.swift */,
 				111B0BAA1F242F751DD35E6D /* PaywallView.swift */,
 				28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */,
+				499F4BE5F3F58DA794474216 /* PermissionsView.swift */,
 				EABB60070E502F8E675BD22D /* PointerOverlay.swift */,
 				AE9306AC94FE381E15B70A16 /* ProjectsTabView.swift */,
 				AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */,
@@ -1664,6 +1670,8 @@
 				C63AC7A1618A13A8A530831E /* PaywallView.swift in Sources */,
 				4F4EDACACD01FB5FFA7DCC8B /* PendingDrawnContextService.swift in Sources */,
 				4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */,
+				95B686CD024B5AD69C9124D0 /* PermissionsService.swift in Sources */,
+				E1B9DFE262E318F830AB41CF /* PermissionsView.swift in Sources */,
 				EA34E17889F5809A0D65D945 /* PillStateModel.swift in Sources */,
 				24F66A36C54D673F2CD4D6CF /* PointFollowUpService.swift in Sources */,
 				FE6BA51A13E871A9A913442B /* PointToService.swift in Sources */,
