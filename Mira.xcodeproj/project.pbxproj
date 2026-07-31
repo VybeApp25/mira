@@ -78,6 +78,7 @@
 		2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16910211171E9C8F0190DBD8 /* SystemStats.swift */; };
 		2FDF8D290B3689B7EB3F13AE /* MiraBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91346EA30D1B31122573AE9 /* MiraBackend.swift */; };
 		3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */; };
+		32D07AF7DEBCCD215C201B9F /* ScreenCapturePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F583E51D3C82857690BC2525 /* ScreenCapturePrivacyService.swift */; };
 		330EFAF058D348734E5A7337 /* AICodingBridgeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */; };
 		337C3FC5FE2A1271016E1791 /* googledrive.md in Resources */ = {isa = PBXBuildFile; fileRef = 088180F819F6CAD079F973DB /* googledrive.md */; };
 		3384AE0F6B1D9F8AB14ABD88 /* MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3ABA2178F03DB65559DB946 /* MediaControls.swift */; };
@@ -743,6 +744,7 @@
 		F15EE928CDBBA87B6E0A4919 /* HUDOverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDOverlayWindowController.swift; sourceTree = "<group>"; };
 		F3AE9C3419A694A4B7C648D1 /* ComputerUseOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseOrchestrator.swift; sourceTree = "<group>"; };
 		F41806DE60A2909E73385AE1 /* HoverInsightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInsightManager.swift; sourceTree = "<group>"; };
+		F583E51D3C82857690BC2525 /* ScreenCapturePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturePrivacyService.swift; sourceTree = "<group>"; };
 		F61BD2F8CF8F6BA08F81DA17 /* OnboardingDemoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingDemoOverlay.swift; sourceTree = "<group>"; };
 		F71BBE7E8D7EEA7B8AE4D74C /* PointToService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointToService.swift; sourceTree = "<group>"; };
 		F7230251B147A0AA2C01D691 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
@@ -1122,6 +1124,7 @@
 				F88DE432AA1C2672DCE9C021 /* RemoteControlService.swift */,
 				63F52A13C8B02EEA4701166A /* ResponseCardService.swift */,
 				39B2C1A5B3D357A621F2541F /* RouterService.swift */,
+				F583E51D3C82857690BC2525 /* ScreenCapturePrivacyService.swift */,
 				BE19FCB717E75B6DD3B2742B /* ScreenCaptureService.swift */,
 				B78AD9EA6F1C38CE13EED661 /* SidecarSuggestionService.swift */,
 				6B4B91E1E7D63F8155F95EA0 /* SkillCatalog.swift */,
@@ -1675,6 +1678,7 @@
 				3FFF52309FE0C4EEA9189464 /* ResponseCardService.swift in Sources */,
 				9D95DC35830EBC1989F2837C /* ResponseCardView.swift in Sources */,
 				A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */,
+				32D07AF7DEBCCD215C201B9F /* ScreenCapturePrivacyService.swift in Sources */,
 				98880AD419171559D97DB004 /* ScreenCaptureService.swift in Sources */,
 				78DC18E55F5011C56CFEE6F9 /* ScreenDrawController.swift in Sources */,
 				8E30B2EFB4859FED732920DF /* ScreenTimeModule.swift in Sources */,

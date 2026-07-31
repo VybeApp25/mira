@@ -2224,12 +2224,17 @@ struct SettingsView: View {
                 binding: $catMode
             )
 
-            // Show the notch island in screenshots & screen recordings (for demos).
-            // Off by default so Mira's chrome stays out of the user's captures.
+            // Show Mira in screenshots & screen recordings (for demos). Off by
+            // default so Mira's chrome stays out of the user's captures.
+            //
+            // Subtitle says "everything Mira draws" because it now genuinely
+            // does — dock, HUDs, overlays, agent chips and Settings, not just
+            // the island. It previously covered only the island while claiming
+            // the same thing.
             toggleRow(
                 icon: "record.circle",
                 title: "Show in screen recordings",
-                subtitle: "Let the Mira island appear in screenshots & screen captures (for demos)",
+                subtitle: "Let everything Mira draws appear in screenshots, recordings & screen sharing (for demos)",
                 binding: $showInCapture
             )
             .onChange(of: showInCapture) {

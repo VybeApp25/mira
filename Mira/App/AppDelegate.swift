@@ -113,6 +113,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         BluetoothService.shared.start()
 
+        // Keeps every Mira window out of capture, not just the island. The
+        // preference has existed for a while but only one window honoured it.
+        ScreenCapturePrivacyService.shared.start()
+
         // AI Coding has two halves with different costs, so they start on
         // different terms.
         //
