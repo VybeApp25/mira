@@ -152,10 +152,31 @@ struct MiraIslandView: View {
     // Settings/agents/crons are content-dense — give them the tall panel.
     /// The selected module declares its own height. No per-tab special casing and
     /// no nav bar to account for any more — the module IS the panel. The dock
-    /// floats outside the pill, so it adds nothing here.
+    /// floats outside the pill, so it adds nothing to the PANEL height.
     private var expandedHeight: CGFloat {
         moduleRegistry.currentHeight
     }
+
+    /// Whether the detached dock strip is currently drawn. Must match the
+    /// condition inside NotchModuleDockStrip, or the hover zone and the visible
+    /// strip disagree.
+    private var dockVisible: Bool {
+        let pinned = moduleRegistry.pinnedModules.count
+        return pinned > 1 || moduleRegistry.visibleModules.count > pinned
+    }
+
+    /// Vertical space the dock occupies BELOW the pill: the measured 21pt gap
+    /// plus the strip itself (28pt circles + 12pt padding).
+    ///
+    /// This has to be included in the hover zone even though it isn't part of the
+    /// panel. The dock lives outside the pill, so without it the zone ends at the
+    /// panel's bottom edge and moving the cursor onto a dock icon reads as
+    /// leaving the island — which collapsed the notch the moment you tried to
+    /// click one.
+    private var dockOverhang: CGFloat { dockVisible ? 21 + 40 : 0 }
+
+    /// What the hover zone is sized from: panel + dock + a little slop.
+    private var hoverHeight: CGFloat { expandedHeight + dockOverhang }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
         // Expanded: add the notch-height band on top so seating content below the
@@ -187,7 +208,12 @@ struct MiraIslandView: View {
                 }
             }
         }
-        .onAppear { registerTabModules() }
+        .onAppear {
+            registerTabModules()
+            // Seed the zone; otherwise it keeps AnimationController's 252pt
+            // default until something happens to change the height.
+            syncHoverZone()
+        }
         // Existing "show me tab X" callers now select the matching MODULE, so
         // every deep link across the app keeps working with the nav bar gone.
         .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
@@ -200,20 +226,15 @@ struct MiraIslandView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
             moduleRegistry.select("labs")
         }
-        // Keep the hover zone in sync with the per-tab panel height — without
-        // this, moving the cursor into the lower half of a tall tab collapses it.
-        .onChange(of: selectedTab) { _, _ in
-            animController.currentExpandedH = expandedHeight
-            NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
-        }
-        // Switching modules (or toggling a module's tall mode) changes the panel
-        // height too — without this the hover zone keeps the previous module's
-        // size and the panel collapses when the cursor moves into the new space.
-        .onChange(of: moduleRegistry.currentHeight) { _, _ in
-            guard selectedTab == .modules else { return }
-            animController.currentExpandedH = expandedHeight
-            NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
-        }
+        // Keep the hover zone in sync with the panel + dock. Switching modules
+        // changes the height, and the dock appearing or disappearing changes how
+        // far below the panel the island still counts as "hovered".
+        //
+        // The previous version of the second handler was gated on
+        // `selectedTab == .modules`, which stopped being true the moment modules
+        // replaced tabs as the navigation — so the zone never resized at all.
+        .onChange(of: moduleRegistry.currentHeight) { _, _ in syncHoverZone() }
+        .onChange(of: dockVisible)                  { _, _ in syncHoverZone() }
         // Opt out of the macOS safe-area inset (menu bar height ≈ 33pt).
         // Without this the pill is pushed ~33pt below the notch, leaving a gap.
         .ignoresSafeArea()
@@ -489,6 +510,13 @@ struct MiraIslandView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: taskStore.tasks.count)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: pointTo.isActive)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voiceModeLabel)
+    }
+
+    /// Publishes the current panel+dock height so NotchManager can resize the
+    /// hover activation rect.
+    private func syncHoverZone() {
+        animController.currentExpandedH = hoverHeight
+        NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
     }
 
     // MARK: - Tab → module migration
