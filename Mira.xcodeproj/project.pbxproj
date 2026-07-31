@@ -250,6 +250,7 @@
 		B2E8AF7CE4206A49D5F46ACD /* CallDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD309491F3423590AAC1CBC3 /* CallDetector.swift */; };
 		B56FAF42D5DBCD92116DD1D9 /* PythonSkillRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174A45383DCADC992E1A009B /* PythonSkillRunner.swift */; };
 		B5DE723923FE8C987B7D8ECB /* AnimationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8261E0EB0C3813433E9281F9 /* AnimationController.swift */; };
+		B62078783ED788B6B3E60364 /* TranslationModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D8242DA1CDEF0232C39992 /* TranslationModule.swift */; };
 		B651A578C12204C7F51ECFB9 /* TextExpansionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC85C65ED890060037FF65B8 /* TextExpansionService.swift */; };
 		B67F17EFCB9B3D38E0590E0D /* QualityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A1297EEE877A44731A4D04 /* QualityStore.swift */; };
 		B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BAF16D6CB27982CEA34F14 /* ContextService.swift */; };
@@ -603,6 +604,7 @@
 		A266BE527831F1DF05489050 /* StripePurchaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripePurchaseService.swift; sourceTree = "<group>"; };
 		A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsView.swift; sourceTree = "<group>"; };
 		A402B112ABE83ADE3C4489E6 /* AgentJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJob.swift; sourceTree = "<group>"; };
+		A4D8242DA1CDEF0232C39992 /* TranslationModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationModule.swift; sourceTree = "<group>"; };
 		A53D32F98D47AABE99933FAA /* FileShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileShelf.swift; sourceTree = "<group>"; };
 		A5AB62B5302AD934D3ED258F /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		A782277C3717512EB6C03900 /* pptx_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = pptx_rw.py; sourceTree = "<group>"; };
@@ -854,6 +856,7 @@
 				3727FB67B7EA11965392716B /* SnapZoneModule.swift */,
 				7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */,
 				D50BCFB8024EFE9453C52FCB /* TodoModule.swift */,
+				A4D8242DA1CDEF0232C39992 /* TranslationModule.swift */,
 				8D40CF4021FFB9DAC5DBBB79 /* WeatherModule.swift */,
 			);
 			path = Modules;
@@ -1660,6 +1663,7 @@
 				03C43899FB9A47220E81DBEA /* TodoModule.swift in Sources */,
 				F7287D8BD2CAF192F0CE8A5A /* ToolTraceStore.swift in Sources */,
 				1504C28D46A624009B19A06D /* ToolTraceView.swift in Sources */,
+				B62078783ED788B6B3E60364 /* TranslationModule.swift in Sources */,
 				B0A1CA510C4F53004BBC02A8 /* TriggerModels.swift in Sources */,
 				D5BB80F248D7A934870197B9 /* TriggersTabView.swift in Sources */,
 				B9B9F936F0A92699E25BA606 /* UpdateService.swift in Sources */,
