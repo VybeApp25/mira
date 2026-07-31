@@ -93,6 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ScreenTimeModule(),
             DayProgressModule(),
             TranslationModule(),
+            CodeHostingModule(),
             BluetoothModule(),
             SystemModule(),
             ModuleBrowserModule()

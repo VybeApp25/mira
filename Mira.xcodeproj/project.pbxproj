@@ -267,6 +267,7 @@
 		BF372E184A15C8EB98F9C7B8 /* TaskContextCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF958B5FD4E56A9C7FAD9C1 /* TaskContextCapture.swift */; };
 		BF5ECB0746A41C442F04B657 /* SharpieOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */; };
 		BF602219B770443FB8E60ADC /* claude-code.md in Resources */ = {isa = PBXBuildFile; fileRef = 69D1A19C98BFF6EDB3B69816 /* claude-code.md */; };
+		BF7297303A1BC452F301D151 /* CodeHostingModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 467A71ED5E2C1DD0226F33C0 /* CodeHostingModule.swift */; };
 		BF9982E2A60975C99295BAB0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD9B5BE0DB7FB85989053E6 /* OnboardingView.swift */; };
 		BFB0355D3849FA0B84F47590 /* ControlGroupTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26CF799162D6500DB5D454C4 /* ControlGroupTracker.swift */; };
 		C0381F14C871C577DA430BFB /* NotchDropZoneController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45EE31BE660CC4400AA5CE60 /* NotchDropZoneController.swift */; };
@@ -469,6 +470,7 @@
 		44B3A75742D4282073152A2A /* gmail.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = gmail.md; sourceTree = "<group>"; };
 		45EE31BE660CC4400AA5CE60 /* NotchDropZoneController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDropZoneController.swift; sourceTree = "<group>"; };
 		463BF5B30736DAB269B90717 /* WebsiteHealthAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteHealthAgent.swift; sourceTree = "<group>"; };
+		467A71ED5E2C1DD0226F33C0 /* CodeHostingModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeHostingModule.swift; sourceTree = "<group>"; };
 		46A1297EEE877A44731A4D04 /* QualityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityStore.swift; sourceTree = "<group>"; };
 		479ABA35C69E7426DBC580D5 /* NotchOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchOnboardingView.swift; sourceTree = "<group>"; };
 		47BAF16D6CB27982CEA34F14 /* ContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextService.swift; sourceTree = "<group>"; };
@@ -847,6 +849,7 @@
 			children = (
 				1CC06F43C9819E4894E14159 /* BluetoothModule.swift */,
 				E139A522A1A860AEA8E7C64B /* CalendarModule.swift */,
+				467A71ED5E2C1DD0226F33C0 /* CodeHostingModule.swift */,
 				62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */,
 				82B45FF8B8A889F69246F622 /* DropActionsModule.swift */,
 				72F8B7224F44A77FAA8D536B /* MediaModule.swift */,
@@ -1468,6 +1471,7 @@
 				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,
 				96C849E349D297CDF5DD1F9C /* ClipboardItem.swift in Sources */,
 				D89568F2308BBB94C70027B3 /* ClipboardMonitorService.swift in Sources */,
+				BF7297303A1BC452F301D151 /* CodeHostingModule.swift in Sources */,
 				6566B080D5E57E3C8C7B22A5 /* CodexBridgeConfig.swift in Sources */,
 				81855163613BB6A2B99E016C /* CodexComputerUseService.swift in Sources */,
 				A27ED327A6F5061ED6D27309 /* CodexHUD.swift in Sources */,
