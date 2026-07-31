@@ -9,6 +9,36 @@ import SwiftUI
 private final class IslandPanel: NSPanel {
     override var canBecomeKey:  Bool { true  }
     override var canBecomeMain: Bool { false }
+
+    /// Routes ⌘V/⌘C/⌘X/⌘A/⌘Z to the focused text field ourselves.
+    ///
+    /// Typing into a field in the notch worked, but PASTING did nothing. Command
+    /// keys are key EQUIVALENTS, and macOS dispatches those through the menu bar
+    /// of the ACTIVE application. This panel deliberately never activates Mira
+    /// (canBecomeMain = false, makeKey without activation) so it doesn't steal
+    /// focus — which means ⌘V was being offered to whatever app the user was
+    /// actually in, and never reached the field they were typing in.
+    ///
+    /// Sending the action to nil walks the responder chain from the first
+    /// responder, so it lands on the focused NSTextView. This is exactly the
+    /// case that made pasting a GitHub token impossible: a value you cannot
+    /// reasonably retype by hand.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods == .command, let key = event.charactersIgnoringModifiers?.lowercased() {
+            let action: Selector?
+            switch key {
+            case "v": action = #selector(NSText.paste(_:))
+            case "c": action = #selector(NSText.copy(_:))
+            case "x": action = #selector(NSText.cut(_:))
+            case "a": action = #selector(NSText.selectAll(_:))
+            case "z": action = Selector(("undo:"))
+            default:  action = nil
+            }
+            if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// NSHostingView subclass that delivers the first mouse-down directly to

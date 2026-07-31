@@ -94,9 +94,24 @@ final class MediaKeyInterceptService {
 
         guard let tap = eventTap else { return }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        // Serviced on a dedicated thread, NOT the main run loop, so a busy main
-        // thread (e.g. an agent build) can't stall or kill media-key handling.
-        EventTapThread.shared.addSource(runLoopSource!)
+        // MUST be the MAIN run loop.
+        //
+        // This was serviced on a dedicated thread so a busy main thread couldn't
+        // stall media keys. That crashed the app: handle(event:) builds an
+        // NSEvent via NSEvent(cgEvent:), and for system-defined events that goes
+        // through HIToolbox's Text Services Manager, which dispatch_asserts it
+        // is on the main queue. Typing anything that moves caps-lock state walks
+        // straight into it:
+        //
+        //   MediaKeyInterceptService.handle(event:)
+        //     NSEvent.__allocating_init(cgEvent:)
+        //       TSMAdjustCapsLockPressAndHold → dispatch_assert_queue_fail
+        //
+        // SIGTRAP, whole app down, reproducible by typing a mixed-case string.
+        // The stall-resistance is not worth a crash, and the tap already
+        // re-enables itself on tapDisabledByTimeout, which is the case the
+        // dedicated thread was guarding against.
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource!, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 
