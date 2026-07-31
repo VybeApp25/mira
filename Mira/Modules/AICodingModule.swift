@@ -205,7 +205,21 @@ final class AICodingModule: NotchModule, ObservableObject {
     }
 
     var activeRows: [AICodingRow] { rows.filter(\.isActive) }
-    var recentRows: [AICodingRow] { rows.filter { !$0.isActive } }
+
+    /// Capped. Every session from the last twelve hours had a row here, so a
+    /// busy day turned the panel into a wall of history and pushed "Resume in
+    /// Terminal" roughly forty scroll-ticks below the fold. Three is what fits
+    /// without scrolling; everything older is what the resume list is for.
+    var recentRows: [AICodingRow] {
+        Array(rows.filter { !$0.isActive }.prefix(3))
+    }
+
+    /// Resume rows for sessions not already on screen above. Listing a session
+    /// twice in one panel makes the second list look like a rendering bug.
+    var resumeRows: [ClaudeCodeSessionWatcher.ResumableSession] {
+        let shown = Set((activeRows + recentRows).map(\.id))
+        return watcher.resumable.filter { !shown.contains($0.id) }
+    }
 
     var subtitle: NotchHeaderSubtitle? {
         if showingRemote {
@@ -683,9 +697,9 @@ private struct AICodingView: View {
     /// you're going back to something you were mid-way through.
     @ViewBuilder
     private var resumeList: some View {
-        if !watcher.resumable.isEmpty {
+        if !module.resumeRows.isEmpty {
             SectionLabel("Resume in Terminal")
-            ForEach(watcher.resumable) { session in
+            ForEach(module.resumeRows) { session in
                 Button {
                     RemoteControlService.resumeInTerminal(sessionID: session.id,
                                                           directory: session.cwd)
