@@ -54,7 +54,8 @@ final class LiveActivitiesModule: NotchModule, ObservableObject {
 
     static func name(for kind: LiveActivity.Kind) -> String {
         switch kind {
-        case .loading:    return "Loading"
+        case .loading:      return "Loading"
+        case .notification: return "Notifications"
         case .bluetooth:  return "Bluetooth"
         case .appUpdates: return "App updates"
         case .systemHUD:  return "System"

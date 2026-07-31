@@ -22,8 +22,11 @@ import EventKit
 
 struct LiveActivity: Equatable, Identifiable {
     enum Kind: Int, CaseIterable {
-        // Declaration order IS priority order (MacNotch's, verbatim).
-        case loading, bluetooth, appUpdates, systemHUD, media, pomodoro, event, todo
+        // Declaration order IS priority order (MacNotch's, verbatim), with
+        // `notification` inserted second: an alert that just landed outranks
+        // everything except a spinner, because it is the only source here that
+        // is time-critical rather than ambient.
+        case loading, notification, bluetooth, appUpdates, systemHUD, media, pomodoro, event, todo
     }
 
     let kind: Kind
@@ -31,6 +34,10 @@ struct LiveActivity: Equatable, Identifiable {
     let text: String
     /// Tint for the icon. Nil uses the neutral secondary colour.
     var tint: Color?
+    /// Posting app, when there is one. The strip draws that app's real icon
+    /// instead of an SF Symbol — "the app icon and name" is most of what makes
+    /// a notification glance readable at a glance.
+    var appName: String?
 
     var id: Int { kind.rawValue }
 }
@@ -55,7 +62,7 @@ final class LiveActivityService: ObservableObject {
     /// one — MacNotch's per-activity Focus toggle. Nil is the normal rotation.
     @Published private(set) var focusedKind: LiveActivity.Kind?
 
-    private let focusKey = "mira_live_activity_focus_v1"
+    private let focusKey = "mira_live_activity_focus_v2"
 
     /// Pin an activity, or unpin it if it is already pinned. Focusing something
     /// that then goes quiet falls back to the rotation rather than leaving the
@@ -84,7 +91,7 @@ final class LiveActivityService: ObservableObject {
     private let calendar   = CalendarTodayService.shared
 
     private init() {
-        if let raw = UserDefaults.standard.object(forKey: "mira_live_activity_focus_v1") as? Int {
+        if let raw = UserDefaults.standard.object(forKey: "mira_live_activity_focus_v2") as? Int {
             focusedKind = LiveActivity.Kind(rawValue: raw)
         }
 
@@ -92,7 +99,12 @@ final class LiveActivityService: ObservableObject {
         // next tick — a track change should be visible now, not up to 4s later.
         for publisher in [nowPlaying.objectWillChange,
                           pomodoro.objectWillChange,
-                          calendar.objectWillChange] {
+                          calendar.objectWillChange,
+                          // Without this a notification would wait up to the
+                          // 4s dwell before the notch reacted, which for the
+                          // one time-critical source here is too late to be
+                          // a pop at all.
+                          SystemNotificationsService.shared.objectWillChange] {
             publisher
                 .sink { [weak self] _ in
                     DispatchQueue.main.async { self?.refresh(advance: false) }
@@ -155,6 +167,7 @@ final class LiveActivityService: ObservableObject {
     private func activeActivities() -> [LiveActivity] {
         var out: [LiveActivity] = []
 
+        if let note  = notificationActivity() { out.append(note) }
         if let bt    = bluetoothActivity()   { out.append(bt)    }
         if let media = mediaActivity()       { out.append(media) }
         if let pom   = pomodoroActivity()    { out.append(pom)   }
@@ -187,6 +200,36 @@ final class LiveActivityService: ObservableObject {
                             icon: "music.note",
                             text: text,
                             tint: Color(red: 0.40, green: 0.85, blue: 0.55))
+    }
+
+    /// Two states, deliberately different.
+    ///
+    /// For the first few seconds after something lands, the closed notch shows
+    /// THAT notification — app, and the line itself. After the pop window it
+    /// falls back to a count, because a message from twenty minutes ago sitting
+    /// permanently in the notch is not a notification any more, it's wallpaper.
+    ///
+    /// This is also where iPhone notifications appear, without anything extra:
+    /// Continuity delivers them into macOS Notification Center, and this reads
+    /// Notification Center rather than any one app.
+    private func notificationActivity() -> LiveActivity? {
+        let service = SystemNotificationsService.shared
+        guard service.isTrusted else { return nil }
+
+        if service.isPopping, let latest = service.latest {
+            return LiveActivity(kind: .notification,
+                                icon: latest.icon,
+                                text: "\(latest.app) · \(latest.message)",
+                                tint: Color(red: 0.55, green: 0.70, blue: 1.0),
+                                appName: latest.app)
+        }
+
+        let count = service.notifications.count
+        guard count > 0 else { return nil }
+        return LiveActivity(kind: .notification,
+                            icon: "bell.fill",
+                            text: count == 1 ? "1 notification" : "\(count) notifications",
+                            tint: Color(red: 0.55, green: 0.70, blue: 1.0))
     }
 
     private func pomodoroActivity() -> LiveActivity? {
@@ -236,9 +279,15 @@ struct LiveActivityStrip: View {
     var body: some View {
         if let activity = service.current {
             HStack(spacing: 5) {
-                Image(systemName: activity.icon)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(activity.tint ?? .white.opacity(0.65))
+                if let appIcon = Self.icon(forApp: activity.appName) {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 13, height: 13)
+                } else {
+                    Image(systemName: activity.icon)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(activity.tint ?? .white.opacity(0.65))
+                }
                 Text(activity.text)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.82))
@@ -251,5 +300,18 @@ struct LiveActivityStrip: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(activity.text)
         }
+    }
+
+    /// Real icon for the posting app, matched by the display name Notification
+    /// Center gives us — that is the only identifier the accessibility tree
+    /// exposes, so there is no bundle id to look up. Falls back to the SF
+    /// Symbol when the app isn't running or the name doesn't match, which is
+    /// why the symbol is still chosen for every notification.
+    static func icon(forApp name: String?) -> NSImage? {
+        guard let name, !name.isEmpty else { return nil }
+        guard let app = NSWorkspace.shared.runningApplications.first(where: {
+            $0.localizedName?.caseInsensitiveCompare(name) == .orderedSame
+        }), let icon = app.icon else { return nil }
+        return icon
     }
 }

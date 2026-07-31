@@ -100,9 +100,40 @@ final class SystemNotificationsService: ObservableObject {
         for window in Self.attr(ax, kAXWindowsAttribute) as? [AXUIElement] ?? [] {
             Self.collect(window, into: &found, depth: 0)
         }
+        // Work out what is NEW before publishing, so the collapsed notch can pop
+        // an arrival rather than only ever showing a static count. The AX tree
+        // is a snapshot of what Notification Center is holding, so "new" is
+        // simply an id we have not seen in a previous snapshot.
+        let incoming = found.filter { !seenIDs.contains($0.id) }
+        if let arrival = incoming.last {
+            latest = arrival
+            latestAt = Date()
+        }
+        // Keep the seen set to the ids still present plus what just arrived, so
+        // it can't grow without bound over a long uptime — and so a notification
+        // that is dismissed and posted again counts as new, which it is.
+        seenIDs = Set(found.map(\.id))
+
         // Only publish on change — reassigning identical content every 3s would
         // redraw the list and fight scrolling.
         if found != notifications { notifications = found }
+    }
+
+    /// The most recent arrival, and when we noticed it. The collapsed strip uses
+    /// the timestamp to decide whether this is still worth interrupting for.
+    @Published private(set) var latest: SystemNotification?
+    @Published private(set) var latestAt: Date?
+
+    private var seenIDs: Set<String> = []
+
+    /// How long a new notification holds the closed notch before it drops back
+    /// to a count. Long enough to read a line, short enough that walking away
+    /// from the Mac doesn't leave it pinned there.
+    static let popDuration: TimeInterval = 6
+
+    var isPopping: Bool {
+        guard let latestAt else { return false }
+        return Date().timeIntervalSince(latestAt) < Self.popDuration
     }
 
     /// Walks for AXGroups carrying a description. Those are the notifications;

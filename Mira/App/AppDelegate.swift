@@ -145,6 +145,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Snap Zones watches for window drags reaching the top of the screen.
         SnapZoneService.shared.start()
 
+        // Notification polling runs from launch, not from the panel opening.
+        // The point of the feature is that an alert pops on the CLOSED notch,
+        // which is precisely when nobody has the Notifications panel open.
+        SystemNotificationsService.shared.start()
+
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
 
