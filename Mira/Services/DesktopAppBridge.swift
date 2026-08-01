@@ -37,6 +37,7 @@
 
 import AppKit
 import ApplicationServices
+import ScreenCaptureKit
 
 @MainActor
 final class DesktopAppBridge: ObservableObject {
@@ -316,6 +317,109 @@ final class DesktopAppBridge: ObservableObject {
     func isReadable(_ app: App) -> Bool {
         guard let running = running(app) else { return false }
         return !staticTexts(of: running).isEmpty
+    }
+
+    // MARK: - Vision
+
+    /// Read the app by LOOKING at it, for what accessibility cannot reach.
+    ///
+    /// This is how ChatGPT gets read at all — it exposes zero static text — and
+    /// how any PAST conversation gets read in either app, since neither keeps
+    /// readable history on disk (ChatGPT's local conversations are individually
+    /// encrypted; Claude Desktop's IndexedDB holds no plain text). The route to
+    /// an old chat is therefore: open it in the app's own UI, then read the
+    /// screen. This is that second half.
+    ///
+    /// CAPTURES ONE WINDOW, NOT THE SCREEN. Cheaper and more accurate, but the
+    /// reason that matters most is privacy: a full-display grab of someone's Mac
+    /// to read their ChatGPT window would also send whatever else is on it.
+    func readViaVision(_ app: App, question: String, apiKey: String) async -> ReadResult {
+        guard let running = await open(app) else { return .notReadable }
+        guard let image = await captureWindow(of: running) else { return .notReadable }
+        guard let jpeg = Self.downscaledJPEG(image) else { return .notReadable }
+
+        let prompt = """
+        This is a screenshot of the \(app.displayName) desktop app. \
+        Answer using ONLY what is visible in it. If the answer is not visible, \
+        say so rather than guessing.
+
+        \(question)
+        """
+        do {
+            let answer = try await ClaudeService(apiKey: apiKey).askStreaming(
+                prompt: prompt,
+                imageBase64: jpeg,
+                imageMediaType: "image/jpeg",
+                maxTokensOverride: 1200
+            ) { _ in }
+            let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? .timedOut : .reply(trimmed)
+        } catch {
+            return .timedOut
+        }
+    }
+
+    /// Whichever route works for this app: accessibility where the text is
+    /// there, vision where it isn't. Callers should not have to know which.
+    func read(_ app: App, question: String, apiKey: String) async -> ReadResult {
+        if isReadable(app), app == .claude {
+            let viaText = await ask(question, app: app)
+            if case .reply = viaText { return viaText }
+        }
+        return await readViaVision(app, question: question, apiKey: apiKey)
+    }
+
+    private func captureWindow(of app: NSRunningApplication) async -> NSImage? {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: true)
+            // Largest window belonging to this app — skips its own tooltips and
+            // panels, which are windows too.
+            let owned = content.windows.filter { window in
+                window.owningApplication?.processID == app.processIdentifier
+            }
+            func area(_ window: SCWindow) -> CGFloat {
+                window.frame.width * window.frame.height
+            }
+            guard let target = owned.max(by: { area($0) < area($1) }) else { return nil }
+
+            let config = SCStreamConfiguration()
+            config.width = Int(target.frame.width)
+            config.height = Int(target.frame.height)
+            config.showsCursor = false
+            let shot = try await SCScreenshotManager.captureImage(
+                contentFilter: SCContentFilter(desktopIndependentWindow: target),
+                configuration: config)
+            return NSImage(cgImage: shot, size: NSSize(width: shot.width, height: shot.height))
+        } catch {
+            return nil
+        }
+    }
+
+    /// Downscale and JPEG-encode under the model's per-image ceiling.
+    ///
+    /// ClaudeService's own note is explicit that a full-resolution Retina PNG of
+    /// a screen is ~14 MB base64, over Anthropic's 5 MB cap, and comes back as
+    /// an HTTP 400. So this is not an optimisation — sending the obvious
+    /// encoding simply fails.
+    private static func downscaledJPEG(_ image: NSImage, maxDimension: CGFloat = 1600) -> String? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let width = CGFloat(cg.width), height = CGFloat(cg.height)
+        let scale = min(1, maxDimension / max(width, height))
+        let size = NSSize(width: width * scale, height: height * scale)
+
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.6])?
+            .base64EncodedString()
     }
 
     // MARK: - Tree
