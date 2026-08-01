@@ -61,6 +61,14 @@ final class SystemVolumeObserver {
                 guard let self else { return }
                 self.listening = false
                 self.start()
+                // Which device sound is coming out of is worth a line in the
+                // notch — it is the thing you actually want confirmed when you
+                // put headphones in. MacNotch surfaces the same ("audio output
+                // labels fit better on built-in notches").
+                if let name = Self.deviceName(self.device) {
+                    NotificationCenter.default.post(name: .miraAudioOutputChanged,
+                                                    object: nil, userInfo: ["name": name])
+                }
             }
         }
 
@@ -74,6 +82,19 @@ final class SystemVolumeObserver {
         lastPosted = level
         NotificationCenter.default.post(name: .miraVolumeHUDChanged, object: nil,
                                         userInfo: ["level": level])
+    }
+
+    static func deviceName(_ id: AudioObjectID) -> String? {
+        guard id != kAudioObjectUnknown else { return nil }
+        var name: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &name) == noErr else { return nil }
+        let value = name as String
+        return value.isEmpty ? nil : value
     }
 
     private static func defaultOutputDevice() -> AudioObjectID {

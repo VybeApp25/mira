@@ -60,6 +60,7 @@ final class LiveActivitiesModule: NotchModule, ObservableObject {
         case .appUpdates: return "App updates"
         case .systemHUD:  return "Volume & brightness"
         case .power:      return "Power"
+        case .deviceChange: return "Displays & audio"
         case .media:      return "Media"
         case .pomodoro:   return "Pomodoro"
         case .event:      return "Calendar"

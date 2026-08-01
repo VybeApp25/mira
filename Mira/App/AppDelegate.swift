@@ -165,6 +165,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Control Center, a script, a headset button.
         SystemVolumeObserver.shared.start()
 
+        // Display connect/disconnect and audio output changes.
+        DeviceChangeActivityService.shared.start()
+
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
 

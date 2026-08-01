@@ -31,7 +31,7 @@ struct LiveActivity: Equatable, Identifiable {
         // acknowledgement that arrives after the ambient rotation gets to it is
         // not an acknowledgement. MacNotch gives its plug/unplug strips "clearer
         // priority" for the same reason.
-        case loading, systemHUD, notification, power, bluetooth, appUpdates, media, pomodoro, event, todo
+        case loading, systemHUD, notification, power, deviceChange, bluetooth, appUpdates, media, pomodoro, event, todo
     }
 
     let kind: Kind
@@ -114,6 +114,12 @@ final class LiveActivityService: ObservableObject {
             NotificationCenter.default.publisher(for: name)
                 .sink { [weak self] note in
                     guard let self, Self.showsSystemHUDInNotch else { return }
+                    // Connecting a display or switching audio output changes the
+                    // output device and often its volume with it. Without this,
+                    // plugging in a monitor fires a volume HUD and a brightness
+                    // HUD on top of the "Display connected" notice you actually
+                    // wanted — three strips fighting over one event.
+                    guard Date() >= DeviceChangeActivityService.shared.hudQuietUntil else { return }
                     let level = (note.userInfo?["level"] as? Double)
                         ?? Double(note.userInfo?["level"] as? Float ?? 0)
                     // Mute reads as zero volume, and a speaker icon at 0% is not
@@ -156,6 +162,7 @@ final class LiveActivityService: ObservableObject {
                           // Plugging a cable in should register now, not on the
                           // next 4s tick.
                           PowerActivityService.shared.objectWillChange,
+                          DeviceChangeActivityService.shared.objectWillChange,
                           // Without this a notification would wait up to the
                           // 4s dwell before the notch reacted, which for the
                           // one time-critical source here is too late to be
@@ -220,7 +227,7 @@ final class LiveActivityService: ObservableObject {
         // press, an alert, a cable. A plug/unplug notice preempts, but a standing
         // low-battery warning does not: it would pin the strip indefinitely and
         // block every other source, which is a status line, not a notice.
-        var preempting: [LiveActivity.Kind] = [.systemHUD, .notification]
+        var preempting: [LiveActivity.Kind] = [.systemHUD, .notification, .deviceChange]
         if PowerActivityService.shared.recentEvent != nil { preempting.append(.power) }
 
         for kind in preempting {
@@ -253,7 +260,8 @@ final class LiveActivityService: ObservableObject {
     private func activeActivities() -> [LiveActivity] {
         var out: [LiveActivity] = []
 
-        if let hud   = systemHUDActivity()   { out.append(hud)   }
+        if let hud    = systemHUDActivity()    { out.append(hud)    }
+        if let device = deviceChangeActivity() { out.append(device) }
         if let note  = notificationActivity() { out.append(note) }
         if let power = powerActivity()       { out.append(power) }
         if let bt    = bluetoothActivity()   { out.append(bt)    }
@@ -262,6 +270,15 @@ final class LiveActivityService: ObservableObject {
         if let event = nextEventActivity()   { out.append(event) }
 
         return out.sorted { $0.kind.rawValue < $1.kind.rawValue }
+    }
+
+    /// A display or audio device that just appeared or went away.
+    private func deviceChangeActivity() -> LiveActivity? {
+        guard let notice = DeviceChangeActivityService.shared.notice else { return nil }
+        return LiveActivity(kind: .deviceChange,
+                            icon: notice.icon,
+                            text: notice.text,
+                            tint: Color(red: 0.60, green: 0.78, blue: 1.0))
     }
 
     /// Volume, brightness and mute, in the notch itself.

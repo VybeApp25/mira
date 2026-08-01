@@ -340,6 +340,7 @@
 		D96F34D4E59194D55862DE85 /* NotchModuleRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA700DD1C27CA8DEA372F8E2 /* NotchModuleRegistry.swift */; };
 		D9D5ADB021219BC46EF5AE86 /* BatteryStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3971B5E467CC08CB2DB4FE /* BatteryStatus.swift */; };
 		DAB962DC6E7F0207ABEC93BF /* vercel.md in Resources */ = {isa = PBXBuildFile; fileRef = E916F39A99413681760D61AE /* vercel.md */; };
+		DC8DF651F4B82DD4158347A7 /* DeviceChangeActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D42A4E6441243BC17C65E6 /* DeviceChangeActivityService.swift */; };
 		DCB1DA8646D9D1A8669A8973 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872DD8FFE16217C9024800BE /* OpenAIService.swift */; };
 		DEB927FF2923FA768D56E060 /* ProjectEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */; };
 		DF7ED74A4C011F0D6D8FAB46 /* FileWatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01313512AA5C428B31B4E8C /* FileWatchService.swift */; };
@@ -596,6 +597,7 @@
 		803FFD5EEBDE9BDFAF14C988 /* CursorCompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorCompanionView.swift; sourceTree = "<group>"; };
 		80ED8ED7A6C8DC6CE506BB1E /* WebsiteBuilderAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteBuilderAgent.swift; sourceTree = "<group>"; };
 		812EB77420B5DB775E6B68C5 /* polymarket.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = polymarket.md; sourceTree = "<group>"; };
+		81D42A4E6441243BC17C65E6 /* DeviceChangeActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceChangeActivityService.swift; sourceTree = "<group>"; };
 		820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDViewModel.swift; sourceTree = "<group>"; };
 		823E45E8C322474B713E0AD7 /* MiraDebugLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDebugLog.swift; sourceTree = "<group>"; };
 		8261E0EB0C3813433E9281F9 /* AnimationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationController.swift; sourceTree = "<group>"; };
@@ -1081,6 +1083,7 @@
 				CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */,
 				B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */,
 				07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */,
+				81D42A4E6441243BC17C65E6 /* DeviceChangeActivityService.swift */,
 				BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */,
 				326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */,
 				C234496ECA2FCA2E1A14EED2 /* ElementLocationDetector.swift */,
@@ -1581,6 +1584,7 @@
 				442F102DD6A49D8BD0BF9EFF /* DashboardProfile.swift in Sources */,
 				295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
+				DC8DF651F4B82DD4158347A7 /* DeviceChangeActivityService.swift in Sources */,
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
 				09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */,
 				D50D8C25DEE71761C7043B7E /* DictationHUDWindowManager.swift in Sources */,
