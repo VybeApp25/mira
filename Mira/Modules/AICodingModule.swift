@@ -76,7 +76,7 @@ final class AICodingModule: NotchModule, ObservableObject {
     /// list down to a single visible row, so the panel advertised a session it
     /// then hid. Height is per-module by construction (NotchModule.swift), and
     /// this is exactly the case that was for.
-    var heightLevel: NotchHeightLevel { (showsBanner || showingRemote) ? .tall : .standard }
+    var heightLevel: NotchHeightLevel { (showsBanner || showingRemote || composed != nil) ? .tall : .standard }
     let allowsTallMode = true
 
     // MARK: Remote control
@@ -157,6 +157,53 @@ final class AICodingModule: NotchModule, ObservableObject {
     private let bridge    = AICodingBridgeService.shared
     private let installer = AICodingHookInstaller.shared
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: Write my prompt
+    //
+    // The non-coder entry point. The HeyClicky ads sell exactly this and never
+    // show a terminal until it has already been filled in — the user says what
+    // they want in their own words and never has to know what a good prompt
+    // looks like.
+    @Published var composeIntent = ""
+    @Published private(set) var composing = false
+    @Published private(set) var composed: PromptComposer.Composed?
+    @Published private(set) var composeFailed = false
+
+    func composePrompt() {
+        let intent = composeIntent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !intent.isEmpty, !composing else { return }
+        composing = true
+        composeFailed = false
+        composed = nil
+        heightChanged()
+        Task { [weak self] in
+            let result = await PromptComposer.shared.compose(
+                intent: intent, target: .claudeCode,
+                apiKey: MiraState.effectiveAPIKeyStatic)
+            await MainActor.run {
+                guard let self else { return }
+                self.composed = result
+                self.composeFailed = (result == nil)
+                self.composing = false
+                self.heightChanged()
+            }
+        }
+    }
+
+    /// Sends only when the user says so — never as part of composing.
+    func sendComposed() {
+        guard let composed else { return }
+        Task { await PromptComposer.shared.handOff(composed, to: .claudeCode) }
+        openRemote()
+        self.composed = nil
+        composeIntent = ""
+    }
+
+    func discardComposed() {
+        composed = nil
+        composeFailed = false
+        heightChanged()
+    }
 
     @Published private(set) var detailSessionID: String?
 
@@ -688,6 +735,7 @@ private struct AICodingView: View {
                         }
                     }
 
+                    composeSection
                     accountsSection
                     coworkList
                     resumeList
@@ -696,6 +744,108 @@ private struct AICodingView: View {
             }
 
             footer
+        }
+    }
+
+    // MARK: Write my prompt
+
+    /// Say what you want in plain words; Mira writes the prompt.
+    @ViewBuilder
+    private var composeSection: some View {
+        SectionLabel("Write my prompt")
+
+        if let composed = module.composed {
+            VStack(alignment: .leading, spacing: 6) {
+                // What Mira THOUGHT it saw, above the prompt. A misread screen
+                // is visible here, before anything runs — not afterwards in a
+                // diff.
+                if !composed.understoodContext.isEmpty {
+                    HStack(spacing: 5) {
+                        Image(systemName: "eye")
+                            .font(.system(size: 9))
+                        Text(composed.understoodContext)
+                            .font(.system(size: 9))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundColor(.white.opacity(0.42))
+                }
+
+                ScrollView {
+                    Text(composed.prompt)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 150)
+
+                HStack(spacing: 7) {
+                    Button { module.sendComposed() } label: {
+                        Text("Send to Claude Code")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Capsule().fill(accent))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(composed.prompt, forType: .string)
+                    } label: {
+                        Text("Copy")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .background(Capsule().fill(Color.white.opacity(0.10)))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { module.discardComposed() } label: {
+                        Text("Discard")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 9).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+        } else {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 7) {
+                    TextField("What do you want to build or change?",
+                              text: $module.composeIntent)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.9))
+                        .onSubmit { module.composePrompt() }
+
+                    if module.composing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button { module.composePrompt() } label: {
+                            Text("Write it")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Capsule().fill(accent))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(module.composeIntent.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                Text(module.composeFailed
+                     ? "Couldn't write that one — try saying it a different way."
+                     : "Mira looks at your screen and writes the prompt, with safety rules built in. You approve it before it runs.")
+                    .font(.system(size: 9))
+                    .foregroundColor(module.composeFailed
+                                     ? Color(red: 0.95, green: 0.55, blue: 0.5)
+                                     : .white.opacity(0.34))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 9).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.045)))
         }
     }
 
