@@ -387,6 +387,7 @@
 		F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4B2256B7C2B1D919E906A1 /* SystemModule.swift */; };
 		F7F4FB408A8BFD4826939A7B /* BluetoothModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CC06F43C9819E4894E14159 /* BluetoothModule.swift */; };
 		F84804BC8E9238CA2534CC14 /* AgentRecommendation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC35A0516A020B690B3C1904 /* AgentRecommendation.swift */; };
+		F8BF46218D0081F091847B76 /* ClaudeDesktopBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F578B2923B72EA7179061CB /* ClaudeDesktopBridge.swift */; };
 		F8DA8ED87428CC67DCC7B272 /* TeachingHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E725D6F6415478DAE245772 /* TeachingHUD.swift */; };
 		F9391C924724A574826C0A5C /* MiraIslandWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3638601932E58FBEFA5B2F77 /* MiraIslandWindowManager.swift */; };
 		F957E4929A175438F6FA0F24 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5AB62B5302AD934D3ED258F /* AgentService.swift */; };
@@ -641,6 +642,7 @@
 		9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharpieOverlayView.swift; sourceTree = "<group>"; };
 		9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		9F2FBF93E03147782BB5FBF5 /* HandoffService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffService.swift; sourceTree = "<group>"; };
+		9F578B2923B72EA7179061CB /* ClaudeDesktopBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeDesktopBridge.swift; sourceTree = "<group>"; };
 		9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssemblyAIService.swift; sourceTree = "<group>"; };
 		A0FC5BE4EB066DC8706C3702 /* MiraDockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraDockView.swift; sourceTree = "<group>"; };
 		A1292CA4CF806B361B668E31 /* DashboardProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardProfile.swift; sourceTree = "<group>"; };
@@ -1072,6 +1074,7 @@
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
 				2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */,
 				52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */,
+				9F578B2923B72EA7179061CB /* ClaudeDesktopBridge.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */,
 				C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */,
@@ -1555,6 +1558,7 @@
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
 				464FD46EF88CB659D0C12BF4 /* ClaudeCodeSessionWatcher.swift in Sources */,
 				29FFDF091455E96338C17ADD /* ClaudeCoworkSessionWatcher.swift in Sources */,
+				F8BF46218D0081F091847B76 /* ClaudeDesktopBridge.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
 				4DFF8C79BB43C1DE7A8D6939 /* ClipReminderService.swift in Sources */,
 				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,

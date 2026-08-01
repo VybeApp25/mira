@@ -85,6 +85,9 @@ final class MiraMCPServer: ObservableObject {
                         // Codex about it, so Claude Code could drive Mira's tools
                         // in principle and had no way to discover them.
                         ClaudeBridgeConfig.reconcile(port: p, token: self.token)
+                        // …and Claude Desktop, which takes stdio connectors
+                        // rather than URLs, so it goes through a relay shim.
+                        ClaudeDesktopBridge.reconcile(port: p, token: self.token)
                     case .failed:
                         // Port likely in use — try the next candidate.
                         self.isRunning = false
