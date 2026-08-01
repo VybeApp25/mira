@@ -241,34 +241,52 @@ private struct MediaModuleView: View {
 
 // MARK: - Level bars
 
-/// Same honest caveat as the collapsed strip's waveform: this is plausible
-/// motion, not an FFT — Mira has no tap on system audio output. It freezes flat
-/// when paused, which is the part that would read as a lie if it got it wrong.
+/// Real levels, from a real FFT over the system audio Mira is already permitted
+/// to capture (AudioSpectrumService).
+///
+/// This used to be six sin() waves — identical motion for silence, a podcast and
+/// a drum solo. The previous comment was honest that it was "plausible motion,
+/// not an FFT… Mira has no tap on system audio output"; that second half stopped
+/// being true once SystemAudioCapture existed for call transcription, so there
+/// was no longer a reason to fake it.
+///
+/// Falls back to the flat idle bars whenever the capture is not running (no
+/// Screen Recording grant, nothing playing), because a frozen last-value would
+/// be the same lie in a quieter form.
 private struct MediaLevelBars: View {
     let isPlaying: Bool
     let tint: Color
     let reduceMotion: Bool
 
-    private static let phases: [Double] = [0, 0.8, 1.6, 0.4, 1.2, 2.0]
-    private static let speeds: [Double] = [3.0, 2.5, 3.5, 2.8, 3.2, 2.6]
+    private static let barCount = AudioSpectrumService.bandCount
+
+    @ObservedObject private var spectrum = AudioSpectrumService.shared
 
     var body: some View {
-        if reduceMotion || !isPlaying {
-            bars { _ in 0.25 }
-        } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                bars { i in
-                    let s = sin(t * Self.speeds[i] + Self.phases[i])
-                    return 0.25 + 0.75 * (s * s)
+        Group {
+            if reduceMotion || !isPlaying || !spectrum.isRunning {
+                bars { _ in 0.25 }
+            } else {
+                bars { index in
+                    // A bar pinned at zero reads as broken rather than quiet, so
+                    // the floor stays at the idle height.
+                    0.25 + 0.75 * (spectrum.levels.indices.contains(index)
+                                   ? spectrum.levels[index] : 0)
                 }
+                .animation(.linear(duration: 0.08), value: spectrum.levels)
             }
+        }
+        .onAppear { if isPlaying { spectrum.retain() } }
+        .onDisappear { if isPlaying { spectrum.release() } }
+        .onChange(of: isPlaying) { _, playing in
+            // Capture follows playback: no audio, no reason to be listening.
+            playing ? spectrum.retain() : spectrum.release()
         }
     }
 
     private func bars(_ height: @escaping (Int) -> Double) -> some View {
         HStack(alignment: .center, spacing: 2) {
-            ForEach(0..<Self.phases.count, id: \.self) { i in
+            ForEach(0..<Self.barCount, id: \.self) { i in
                 Capsule()
                     .fill(tint.opacity(0.85))
                     .frame(width: 2)
