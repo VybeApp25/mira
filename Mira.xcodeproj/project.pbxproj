@@ -283,6 +283,7 @@
 		B9346FC64CCF6A05E8DA358D /* skill-up.wav in Resources */ = {isa = PBXBuildFile; fileRef = EF8119ECAE1C7A35BEE1D5B7 /* skill-up.wav */; };
 		B9B9F936F0A92699E25BA606 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */; };
 		BB26C7ACD6AAE5F3CCD3B3B8 /* ComputerUseTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */; };
+		BCB303ACE59A3FEF169A7A3A /* PromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A9881FDEA6376DA1611ADFF /* PromptComposer.swift */; };
 		BD5AE3B2B6C89C2DCEB2AF22 /* AgentsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE7DF095B4FD643414C1167 /* AgentsTabView.swift */; };
 		BE920249C6E6429E497C7954 /* PolicyWeightStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */; };
 		BF26435153371D1BBC560BE2 /* obsidian.md in Resources */ = {isa = PBXBuildFile; fileRef = 8F4F81E8FA81740E9B72884C /* obsidian.md */; };
@@ -642,6 +643,7 @@
 		99058D51039EBF7338DD237C /* narration-32st8yv6dvivp.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-32st8yv6dvivp.mp3"; sourceTree = "<group>"; };
 		99C3BB72D1F93B0BB58CAFD3 /* OutputEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputEntry.swift; sourceTree = "<group>"; };
 		9A431A7E053E44BF6BCF3CC6 /* SkillsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsTabView.swift; sourceTree = "<group>"; };
+		9A9881FDEA6376DA1611ADFF /* PromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptComposer.swift; sourceTree = "<group>"; };
 		9CDE4D9FFAA2573FD2BE0E42 /* GuidanceOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidanceOverlayView.swift; sourceTree = "<group>"; };
 		9DC6765D0E39A32154B83122 /* SharpieOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharpieOverlayView.swift; sourceTree = "<group>"; };
 		9E7ECF93FE67EB7FD12941A4 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
@@ -1167,6 +1169,7 @@
 				39C154861E3B578799597C0C /* PowerActivityService.swift */,
 				FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */,
 				5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */,
+				9A9881FDEA6376DA1611ADFF /* PromptComposer.swift */,
 				FE89AA4E41C972A58C582686 /* ProposalStore.swift */,
 				ABFB3611DA2D4DFD279D7709 /* PublishingAgent.swift */,
 				174A45383DCADC992E1A009B /* PythonSkillRunner.swift */,
@@ -1738,6 +1741,7 @@
 				D9000B1F5D5817FE0E25FB6C /* ProjectEvent.swift in Sources */,
 				CA63D9AFDC3D4C6971488A9B /* ProjectModels.swift in Sources */,
 				D37336D1E54FF64164918D9A /* ProjectsTabView.swift in Sources */,
+				BCB303ACE59A3FEF169A7A3A /* PromptComposer.swift in Sources */,
 				3260F07BF73E39032CD401FA /* ProposalMetricsView.swift in Sources */,
 				0E37A87E6432FD04DF2C441B /* ProposalModels.swift in Sources */,
 				A203B2E97FF34162072AC381 /* ProposalStore.swift in Sources */,
