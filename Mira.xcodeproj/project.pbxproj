@@ -68,6 +68,7 @@
 		292C686B643713544F1201A2 /* MediaKeyInterceptService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF9BB301B5C04D15B1FB943 /* MediaKeyInterceptService.swift */; };
 		295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ED03F881278A3A9ED01EF7 /* DayProgressModule.swift */; };
 		2984C9424D7B8E9A636ADAE5 /* AgentOutputsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42036566FF695AD6554E8E01 /* AgentOutputsView.swift */; };
+		29FFDF091455E96338C17ADD /* ClaudeCoworkSessionWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */; };
 		2AC0A79B1C9F25ACE71A1EBF /* gmail.md in Resources */ = {isa = PBXBuildFile; fileRef = 44B3A75742D4282073152A2A /* gmail.md */; };
 		2BC76E2CC98B202D34533CAE /* ActionChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B706458B64024088E8769D /* ActionChipsView.swift */; };
 		2CB842A914171B3FBE05C76B /* SystemHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF1DAA7C22977CB338F58CE2 /* SystemHUDView.swift */; };
@@ -519,6 +520,7 @@
 		4F73902D6E3F8EE8514F79EA /* LearnerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnerModel.swift; sourceTree = "<group>"; };
 		518104F61E166A1846E07781 /* claude-design.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "claude-design.md"; sourceTree = "<group>"; };
 		525539495FEEE1BE8A5A2BC4 /* ToolTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolTraceStore.swift; sourceTree = "<group>"; };
+		52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCoworkSessionWatcher.swift; sourceTree = "<group>"; };
 		52F23C4512D86ECC6F0FFA52 /* EventTapThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTapThread.swift; sourceTree = "<group>"; };
 		52FA32F20FF203E1260D29E0 /* clicky-text-receive.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "clicky-text-receive.wav"; sourceTree = "<group>"; };
 		53C99AB15A84E3C48B1EF6F5 /* NotificationCenterStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCenterStore.swift; sourceTree = "<group>"; };
@@ -1066,6 +1068,7 @@
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
 				2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */,
+				52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */,
 				F7790F87FD171EFA2DDB0E1B /* ClaudeService.swift */,
 				CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */,
 				C7D97A8467FD7BDA0DE92415 /* ClipReminderService.swift */,
@@ -1547,6 +1550,7 @@
 				68AB75F8085FC784C9D39C07 /* ClarificationCard.swift in Sources */,
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
 				464FD46EF88CB659D0C12BF4 /* ClaudeCodeSessionWatcher.swift in Sources */,
+				29FFDF091455E96338C17ADD /* ClaudeCoworkSessionWatcher.swift in Sources */,
 				EF5A78AE754A93C27F0D27E1 /* ClaudeService.swift in Sources */,
 				4DFF8C79BB43C1DE7A8D6939 /* ClipReminderService.swift in Sources */,
 				B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */,

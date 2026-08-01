@@ -272,6 +272,11 @@ final class AICodingModule: NotchModule, ObservableObject {
         watcher.stop()
         watcher.start(interval: 1.5)
         if installer.isInstalled { bridge.start() }
+        // Cowork sessions change on the scale of minutes, so this stays lazy
+        // even while the panel is open.
+        if ClaudeCoworkSessionWatcher.shared.isAvailable {
+            ClaudeCoworkSessionWatcher.shared.start(interval: 8)
+        }
     }
 
     func didDisappear() {
@@ -293,6 +298,7 @@ private struct AICodingView: View {
     @ObservedObject var module: AICodingModule
     @ObservedObject var watcher: ClaudeCodeSessionWatcher
     @ObservedObject var bridge: AICodingBridgeService
+    @ObservedObject private var cowork = ClaudeCoworkSessionWatcher.shared
     @ObservedObject var installer: AICodingHookInstaller
     @ObservedObject var remote: RemoteControlService
     @ObservedObject private var accentSvc = AccentColorService.shared
@@ -680,6 +686,7 @@ private struct AICodingView: View {
                         }
                     }
 
+                    coworkList
                     resumeList
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -687,6 +694,57 @@ private struct AICodingView: View {
 
             footer
         }
+    }
+
+    // MARK: Claude Cowork
+
+    /// Cowork sessions from Claude Desktop. Listed, not driven: these run inside
+    /// Claude Desktop's own sandbox, their `cwd` is a path in that sandbox
+    /// rather than on this Mac, and there is no documented way to attach to one.
+    /// So the row says what is there and stops — offering an "open" that could
+    /// not work would be worse than not offering it.
+    @ViewBuilder
+    private var coworkList: some View {
+        if !cowork.sessions.isEmpty {
+            SectionLabel("Claude Cowork")
+            ForEach(cowork.sessions.prefix(6)) { session in
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(accent.opacity(0.8))
+                        .frame(width: 16)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.displayName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.88))
+                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(Self.ago(session.lastActivity))
+                            if let model = session.shortModel { Text("· \(model)") }
+                        }
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.38))
+                        .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.045)))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Cowork session \(session.displayName)")
+            }
+        }
+    }
+
+    private static func ago(_ date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        if seconds < 60    { return "just now" }
+        if seconds < 3600  { return "\(seconds / 60)m ago" }
+        if seconds < 86400 { return "\(seconds / 3600)h ago" }
+        return "\(seconds / 86400)d ago"
     }
 
     // MARK: Resume in Terminal
