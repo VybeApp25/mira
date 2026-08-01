@@ -87,6 +87,7 @@
 		344E90E12D4892683DF73CC0 /* narration-32avewxye1iet.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7EABAFC55507CAA7A38F7F58 /* narration-32avewxye1iet.mp3 */; };
 		3485F74889771FC04FA0AFB3 /* NotchModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7CBB0F6BBD35FC69EF348B /* NotchModule.swift */; };
 		35284522AB7658901578BD8C /* AppIconResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E704BE5155B7B1A32C18399D /* AppIconResolver.swift */; };
+		35A4E1ECD1DB781B2EF6A4DE /* NotchLayoutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C38E0347793F021A758480F /* NotchLayoutService.swift */; };
 		36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */; };
 		373C68AA6EF019FE3AC80567 /* WorkspaceReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77428E1C00142D230E8329 /* WorkspaceReview.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
@@ -461,6 +462,7 @@
 		2AF3189EDE0C5C15FF535263 /* MusicControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicControlService.swift; sourceTree = "<group>"; };
 		2B2C2BABF10795BCC6C8BC2B /* LessonsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonsTabView.swift; sourceTree = "<group>"; };
 		2BFC8C65415313615C5F3B03 /* narration-jdcjns7igj8m.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-jdcjns7igj8m.mp3"; sourceTree = "<group>"; };
+		2C38E0347793F021A758480F /* NotchLayoutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchLayoutService.swift; sourceTree = "<group>"; };
 		2C8BA2BD78641303FE97FD2D /* TeachingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeachingEngine.swift; sourceTree = "<group>"; };
 		2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeSessionWatcher.swift; sourceTree = "<group>"; };
 		2F3CF04D89D09EF7D66A6A2E /* hatching.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = hatching.wav; sourceTree = "<group>"; };
@@ -1119,6 +1121,7 @@
 				6C32360D76CD7D9599499DCA /* MisoTTSService.swift */,
 				418A0DC704E09EF7E41B2041 /* MultiCopyQueueService.swift */,
 				2AF3189EDE0C5C15FF535263 /* MusicControlService.swift */,
+				2C38E0347793F021A758480F /* NotchLayoutService.swift */,
 				CA700DD1C27CA8DEA372F8E2 /* NotchModuleRegistry.swift */,
 				6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */,
 				E631734099EB92C31D4A0F8E /* NotchSnoozeService.swift */,
@@ -1660,6 +1663,7 @@
 				FE2C1FD8706A8BEB3631B71C /* NotchHUDController.swift in Sources */,
 				91A15DA3CC30934E17C87414 /* NotchHUDView.swift in Sources */,
 				8EA66D11C2AD39CDA20B37F7 /* NotchHomeIdleView.swift in Sources */,
+				35A4E1ECD1DB781B2EF6A4DE /* NotchLayoutService.swift in Sources */,
 				E793320D33D4EE21A19C2930 /* NotchManager.swift in Sources */,
 				3485F74889771FC04FA0AFB3 /* NotchModule.swift in Sources */,
 				D96F34D4E59194D55862DE85 /* NotchModuleRegistry.swift in Sources */,

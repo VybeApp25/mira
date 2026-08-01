@@ -409,7 +409,10 @@ final class NotchManager {
         let padH: CGFloat = 60   // horizontal slop
         let padV: CGFloat = 50   // vertical below the panel bottom
         let s = geometry.screen
-        let w = AnimationController.expandedW + padH * 2
+        // Follows the maximized state — a hover zone sized to the narrow panel
+        // would end partway across a maximized one, closing the island while the
+        // pointer is still inside it.
+        let w = NotchLayoutService.shared.expandedWidth + padH * 2
         let h = animController.currentExpandedH + geometry.notchHeight + padV
         return CGRect(
             x:      s.frame.midX - w / 2,

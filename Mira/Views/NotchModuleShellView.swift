@@ -136,6 +136,11 @@ struct NotchModuleShellView: View {
             ForEach(module.headerAccessories) { accessory in
                 accessoryButton(accessory)
             }
+
+            // Widen/narrow the panel. Deliberately LAST — it is the only control
+            // here that belongs to the notch rather than to the module, so it
+            // stays in the same corner no matter which module is open.
+            maximizeButton
         }
         .padding(.horizontal, 14)
         .frame(height: max(notchBandHeight, Self.headerHeight))
@@ -163,6 +168,23 @@ struct NotchModuleShellView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to \(title)")
+    }
+
+    @ObservedObject private var layout = NotchLayoutService.shared
+
+    private var maximizeButton: some View {
+        Button { layout.toggle() } label: {
+            Image(systemName: layout.isMaximized
+                  ? "arrow.down.right.and.arrow.up.left"
+                  : "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.60))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(layout.isMaximized ? "Narrow the notch" : "Widen the notch")
+        .accessibilityLabel(layout.isMaximized ? "Narrow the notch" : "Widen the notch")
     }
 
     private func accessoryButton(_ accessory: NotchHeaderAccessory) -> some View {

@@ -29,6 +29,11 @@ final class AnimationController: ObservableObject {
     // is hover hit-area and shadow room, so window bounds are the wrong thing to
     // copy.) Mira's previous 700 was close but not it.
     static let expandedW:  CGFloat = 724
+    /// Maximized width, for the corner control that widens the panel. Sized to
+    /// sit inside MacNotch's own 1080pt window with the same shadow room the
+    /// note above describes, so a maximized Mira panel and a maximized MacNotch
+    /// panel occupy the same span of screen.
+    static let expandedWideW: CGFloat = 1000
     static let expandedH:  CGFloat = 252
     // Content-dense tabs (settings, agents, crons) get a taller panel —
     // 252pt showed ~190pt of a 1400-line settings page through a scroll slot.

@@ -59,7 +59,11 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
 final class MiraIslandWindowManager {
 
     // Maximum window dimensions — must contain the expanded island + shadow room.
-    static let windowW: CGFloat = 760
+    // 1080 rather than 760 so the MAXIMIZED panel (1000pt) still fits with
+    // shadow room. The window is transparent and sized to the maximum the panel
+    // can ever be, not to its current size — resizing it on every toggle would
+    // fight the panel's own spring animation.
+    static let windowW: CGFloat = 1080
     // Tall enough for expandedTallH (500) + notch + shadow margin
     static let windowH: CGFloat = 560
 

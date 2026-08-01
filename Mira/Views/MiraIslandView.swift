@@ -120,7 +120,7 @@ struct MiraIslandView: View {
 
     // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
     private var pillW: CGFloat {
-        if isOnboarding || isExpanded { return AnimationController.expandedW }
+        if isOnboarding || isExpanded { return layout.expandedWidth }
         guard collapsedIndicatorActive else { return geometry.notchWidth }
         if isMediaActivity {
             // Ears need room for artwork on the left and the waveform on the
@@ -473,6 +473,7 @@ struct MiraIslandView: View {
     // Only active states (voice, agent) render a visible indicator.
 
     @ObservedObject private var hudVM = HUDViewModel.shared
+    @ObservedObject private var layout = NotchLayoutService.shared
 
     // Supplementary left-side badge when an agent task or cursor action is active.
     // Voice states (listening/thinking/speaking) show no text — the centered animation speaks.
