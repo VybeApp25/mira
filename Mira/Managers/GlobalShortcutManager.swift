@@ -13,6 +13,10 @@ extension Notification.Name {
     static let miraChipPromptSelected     = Notification.Name("miraChipPromptSelected")
     // Now-playing card action chip tapped (userInfo: "action" = MusicControlService.Action raw)
     static let miraMusicAction            = Notification.Name("miraMusicAction")
+    /// ⌃⌥P — open the notch on "Write my prompt", ready to type.
+    static let miraComposePrompt          = Notification.Name("miraComposePrompt")
+    /// Posted once the panel is up, so the composer field can take focus.
+    static let miraFocusComposer          = Notification.Name("miraFocusComposer")
     static let miraTabSelected            = Notification.Name("miraTabSelected")
     // PTT — mirrors HeyClicky's GlobalPushToTalkShortcutMonitor events
     static let miraPushToTalkBegan        = Notification.Name("miraPushToTalkBegan")
@@ -118,6 +122,10 @@ private func miraHotKeyHandler(
             if !isRelease { NotificationCenter.default.post(name: .miraModuleNext,   object: nil) }
         case 9:
             if !isRelease { NotificationCenter.default.post(name: .miraToggleSnooze, object: nil) }
+        case 10:
+            // Edge-triggered like the three above: this handler runs for pressed
+            // AND released, so an unguarded case fires twice per press.
+            if !isRelease { NotificationCenter.default.post(name: .miraComposePrompt, object: nil) }
         default: break
         }
     }
@@ -130,6 +138,7 @@ private func miraHotKeyHandler(
 /// Call start() once; call update() whenever ShortcutStore changes.
 final class GlobalShortcutManager {
 
+    private var composeRef:   EventHotKeyRef?
     private var voiceRef:     EventHotKeyRef?
     private var textRef:      EventHotKeyRef?
     private var drawRef:      EventHotKeyRef?
@@ -193,6 +202,12 @@ final class GlobalShortcutManager {
         RegisterEventHotKey(124, UInt32(controlKey | optionKey),
                             EventHotKeyID(signature: Self.sig, id: 8),
                             GetApplicationEventTarget(), 0, &nextRef)
+
+        // ⌃⌥P — "prompt". The one-keypress entry to the composer: the point of
+        // the feature is that you never go looking for a panel.
+        RegisterEventHotKey(35, UInt32(controlKey | optionKey),
+                            EventHotKeyID(signature: Self.sig, id: 10),
+                            GetApplicationEventTarget(), 0, &composeRef)
 
         // ⌃⌥Z — snooze the notch. MacNotch binds this too: sometimes you want
         // the top of the screen to stop reacting to your cursor for a while.
