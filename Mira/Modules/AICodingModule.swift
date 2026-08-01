@@ -277,6 +277,7 @@ final class AICodingModule: NotchModule, ObservableObject {
         if ClaudeCoworkSessionWatcher.shared.isAvailable {
             ClaudeCoworkSessionWatcher.shared.start(interval: 8)
         }
+        AIAccountService.shared.refresh()
     }
 
     func didDisappear() {
@@ -299,6 +300,7 @@ private struct AICodingView: View {
     @ObservedObject var watcher: ClaudeCodeSessionWatcher
     @ObservedObject var bridge: AICodingBridgeService
     @ObservedObject private var cowork = ClaudeCoworkSessionWatcher.shared
+    @ObservedObject private var accounts = AIAccountService.shared
     @ObservedObject var installer: AICodingHookInstaller
     @ObservedObject var remote: RemoteControlService
     @ObservedObject private var accentSvc = AccentColorService.shared
@@ -686,6 +688,7 @@ private struct AICodingView: View {
                         }
                     }
 
+                    accountsSection
                     coworkList
                     resumeList
                 }
@@ -693,6 +696,92 @@ private struct AICodingView: View {
             }
 
             footer
+        }
+    }
+
+    // MARK: Accounts
+
+    /// Which accounts the CLI lanes are running on.
+    ///
+    /// Only the CLI side of Mira uses the user's own subscription — chat, voice
+    /// and vision still go through Mira's backend. So this lives HERE, in the
+    /// module that spawns those CLIs, rather than in Settings where it would
+    /// read as a claim about the whole app.
+    @ViewBuilder
+    private var accountsSection: some View {
+        SectionLabel("Your accounts")
+        VStack(spacing: 4) {
+            accountRow(.claude, name: "Claude", symbol: "sparkle",
+                       state: accounts.claude)
+            accountRow(.codex, name: "ChatGPT / Codex", symbol: "chevron.left.slash.chevron.right",
+                       state: accounts.codex)
+        }
+        Text("Claude Code and Codex sign in themselves, against your own plan. "
+             + "Mira spawns them and never sees your login.")
+            .font(.system(size: 9))
+            .foregroundColor(.white.opacity(0.32))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 9)
+            .padding(.top, 1)
+    }
+
+    private func accountRow(_ provider: AIAccountService.Provider,
+                            name: String,
+                            symbol: String,
+                            state: AIAccountService.State) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: symbol)
+                .font(.system(size: 11))
+                .foregroundColor(state.isConnected ? accent : .white.opacity(0.35))
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.88))
+                Text(Self.stateLabel(state, provider: provider))
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.40))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 4)
+
+            // Nothing to offer when the CLI isn't installed — a Connect button
+            // that opens a login for a missing binary is a dead end.
+            if case .notInstalled = state {
+                EmptyView()
+            } else if !state.isConnected {
+                Button { accounts.connect(provider) } label: {
+                    Text("Connect")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(accent))
+                }
+                .buttonStyle(.plain)
+                .help("Opens \(name)'s own sign-in in Terminal")
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(accent.opacity(0.9))
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.045)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name): \(Self.stateLabel(state, provider: provider))")
+    }
+
+    private static func stateLabel(_ state: AIAccountService.State,
+                                   provider: AIAccountService.Provider) -> String {
+        switch state {
+        case .notInstalled:            return AIAccountService.installHint(for: provider)
+        case .signedOut:               return "Installed — not signed in"
+        case .connected(let detail):   return detail.map { "Connected · \($0)" } ?? "Connected"
         }
     }
 

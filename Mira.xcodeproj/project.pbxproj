@@ -110,6 +110,7 @@
 		421BC20D592D1A9D8C144F2E /* AgentProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */; };
 		4238F3B625F16B1D1B85B86B /* PermissionRecoveryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F15294FC2F2D8837DD7E19 /* PermissionRecoveryCard.swift */; };
 		435235FBB96512337D08237E /* IntegrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2EE5D82CEA6FEF8500C5146 /* IntegrationsView.swift */; };
+		43C238E3A63522D6E111E765 /* AIAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE32BAFD5149E911277AAD52 /* AIAccountService.swift */; };
 		442F102DD6A49D8BD0BF9EFF /* DashboardProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1292CA4CF806B361B668E31 /* DashboardProfile.swift */; };
 		44C5603AADFCC901107E40EE /* narration-2poocvt5yla18.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = CC4757965DB5A1F44360BDBA /* narration-2poocvt5yla18.mp3 */; };
 		450BD0807B6E2B133997E6A3 /* SpotifyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 499BDEDC3429C7EDE060F779 /* SpotifyAuthService.swift */; };
@@ -720,6 +721,7 @@
 		CC4757965DB5A1F44360BDBA /* narration-2poocvt5yla18.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-2poocvt5yla18.mp3"; sourceTree = "<group>"; };
 		CC85C65ED890060037FF65B8 /* TextExpansionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextExpansionService.swift; sourceTree = "<group>"; };
 		CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitorService.swift; sourceTree = "<group>"; };
+		CE32BAFD5149E911277AAD52 /* AIAccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAccountService.swift; sourceTree = "<group>"; };
 		CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexHUD.swift; sourceTree = "<group>"; };
 		CECF49A88AB42C914BD34504 /* computer-use.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "computer-use.md"; sourceTree = "<group>"; };
 		CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronScheduler.swift; sourceTree = "<group>"; };
@@ -1046,6 +1048,7 @@
 				2466F7E68E381171BB6CA060 /* AgentProcessManager.swift */,
 				A5AB62B5302AD934D3ED258F /* AgentService.swift */,
 				B54C5F3494EE98B7199C6D7E /* AgentTaskManager.swift */,
+				CE32BAFD5149E911277AAD52 /* AIAccountService.swift */,
 				A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */,
 				D73278851B4A9186CFAFF3F6 /* AICodingHookInstaller.swift */,
 				CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */,
@@ -1492,6 +1495,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				43C238E3A63522D6E111E765 /* AIAccountService.swift in Sources */,
 				330EFAF058D348734E5A7337 /* AICodingBridgeService.swift in Sources */,
 				0A561B614439BB4DDB82A142 /* AICodingHookInstaller.swift in Sources */,
 				F59FA3ADA506EEDC79237077 /* AICodingModule.swift in Sources */,
