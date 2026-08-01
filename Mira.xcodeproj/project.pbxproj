@@ -52,6 +52,7 @@
 		21C11CB603C81EEA0B101A39 /* powerpoint.md in Resources */ = {isa = PBXBuildFile; fileRef = EB0848094B0493DE9157E662 /* powerpoint.md */; };
 		21EEDF39AC44128C8FEBD7F5 /* spotify.md in Resources */ = {isa = PBXBuildFile; fileRef = EBB7394DB7201E80D6B15BA3 /* spotify.md */; };
 		23A6E2AD7659C4A30D3120C6 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561078F647683F692AC8613D /* AgentActivity.swift */; };
+		23E6EC36A3ECC71DDF1C2249 /* ClaudeBridgeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9F222DDFF88EC4354DD9D9 /* ClaudeBridgeConfig.swift */; };
 		23E9E6161732C5CDFC490DA4 /* CausalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */; };
 		240843308092A906750786AC /* AgentHUDWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090845E773DD2B752EEB8002 /* AgentHUDWindowManager.swift */; };
 		2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */; };
@@ -591,6 +592,7 @@
 		7DD78BE916FB9A1963E253C2 /* ShelfModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModule.swift; sourceTree = "<group>"; };
 		7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeBridge.swift; sourceTree = "<group>"; };
 		7E71BD33D89C0E1FC72B623B /* AgentJobStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentJobStore.swift; sourceTree = "<group>"; };
+		7E9F222DDFF88EC4354DD9D9 /* ClaudeBridgeConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeBridgeConfig.swift; sourceTree = "<group>"; };
 		7EABAFC55507CAA7A38F7F58 /* narration-32avewxye1iet.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-32avewxye1iet.mp3"; sourceTree = "<group>"; };
 		7F22272A22B66E5ADDFCDE30 /* AgentResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentResultView.swift; sourceTree = "<group>"; };
 		801F97A114C64C4844285987 /* sheet_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = sheet_rw.py; sourceTree = "<group>"; };
@@ -1066,6 +1068,7 @@
 				B81EEEF22AFB574869A5ECA9 /* CameraPreviewService.swift */,
 				3E904B2C5B1E8A9C72D1FEF9 /* CausalEngine.swift */,
 				5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */,
+				7E9F222DDFF88EC4354DD9D9 /* ClaudeBridgeConfig.swift */,
 				7E1738DD833B90F61E15688E /* ClaudeCodeBridge.swift */,
 				2E44927BD7C1F621E0395296 /* ClaudeCodeSessionWatcher.swift */,
 				52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */,
@@ -1548,6 +1551,7 @@
 				36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */,
 				86381236CFAE5F4DD5A0A433 /* ChatWidgetView.swift in Sources */,
 				68AB75F8085FC784C9D39C07 /* ClarificationCard.swift in Sources */,
+				23E6EC36A3ECC71DDF1C2249 /* ClaudeBridgeConfig.swift in Sources */,
 				8AB0838F7035ECCEEABDD8FF /* ClaudeCodeBridge.swift in Sources */,
 				464FD46EF88CB659D0C12BF4 /* ClaudeCodeSessionWatcher.swift in Sources */,
 				29FFDF091455E96338C17ADD /* ClaudeCoworkSessionWatcher.swift in Sources */,
