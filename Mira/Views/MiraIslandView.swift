@@ -244,6 +244,17 @@ struct MiraIslandView: View {
         .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
             moduleRegistry.select("labs")
         }
+        // ⌃⌥P — straight to the composer. Selecting the module is not enough on
+        // its own: the notch has to be OPEN, or the shortcut silently changes
+        // which module would be shown next time.
+        .onReceive(NotificationCenter.default.publisher(for: .miraComposePrompt)) { _ in
+            moduleRegistry.select("aicoding")
+            animController.expand()
+            // After the panel exists, or the field is not there to focus yet.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                NotificationCenter.default.post(name: .miraFocusComposer, object: nil)
+            }
+        }
         // ⌃⌥← / ⌃⌥→ walk the carousel without the mouse.
         .onReceive(NotificationCenter.default.publisher(for: .miraModulePrev)) { _ in
             moduleRegistry.advance(by: -1)

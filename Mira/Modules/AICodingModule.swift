@@ -353,6 +353,7 @@ private struct AICodingView: View {
     @ObservedObject private var accentSvc = AccentColorService.shared
 
     @State private var composer = ""
+    @FocusState private var composeFieldFocused: Bool
     @FocusState private var composerFocused: Bool
 
     private var accent: Color { accentSvc.color }
@@ -817,6 +818,10 @@ private struct AICodingView: View {
                     TextField("What do you want to build or change?",
                               text: $module.composeIntent)
                         .textFieldStyle(.plain)
+                        .focused($composeFieldFocused)
+                        .onReceive(NotificationCenter.default.publisher(for: .miraFocusComposer)) { _ in
+                            composeFieldFocused = true
+                        }
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.9))
                         .onSubmit { module.composePrompt() }
