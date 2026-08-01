@@ -232,6 +232,8 @@ final class GlobalShortcutManager {
         if let r = prevRef      { UnregisterEventHotKey(r) }
         if let r = nextRef      { UnregisterEventHotKey(r) }
         if let r = snoozeRef    { UnregisterEventHotKey(r) }
+        if let r = composeRef   { UnregisterEventHotKey(r) }
+        composeRef   = nil
         voiceRef     = nil
         textRef      = nil
         drawRef      = nil
