@@ -31,6 +31,7 @@
 // sentence that caused it.
 
 import AppKit
+import ScreenCaptureKit
 
 @MainActor
 final class PromptComposer: ObservableObject {
@@ -148,11 +149,27 @@ final class PromptComposer: ObservableObject {
 
     // MARK: - Screen
 
-    /// Downscaled JPEG of the main display, for the same reason as elsewhere: a
-    /// full-resolution Retina PNG is ~14 MB base64 and over Anthropic's 5 MB
-    /// per-image cap, which fails as an HTTP 400 rather than degrading.
+    /// Captures the FRONTMOST WINDOW, not the display.
+    ///
+    /// This started as a full-screen grab and was changed on evidence: within a
+    /// minute of the feature existing, a GitHub personal access token was
+    /// sitting in plain view in an unrelated window on this Mac. A whole-display
+    /// capture would have shipped it to a model as part of "look at my screen
+    /// and write me a prompt" — a credential leak the user never agreed to and
+    /// would never have seen happen.
+    ///
+    /// The window the user is actually looking at is also the better context.
+    /// Falls back to the display only when no window can be resolved, because a
+    /// composer with no context is close to useless.
     private func captureScreenJPEG() async -> String? {
-        guard let image = try? await ScreenCaptureService().captureMainDisplay() else { return nil }
+        let image: NSImage
+        if let focused = await captureFrontmostWindow() {
+            image = focused
+        } else if let full = try? await ScreenCaptureService().captureMainDisplay() {
+            image = full
+        } else {
+            return nil
+        }
         guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
 
         let maxDimension: CGFloat = 1600
@@ -172,6 +189,33 @@ final class PromptComposer: ObservableObject {
 
         return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.6])?
             .base64EncodedString()
+    }
+
+    /// The frontmost app's largest on-screen window.
+    private func captureFrontmostWindow() async -> NSImage? {
+        guard let front = NSWorkspace.shared.frontmostApplication,
+              front.bundleIdentifier != Bundle.main.bundleIdentifier else { return nil }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: true)
+            let owned = content.windows.filter { window in
+                window.owningApplication?.processID == front.processIdentifier
+            }
+            func area(_ w: SCWindow) -> CGFloat { w.frame.width * w.frame.height }
+            guard let target = owned.max(by: { area($0) < area($1) }), area(target) > 10_000
+            else { return nil }
+
+            let config = SCStreamConfiguration()
+            config.width = Int(target.frame.width)
+            config.height = Int(target.frame.height)
+            config.showsCursor = false
+            let shot = try await SCScreenshotManager.captureImage(
+                contentFilter: SCContentFilter(desktopIndependentWindow: target),
+                configuration: config)
+            return NSImage(cgImage: shot, size: NSSize(width: shot.width, height: shot.height))
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Parsing
