@@ -131,6 +131,11 @@ struct NotchModuleShellView: View {
                 }
             }
 
+            // Amber "this is suspended while you edit it" state. Sits before
+            // the accessories so it reads as part of the title, not as another
+            // button.
+            PreviewModeBanner()
+
             Spacer(minLength: 8)
 
             ForEach(module.headerAccessories) { accessory in

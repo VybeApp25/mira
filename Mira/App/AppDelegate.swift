@@ -102,6 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             BluetoothModule(),
             LiveActivitiesModule(),
             SystemModule(),
+            SupportModule(),
             ModuleBrowserModule()
         ])
 
