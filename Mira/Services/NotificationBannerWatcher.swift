@@ -201,6 +201,15 @@ final class NotificationBannerWatcher: ObservableObject {
             if seen[note.id] != nil { continue }
             seen[note.id] = Date()
             SystemNotificationsService.shared.ingestLive(note)
+
+            // Only for apps that aren't on this Mac — anything installed already
+            // resolves properly and far more cheaply. This is what gets a real
+            // icon for iPhone alerts mirrored over Continuity.
+            if AppIconResolver.icon(bundleID: note.bundleID, appName: note.app) == nil {
+                BannerIconCapture.shared.captureIfNeeded(appName: note.app,
+                                                         window: window,
+                                                         banner: banner)
+            }
         }
     }
 
@@ -228,13 +237,54 @@ final class NotificationBannerWatcher: ObservableObject {
         return false
     }
 
-    /// Far enough off screen that no display arrangement can reach it. Restoring
-    /// is never needed — the window is destroyed when the banner's own timer
-    /// expires, and the next alert gets a fresh one.
+    /// Moves the banner window so its content is off every display, while
+    /// leaving ONE PIXEL of it overlapping the main display.
+    ///
+    /// That single pixel is not fussiness, it is what keeps the icon capture
+    /// possible. ScreenCaptureKit refuses a window that touches no display —
+    /// measured, SCStreamError -3811 — so parking at (-30000, -30000), which was
+    /// the first version, silently disabled BannerIconCapture whenever
+    /// suppression was on. Which is exactly when it is needed.
+    ///
+    /// The overlapping pixel is the window's leading edge, which is transparent:
+    /// the banner sits ~360pt in from the far side, so shifting by the display's
+    /// full width puts every drawn pixel beyond it. Verified invisible.
     private static func park(_ window: AXUIElement) {
-        var offscreen = CGPoint(x: -30_000, y: -30_000)
-        guard let value = AXValueCreate(.cgPoint, &offscreen) else { return }
+        var origin = parkOrigin(for: window)
+        guard let value = AXValueCreate(.cgPoint, &origin) else { return }
         AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value)
+    }
+
+    /// Somewhere that is off every screen but still adjacent to one.
+    ///
+    /// Tries right of the main display, then below it, checking each against the
+    /// REAL display arrangement — on a two-monitor desk, shoving the window
+    /// right would park it in the middle of the second monitor and show every
+    /// banner there instead of hiding it. If both are occupied it gives up and
+    /// goes far off-screen: suppression still works, only the icon capture is
+    /// lost, and that is the right thing to sacrifice.
+    private static func parkOrigin(for window: AXUIElement) -> CGPoint {
+        var size = CGSize(width: 1728, height: 1117)
+        if let value = attr(window, kAXSizeAttribute) {
+            AXValueGetValue(value as! AXValue, .cgSize, &size)
+        }
+
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &ids, &count)
+        let displays = ids.prefix(Int(count)).map { CGDisplayBounds($0) }
+        let main = CGDisplayBounds(CGMainDisplayID())
+
+        let toTheRight = CGRect(x: main.maxX, y: main.minY, width: size.width, height: size.height)
+        if !displays.contains(where: { $0.intersects(toTheRight) }) {
+            return CGPoint(x: main.maxX - 1, y: main.minY)
+        }
+        let below = CGRect(x: main.minX, y: main.maxY, width: size.width, height: size.height)
+        if !displays.contains(where: { $0.intersects(below) }) {
+            return CGPoint(x: main.minX, y: main.maxY - 1)
+        }
+        return CGPoint(x: -30_000, y: -30_000)
     }
 
     /// While a banner window is up, re-check it. Catches two things a single

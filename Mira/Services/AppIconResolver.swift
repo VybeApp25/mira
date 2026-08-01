@@ -138,12 +138,24 @@ struct NotificationAppIcon: View {
     var size: CGFloat = 14
     var tint: Color = .white.opacity(0.65)
 
+    /// Observed so a monogram is replaced the moment a capture lands, rather
+    /// than staying wrong until the next notification from that app.
+    @ObservedObject private var captured = BannerIconCapture.shared
+
     var body: some View {
         if let icon = AppIconResolver.icon(bundleID: bundleID, appName: appName) {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: size, height: size)
+        } else if let appName, let icon = captured.icon(for: appName) {
+            // Lifted from the banner's own pixels — the only way to show an icon
+            // for an app that was never installed on this Mac.
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         } else if let appName, !appName.isEmpty {
             Text(AppIconResolver.monogram(for: appName))
                 .font(.system(size: size * 0.58, weight: .bold))
