@@ -170,6 +170,154 @@ final class DesktopAppBridge: ObservableObject {
         return .typed
     }
 
+    // MARK: - Reading a reply
+
+    enum ReadResult: Equatable {
+        case reply(String)
+        /// The app exposes no readable text — ChatGPT's case today.
+        case notReadable
+        case timedOut
+    }
+
+    /// Send `prompt` and return what the app answers.
+    ///
+    /// READS BY DIFFING, not by selectors. The alternative — find the last
+    /// message bubble and read it — needs a guess about which node is a reply,
+    /// and a wrong guess does not fail, it returns the WRONG TEXT attributed to
+    /// the model. Snapshotting every string before sending and taking what is
+    /// new afterwards cannot make that mistake: whatever appeared, appeared
+    /// because of this prompt.
+    func ask(_ prompt: String, app: App, timeout: TimeInterval = 90) async -> ReadResult {
+        guard let running = await open(app) else { return .notReadable }
+
+        let before = staticTexts(of: running)
+        // Nothing readable at all before we even start — ChatGPT exposes zero
+        // static text, so there is no point sending and then waiting 90s to
+        // discover we cannot read the answer.
+        if before.isEmpty, app == .chatgpt { return .notReadable }
+
+        let sent = await send(prompt, to: app)
+        guard sent == .wrote || sent == .typed else { return .notReadable }
+
+        // Poll until the text stops growing. A reply streams in, so "there is
+        // new text" is not the same as "it has finished" — it has to be stable
+        // before it is worth returning.
+        let deadline = Date().addingTimeInterval(timeout)
+        var lastJoined = ""
+        var stableCount = 0
+
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+
+            let now = staticTexts(of: running)
+            let fresh = now.subtracting(before).filter { $0.count > 1 && $0 != prompt }
+
+            // PREFER THE SCREEN-READER ANNOUNCEMENT. Claude Desktop publishes
+            // "You said: …", "Claude responded: …" and "Claude finished the
+            // response" for assistive clients. That last one is an exact
+            // completion signal, and "Claude responded:" is the reply itself
+            // with no guessing.
+            //
+            // This matters more than it sounds: the first version returned every
+            // new string ordered by length, and the LONGEST was "Claude is AI
+            // and can make mistakes. Please double-check responses." — the
+            // disclaimer, not the answer. Measured, not hypothesised.
+            if let announced = fresh.first(where: { $0.hasPrefix(Self.replyPrefix) }) {
+                let reply = String(announced.dropFirst(Self.replyPrefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !reply.isEmpty {
+                    // The done marker is the fast path when it is there — but it
+                    // is TRANSIENT. Observed: it was present on one run and gone
+                    // by the equivalent poll on the next, because the app posts
+                    // it once and drops it. Requiring it meant a correct reply
+                    // sat in hand while the loop ran to its 90s timeout, so
+                    // stability decides too.
+                    if fresh.contains(Self.doneMarker) { return .reply(reply) }
+                    if reply == lastJoined {
+                        stableCount += 1
+                        if stableCount >= 2 { return .reply(reply) }
+                    } else {
+                        stableCount = 0
+                        lastJoined = reply
+                    }
+                    continue
+                }
+            }
+
+            // Fallback: no announcement (a future build, or ChatGPT once it
+            // exposes text). Drop known chrome, then take what's left.
+            let cleaned = fresh
+                .filter { candidate in
+                    !Self.chrome.contains { candidate.hasPrefix($0) }
+                }
+                .sorted { $0.count > $1.count }
+            let joined = cleaned.joined(separator: "\n")
+
+            if joined.isEmpty { continue }
+            if joined == lastJoined {
+                stableCount += 1
+                // Two quiet polls in a row: streaming has stopped.
+                if stableCount >= 2 { return .reply(joined) }
+            } else {
+                stableCount = 0
+                lastJoined = joined
+            }
+        }
+        return lastJoined.isEmpty ? .timedOut : .reply(lastJoined)
+    }
+
+    /// Claude Desktop's assistive announcements, captured from the live tree.
+    private static let replyPrefix = "Claude responded: "
+    private static let doneMarker  = "Claude finished the response"
+
+    /// Strings that appear alongside a reply but are not the reply. Every one of
+    /// these was observed in a real round trip — including the session-limit
+    /// notice, which is unrelated to the answer and would otherwise be reported
+    /// as part of it.
+    private static let chrome: [String] = [
+        "Claude is AI and can make mistakes",
+        "Use the up and down arrow keys",
+        "Track tools and referenced files",
+        "You said: ",
+        "Claude finished the response",
+        "You’ve used ",
+        "You've used ",
+        " of your session limit"
+    ]
+
+    /// Every string the app is currently displaying. A Set because position in
+    /// the tree is not stable across renders, and only membership matters here.
+    private func staticTexts(of app: NSRunningApplication) -> Set<String> {
+        var out = Set<String>()
+        for window in windows(of: app) { collectText(window, depth: 0, into: &out) }
+        return out
+    }
+
+    private func collectText(_ element: AXUIElement, depth: Int, into out: inout Set<String>) {
+        guard depth < 30, out.count < 4000 else { return }
+
+        var roleValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
+        if (roleValue as? String) == "AXStaticText" {
+            var value: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+            if let text = value as? String, !text.isEmpty { out.insert(text) }
+        }
+
+        var childValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childValue)
+        for child in (childValue as? [AXUIElement]) ?? [] {
+            collectText(child, depth: depth + 1, into: &out)
+        }
+    }
+
+    /// Whether this app's replies can be read at all, so a caller can route to
+    /// vision instead of waiting for text that will never arrive.
+    func isReadable(_ app: App) -> Bool {
+        guard let running = running(app) else { return false }
+        return !staticTexts(of: running).isEmpty
+    }
+
     // MARK: - Tree
 
     private func windows(of app: NSRunningApplication) -> [AXUIElement] {
