@@ -299,6 +299,20 @@ final class SnapZoneModule: NotchModule, ObservableObject {
             .store(in: &cancellables)
     }
 
+    func didAppear() {
+        // Matches MacNotch: while you are configuring zones, snapping is
+        // suspended so a drag does not fight the editor — and the header says
+        // so, because a feature that is deliberately inert and silent is
+        // indistinguishable from a broken one.
+        PreviewModeService.shared.begin(feature: "Snap Zones", suspended: "Snap inactive")
+        SnapZoneService.shared.stop()
+    }
+
+    func didDisappear() {
+        PreviewModeService.shared.end(feature: "Snap Zones")
+        SnapZoneService.shared.start()
+    }
+
     func makeContent() -> AnyView { AnyView(SnapZoneModuleView(service: service)) }
 }
 

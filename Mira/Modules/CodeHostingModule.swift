@@ -153,7 +153,7 @@ final class CodeHostingService: ObservableObject {
     nonisolated private static let kcService = "mira.codehosting"
     nonisolated private static let kcAccount = "github_pat"
 
-    static func writeToken(_ token: String) {
+    nonisolated static func writeToken(_ token: String) {
         let base: [CFString: Any] = [
             kSecClass:              kSecClassGenericPassword,
             kSecAttrService:        kcService,
@@ -251,8 +251,26 @@ final class CodeHostingService: ObservableObject {
         else { return nil }
 
         cachedToken = s
+
+        // HEAL THE ACL. Caching alone reduced this dialog from every five
+        // minutes to once per launch, which is better and still wrong — the
+        // user should not be asked at all for a token they already granted.
+        //
+        // The prompt happens because the item's ACL names the build that
+        // created it, and this build is a different one. Re-writing the item now
+        // recreates it owned by the CURRENT binary, so the next launch reads it
+        // silently. Done once per process, and only after a read that actually
+        // succeeded, so a denial never destroys a working item.
+        if !didHealACL {
+            didHealACL = true
+            writeToken(s)
+            // If the rewrite somehow failed, the in-memory copy still carries
+            // this launch; the next one asks again rather than losing access.
+        }
         return s
     }
+
+    private nonisolated(unsafe) static var didHealACL = false
 
     func setToken(_ token: String) {
         // Reconnecting must invalidate the cache, or the old token survives the
