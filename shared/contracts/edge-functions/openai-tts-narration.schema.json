@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/openai-tts-narration.schema.json",
+  "title": "OpenAITTSNarration",
+  "description": "supabase/functions/openai-tts-narration/index.ts. General-purpose TTS for in-app narration (used by OnboardingNarrator.swift) — unlike openai-tts-proxy, the client supplies arbitrary `input` text, capped at 600 characters. Requires sign-in but not a specific entitlement/quota check beyond requireUser in this function (no requireEntitlement/checkQuota call was found in this file, unlike most other proxies — flagged as an asymmetry, not corrected here). Response Content-Type audio/mpeg on success, same binary contract as openai-tts-proxy.",
+  "$defs": {
+    "OpenAITTSNarrationRequest": {
+      "title": "OpenAITTSNarrationRequest",
+      "type": "object",
+      "properties": {
+        "voice": {
+          "title": "OpenAITTSNarrationVoice",
+          "type": "string",
+          "enum": ["alloy", "ash", "ballad", "cedar", "coral", "echo", "marin", "sage", "shimmer", "verse"],
+          "default": "marin",
+          "description": "Defaults to \"marin\" server-side if omitted (matches Mira's onboarding narrator voice)."
+        },
+        "input": { "type": "string", "maxLength": 600, "description": "The text to speak. Required and non-empty; rejected with input_required if blank, input_too_long if over 600 chars." }
+      },
+      "required": ["input"],
+      "additionalProperties": false
+    },
+    "OpenAITTSNarrationSuccessResponse": {
+      "title": "OpenAITTSNarrationSuccessResponse",
+      "type": "string",
+      "contentEncoding": "base64",
+      "contentMediaType": "audio/mpeg",
+      "description": "Raw audio/mpeg byte stream on success — same binary-response note as OpenAITTSProxySuccessResponse."
+    },
+    "OpenAITTSNarrationErrorResponse": {
+      "title": "OpenAITTSNarrationErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "OpenAITTSNarrationErrorCode", "type": "string", "enum": ["method_not_allowed", "unauthenticated", "voice_not_allowed", "input_required", "input_too_long", "OPENAI_API_KEY not set"] },
+            "voice": { "type": "string" },
+            "max": { "type": "integer", "description": "Present only alongside error=input_too_long; echoes MAX_CHARS (600)." }
+          }
+        }
+      ]
+    }
+  }
+}

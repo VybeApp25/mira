@@ -1,6 +1,7 @@
 .DS_Store
 AgentService/node_modules/
 AgentService/.env
+shared/codegen/node_modules/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 build/
@@ -35,3 +36,8 @@ supabase/.temp/
 # holds absolute DerivedData paths, so each dev regenerates it locally with
 #   xcode-build-server config -project Mira.xcodeproj -scheme Mira
 buildServer.json
+
+# .NET build output (windows/) — standard bin/obj, kept out of source control the
+# same way Mira.xcodeproj's build/DerivedData are above.
+windows/**/bin/
+windows/**/obj/

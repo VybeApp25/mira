@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/auth/session-response.schema.json",
+  "title": "SupabaseAuthResponse",
+  "description": "Response body from Supabase GoTrue's POST /auth/v1/token (grant_type=password | refresh_token | id_token) and POST /auth/v1/signup when a session is issued immediately. Confirmed from Mira/Services/SupabaseService.swift's private AuthResponse + SupabaseUser structs (source of truth: Supabase GoTrue itself, not a Mira-authored contract — Mira only decodes a subset of the full response). This is NOT a Mira Edge Function; it is Supabase's own hosted auth API, called directly by the client with the anon key.",
+  "type": "object",
+  "properties": {
+    "access_token": { "type": "string", "description": "Short-lived JWT, ~1h expiry per SupabaseService.swift's auto-refresh comments." },
+    "token_type": { "type": "string" },
+    "expires_in": { "type": "integer", "description": "Seconds until access_token expires." },
+    "refresh_token": { "type": "string", "description": "Single-use — rotates on every refresh. SupabaseService.swift single-flights concurrent refreshes specifically to avoid rotating this twice." },
+    "user": { "$ref": "#/$defs/SupabaseAuthUser" }
+  },
+  "required": ["access_token", "token_type", "expires_in", "refresh_token", "user"],
+  "additionalProperties": true,
+  "$defs": {
+    "SupabaseAuthUser": {
+      "title": "SupabaseAuthUser",
+      "type": "object",
+      "description": "Only the fields Mira's client actually decodes (id, email, user_metadata.display_name) — GoTrue's real user object has more fields; this is a deliberate subset, not the full upstream shape.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "email": { "type": ["string", "null"] },
+        "user_metadata": {
+          "type": "object",
+          "description": "Mixed-type bag (e.g. email_verified: bool alongside display_name: string) — SupabaseUser.swift decodes this via a nested container specifically because of the mixed types.",
+          "properties": {
+            "display_name": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": true
+    }
+  }
+}

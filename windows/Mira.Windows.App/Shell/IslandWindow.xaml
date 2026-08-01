@@ -1,0 +1,873 @@
+<Window x:Class="Mira.Windows.App.Shell.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Mira.Windows.App"
+        mc:Ignorable="d"
+        Title="Mira"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual">
+    <Window.Resources>
+        <local:BoolToAlignmentConverter x:Key="BoolToAlignmentConverter" />
+        <local:BoolToBubbleBrushConverter x:Key="BoolToBubbleBrushConverter" />
+        <local:BoolToBubbleForegroundConverter x:Key="BoolToBubbleForegroundConverter" />
+
+        <Style x:Key="IslandTabButtonBase" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IslandTabButtonStyle" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Opacity" Value="1.0" />
+        </Style>
+        <Style x:Key="IslandTabButtonStyleDim" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Opacity" Value="0.32" />
+        </Style>
+
+        <Style x:Key="MediaCtrlButtonStyle" TargetType="Button" BasedOn="{StaticResource IslandTabButtonBase}">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+        </Style>
+        <Style x:Key="MediaCtrlButtonStylePlay" TargetType="Button" BasedOn="{StaticResource MediaCtrlButtonStyle}">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Width" Value="28" />
+        </Style>
+        <Style x:Key="LabsSubTabButtonBase" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="LabsSubTabButtonStyle" TargetType="Button" BasedOn="{StaticResource LabsSubTabButtonBase}">
+            <Setter Property="Background" Value="#382563EB" />
+        </Style>
+        <Style x:Key="LabsSubTabButtonStyleDim" TargetType="Button" BasedOn="{StaticResource LabsSubTabButtonBase}">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+
+        <Style x:Key="CalendarDayButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Mirrors SettingsView.swift's settingsGroup(...) collapsible sections. -->
+        <Style x:Key="SettingsGroupExpanderStyle" TargetType="Expander">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#ECEEED" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Border Background="#0DFFFFFF" CornerRadius="8" Padding="10,8">
+                            <DockPanel>
+                                <ToggleButton DockPanel.Dock="Top"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              Cursor="Hand" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Grid Background="Transparent">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Header, RelativeSource={RelativeSource AncestorType=Expander}}"
+                                                           FontSize="13" FontWeight="SemiBold" Foreground="#ECEEED" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="Arrow" Grid.Column="1" Text="&#x25BE;" Foreground="#8CFFFFFF" FontSize="10" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="False">
+                                                    <Setter TargetName="Arrow" Property="Text" Value="&#x25B8;" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter x:Name="ExpandSite" DockPanel.Dock="Bottom" Visibility="Collapsed" />
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="Shell" Background="Black" Margin="24,0,24,24" MouseEnter="Shell_MouseEnter" MouseLeave="Shell_MouseLeave">
+        <Grid x:Name="RootGrid">
+            <!-- Pulsing accent border shown only while a reply is in flight. -->
+            <Border x:Name="ThinkingGlow" BorderThickness="2" BorderBrush="#9E80EB" Opacity="0" IsHitTestVisible="False" />
+
+            <!-- Collapsed state: twin animated "eyes" (ports SharedStatusView.swift's
+                 notchEyes/singleEye: blink every 3.7s, subtle side-to-side gaze drift,
+                 both driven by absolute elapsed time so they never reset). Mac's own
+                 idle collapsed state shows nothing at all (its physical hardware notch
+                 already occupies that space), but Windows has no notch to hide behind,
+                 so the eyes stand in as the default resting look instead of blank space
+                 or a static text label. -->
+            <StackPanel x:Name="CollapsedIdleView" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                <Grid Width="9" Height="7" Margin="0,0,3,0">
+                    <Rectangle x:Name="EyeLeftSclera" Fill="#E6FFFFFF" Width="9" Height="7" RadiusX="3.5" RadiusY="3.5" />
+                    <Ellipse x:Name="EyeLeftIris" Width="4.5" Height="4.5" Fill="#EB0DCCC0">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeLeftIrisTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse x:Name="EyeLeftPupil" Width="2" Height="2" Fill="#CC000000">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeLeftPupilTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                </Grid>
+                <Grid Width="9" Height="7">
+                    <Rectangle x:Name="EyeRightSclera" Fill="#E6FFFFFF" Width="9" Height="7" RadiusX="3.5" RadiusY="3.5" />
+                    <Ellipse x:Name="EyeRightIris" Width="4.5" Height="4.5" Fill="#EB0DCCC0">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeRightIrisTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <Ellipse x:Name="EyeRightPupil" Width="2" Height="2" Fill="#CC000000">
+                        <Ellipse.RenderTransform>
+                            <TranslateTransform x:Name="EyeRightPupilTransform" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                </Grid>
+
+                <!-- Voice state waveform (ports SharedStatusView.swift's listeningWaveform/reedWaveform
+                     rendered alongside notchEyes): hidden at idle, shown with 5 blue bars while the
+                     realtime voice session is listening, or all 7 teal bars while it's speaking. -->
+                <StackPanel x:Name="CollapsedVoiceBars" Orientation="Horizontal" Margin="5,0,0,0"
+                            VerticalAlignment="Center" Visibility="Collapsed">
+                    <Rectangle x:Name="VoiceBar0" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar1" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar2" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar3" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar4" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar5" Width="2" Height="4" RadiusX="1" RadiusY="1" Margin="0,0,1.5,0" />
+                    <Rectangle x:Name="VoiceBar6" Width="2" Height="4" RadiusX="1" RadiusY="1" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Expanded state: tab bar + per-tab content. -->
+            <Grid x:Name="ExpandedContent" Visibility="Collapsed" Opacity="0" Margin="16,12,16,14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Tab bar: 9 feature tabs left, Settings gear + collapse pinned right. -->
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="TabHome" Tag="Home" Content="🏠" ToolTip="Home" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabChat" Tag="Chat" Content="💬" ToolTip="Chat" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabShelf" Tag="Shelf" Content="🗂" ToolTip="Shelf" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabCamera" Tag="Camera" Content="📷" ToolTip="Camera" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabAgents" Tag="Agents" Content="🤖" ToolTip="Agents" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabLabs" Tag="Labs" Content="🧪" ToolTip="Labs" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabSkills" Tag="Skills" Content="⭐" ToolTip="Skills" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabLearn" Tag="Learn" Content="📖" ToolTip="Learn" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                        <Button x:Name="TabCrons" Tag="Crons" Content="⏰" ToolTip="Crons" Click="TabButton_Click" Style="{StaticResource IslandTabButtonStyle}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="TabSettings" Tag="Settings" Content="⚙" ToolTip="Settings" Click="TabButton_Click"
+                                Style="{StaticResource IslandTabButtonStyle}" Margin="0,0,8,0" />
+                        <Button x:Name="CollapseButton" Content="&#x2715;" Width="22" Height="22"
+                                Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
+                                Click="CollapseButton_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Content area: exactly one panel visible at a time. -->
+                <Grid Grid.Row="1">
+                    <!-- Home: media panel (left, Now Playing) + calendar panel (right), mirroring NotchHomeIdleView.swift's BoringNotch-parity layout. -->
+                    <Grid x:Name="HomePanel" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Small header, not part of the Mac layout, but gives voice a one-click
+                         entry point from Home too, clicking switches to the Chat tab and
+                         starts the same embedded voice session the mic button there uses. -->
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock x:Name="HomeStatusText" Foreground="#8CFFFFFF" FontSize="10" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <Button Content="🎙 Voice" HorizontalAlignment="Right" Height="22" Padding="8,0"
+                                Background="#14FFFFFF" Foreground="#ECEEED" BorderThickness="0" Cursor="Hand"
+                                Click="OpenVoiceButton_Click" />
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Media panel -->
+                        <Grid Grid.Column="0" Margin="0,0,16,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0" Width="84" Height="84" VerticalAlignment="Top">
+                                <Image x:Name="AlbumArtGlow" Stretch="UniformToFill" Opacity="0.5" Width="84" Height="84">
+                                    <Image.Effect>
+                                        <BlurEffect Radius="24" />
+                                    </Image.Effect>
+                                </Image>
+                                <Border CornerRadius="13" Width="80" Height="80" ClipToBounds="True">
+                                    <Grid>
+                                        <Border Background="#14FFFFFF" />
+                                        <TextBlock x:Name="NoArtIcon" Text="🎵" FontSize="24" Opacity="0.25"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Image x:Name="AlbumArt" Stretch="UniformToFill" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Column="1" Margin="10,4,0,0">
+                                <TextBlock x:Name="NowPlayingNothingText" Text="Nothing Playing" Foreground="#4DFFFFFF" FontSize="12"
+                                           Visibility="Collapsed" VerticalAlignment="Center" />
+                                <StackPanel x:Name="NowPlayingContent">
+                                    <TextBlock x:Name="TrackTitleText" Foreground="White" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock x:Name="TrackArtistText" Foreground="#80FFFFFF" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+
+                                    <Grid Margin="0,8,0,0" Height="14" Cursor="Hand"
+                                          MouseLeftButtonDown="SeekTrack_MouseLeftButtonDown" MouseMove="SeekTrack_MouseMove" MouseLeftButtonUp="SeekTrack_MouseLeftButtonUp">
+                                        <Border x:Name="SeekTrack" VerticalAlignment="Center" Height="3" Background="#24FFFFFF" CornerRadius="1.5" />
+                                        <Border x:Name="SeekFill" VerticalAlignment="Center" Height="3" Width="0" HorizontalAlignment="Left" Background="#BFFFFFFF" CornerRadius="1.5" IsHitTestVisible="False" />
+                                    </Grid>
+                                    <Grid>
+                                        <TextBlock x:Name="PositionText" Foreground="#59FFFFFF" FontSize="8" HorizontalAlignment="Left" Text="0:00" />
+                                        <TextBlock x:Name="DurationText" Foreground="#59FFFFFF" FontSize="8" HorizontalAlignment="Right" Text="0:00" />
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button x:Name="ShuffleButton" Content="🔀" ToolTip="Shuffle" Click="ShuffleButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button Content="⏮" ToolTip="Previous" Click="PreviousButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button x:Name="PlayPauseButton" Content="▶" ToolTip="Play/Pause" Click="PlayPauseButton_Click" Style="{StaticResource MediaCtrlButtonStylePlay}" />
+                                        <Button Content="⏭" ToolTip="Next" Click="NextButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                        <Button x:Name="RepeatButton" Content="🔁" ToolTip="Repeat" Click="RepeatButton_Click" Style="{StaticResource MediaCtrlButtonStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+
+                        <!-- Calendar panel -->
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="CalendarMonthYearText" Foreground="White" FontSize="13" FontWeight="Bold" />
+                            <StackPanel x:Name="CalendarDateStrip" Orientation="Horizontal" Margin="0,8,0,8" />
+                            <Border BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Margin="0,0,0,10" />
+                            <StackPanel HorizontalAlignment="Center" Margin="0,14,0,0">
+                                <TextBlock Text="📅" FontSize="16" Opacity="0.25" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="10" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="170"
+                                           Text="Calendar isn't connected on Windows yet." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    </Grid>
+
+                    <!-- Camera -->
+                    <Grid x:Name="CameraPanel" Visibility="Collapsed">
+                        <Image x:Name="CameraImage" Stretch="Uniform" />
+                        <StackPanel x:Name="CameraPlaceholder" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="📷" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                            <TextBlock x:Name="CameraStatusText" Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap"
+                                       TextAlignment="Center" MaxWidth="360" Text="Starting camera…" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Shelf: temporary drag-and-drop file staging area (Documents\Shelf), mirroring
+                         Mira/Services/FileShelf.swift's FileShelfService (confirmed NOT a memory/RAG
+                         system, just a capped holding pen you can drop files into and drag back out). -->
+                    <Grid x:Name="ShelfPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="File Shelf" Foreground="White" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="📁 Open Folder" Click="ShelfOpenFolderButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                <Button Content="Clear" Click="ShelfClearButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1" x:Name="ShelfDropZone" BorderThickness="1.5" BorderBrush="#38FFFFFF" CornerRadius="10"
+                                Height="52" Margin="0,0,0,10" AllowDrop="True"
+                                Drop="ShelfDropZone_Drop" DragEnter="ShelfDropZone_DragEnter" DragOver="ShelfDropZone_DragEnter" DragLeave="ShelfDropZone_DragLeave">
+                            <TextBlock x:Name="ShelfDropZoneText" Text="Drop files here" Foreground="#66FFFFFF" FontSize="11"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="ShelfList" />
+                        </ScrollViewer>
+
+                        <TextBlock x:Name="ShelfLimitText" Grid.Row="3" Foreground="#59FFFFFF" FontSize="9" Margin="0,8,0,0" />
+                    </Grid>
+
+                    <!-- Labs: sub-tab bar mirroring LabsTabView.swift, only Clipboard is real. -->
+                    <Grid x:Name="LabsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="LabsSubTabClipboard" Tag="Clipboard" Content="📋 Clipboard" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            <Button Tag="Shelf" Content="🗃 Shelf" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            <Button Tag="Shortcuts" Content="⌨ Shortcuts" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                            <Button Tag="Queue" Content="🔢 Queue" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                            <Button Tag="Reminders" Content="🔔 Reminders" Click="LabsSubTabButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <Grid x:Name="LabsClipboardPanel" Visibility="Visible">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBox x:Name="ClipboardSearchBox" Grid.Row="0" Height="26" Margin="0,0,0,8"
+                                         TextChanged="ClipboardSearchBox_TextChanged" />
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="ClipboardList" />
+                                </ScrollViewer>
+                            </Grid>
+
+                            <StackPanel x:Name="LabsPlaceholderPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock x:Name="LabsPlaceholderText" Foreground="#6B736F" FontSize="13"
+                                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                            </StackPanel>
+
+                            <!-- Same FileShelfService data as the top-level Shelf tab (Mac's own
+                                 MiraIslandView.swift/LabsTabView.swift render the identical
+                                 FileShelfLabsView from both places), so this just points there
+                                 rather than duplicating the drop-zone/list UI a second time. -->
+                            <StackPanel x:Name="LabsShelfRedirectPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="🗃" FontSize="22" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320" Margin="0,0,0,10"
+                                           Text="Shelf lives in its own tab now." />
+                                <Button Content="Open Shelf tab" Click="LabsShelfOpenButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Agents: submit + track background tasks. Only DeepResearch/ContentGeneration/Custom
+                         have a real runner; WebsiteBuilder and its whole family (edit/improve/health/publish)
+                         are deliberately deferred, see IMPLEMENTATION_PLAN.md. -->
+                    <Grid x:Name="AgentsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="AgentPromptBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
+                                     TextChanged="AgentPromptBox_TextChanged" KeyDown="AgentPromptBox_KeyDown" />
+                            <Border x:Name="AgentTypeBadge" Grid.Column="1" Background="#382563EB" CornerRadius="10"
+                                    Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="AgentTypeBadgeText" Foreground="White" FontSize="10" />
+                            </Border>
+                            <Button Grid.Column="2" Content="Run" Width="56" Height="30" Margin="8,0,0,0" Click="AgentSubmitButton_Click" />
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="AgentJobList" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Skills: toggle prompt-injection text that biases how Mira responds, see
+                         IMPLEMENTATION_PLAN.md for why this is safe on Windows today (no unsandboxed
+                         tool surface for a skill's text to steer toward, unlike the Mac original). -->
+                    <Grid x:Name="SkillsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button x:Name="SkillCreateButton" Content="✨ Create Skill" Click="SkillCreateButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                            <Button x:Name="SkillImportButton" Content="📂 Import" Click="SkillImportButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer x:Name="SkillsScroller" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="SkillsList" />
+                            </ScrollViewer>
+
+                            <StackPanel x:Name="SkillsUpsellPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="⭐" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"
+                                           Text="Skills need a Pro or Ultra plan. Upgrade in Settings to bias how Mira responds." />
+                            </StackPanel>
+
+                            <Grid x:Name="SkillCreatePanel" Visibility="Collapsed" Background="#EE101216">
+                                <StackPanel MaxWidth="420" VerticalAlignment="Top" Margin="0,10,0,0">
+                                    <TextBlock Text="Describe the skill you want" Foreground="White" FontSize="12" Margin="0,0,0,6" />
+                                    <TextBox x:Name="SkillDescriptionBox" Height="28" Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <Button Content="Generate" Height="26" Width="80" Click="SkillGenerateButton_Click" />
+                                        <Button Content="Cancel" Height="26" Width="70" Margin="8,0,0,0" Click="SkillCreateCancelButton_Click" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="SkillGenerateStatusText" Foreground="#8CFFFFFF" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                    <Border x:Name="SkillPreviewBorder" Visibility="Collapsed" Background="#0DFFFFFF" CornerRadius="6" Padding="8" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <TextBlock x:Name="SkillPreviewText" Foreground="#CCFFFFFF" FontSize="11" TextWrapping="Wrap" />
+                                            <Button Content="Save Skill" Height="26" Width="90" HorizontalAlignment="Left" Margin="0,8,0,0" Click="SkillSaveButton_Click" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Crons: recurring background tasks that fire a prompt into Claude on a
+                         schedule, mirroring CronsTabView.swift/CronScheduler.swift. No plan
+                         gating (confirmed the real Mac source never checks EntitlementService
+                         for this feature, unlike Agents/Skills). -->
+                    <Grid x:Name="CronsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Scheduled Tasks" Foreground="White" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" />
+                            <Button Content="+ New" HorizontalAlignment="Right" Click="CronCreateButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="CronList" />
+                            </ScrollViewer>
+
+                            <StackPanel x:Name="CronEmptyPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <TextBlock Text="⏰" FontSize="24" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <TextBlock Foreground="#8CFFFFFF" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"
+                                           Text="No scheduled tasks. Tap + New to schedule a recurring Mira task." />
+                            </StackPanel>
+
+                            <!-- Create/edit overlay -->
+                            <Grid x:Name="CronEditorPanel" Visibility="Collapsed" Background="#EE101216">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel MaxWidth="420" Margin="0,4,0,0">
+                                        <TextBlock x:Name="CronEditorTitleText" Text="New Scheduled Task" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Task name" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBox x:Name="CronNameBox" Height="26" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Prompt" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBox x:Name="CronPromptBox" Height="70" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Schedule" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button x:Name="CronKindHourlyButton" Content="Hourly" Tag="Hourly" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                                            <Button x:Name="CronKindDailyButton" Content="Daily" Tag="Daily" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                            <Button x:Name="CronKindWeeklyButton" Content="Weekly" Tag="Weekly" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                            <Button x:Name="CronKindCustomButton" Content="Custom" Tag="Custom" Click="CronKindButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="CronHourlyHintText" Text="Fires once per hour." Foreground="#59FFFFFF" FontSize="11" Visibility="Collapsed" Margin="0,0,0,10" />
+
+                                        <StackPanel x:Name="CronWeekdayRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,8">
+                                            <TextBlock Text="Day" Foreground="#73FFFFFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="CronWeekdayCombo" Width="90" />
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="CronTimeRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,10">
+                                            <TextBlock Text="Time" Foreground="#73FFFFFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="CronHourCombo" Width="60" />
+                                            <TextBlock Text=":" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="4,0" />
+                                            <ComboBox x:Name="CronMinuteCombo" Width="60" />
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="CronIntervalRow" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,10">
+                                            <TextBlock Text="Every" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBox x:Name="CronIntervalBox" Width="50" Text="30" />
+                                            <TextBlock Text="minutes" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="CronEditorErrorText" Foreground="#F87171" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed" />
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="CronSaveButton" Content="Save" Height="28" Width="80" Click="CronSaveButton_Click" />
+                                            <Button Content="Cancel" Height="28" Width="70" Margin="8,0,0,0" Click="CronCancelButton_Click" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Learn: guided, step-by-step coaching lessons, mirroring LessonsTabView.swift/
+                         TeachingEngine.swift trimmed to deterministic checks only (no vision-grounded
+                         rings, no vision-observed steps, no autonomous mode this pass; see
+                         IMPLEMENTATION_PLAN.md). No plan gating (confirmed absent from the real Mac
+                         source, same as Crons). -->
+                    <Grid x:Name="LearnPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock Text="Learn" Foreground="White" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" />
+                            <Button Content="+ Teach an app" HorizontalAlignment="Right" Click="LearnTeachButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                        </Grid>
+
+                        <Grid Grid.Row="1">
+                            <ScrollViewer x:Name="LearnListScroller" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="LearnLessonList" />
+                            </ScrollViewer>
+
+                            <!-- Running-lesson view -->
+                            <Grid x:Name="LearnRunningPanel" Visibility="Collapsed">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0" Margin="0,0,0,10">
+                                    <TextBlock x:Name="LearnRunningTitleText" Foreground="White" FontSize="13" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                    <Button Content="Stop" HorizontalAlignment="Right" Click="LearnStopButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                </Grid>
+
+                                <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                    <TextBlock x:Name="LearnStepProgressText" Foreground="#73FFFFFF" FontSize="10" Margin="0,0,0,10" HorizontalAlignment="Center" />
+                                    <Border Background="#14FFFFFF" CornerRadius="10" Padding="16">
+                                        <StackPanel>
+                                            <TextBlock x:Name="LearnStepInstructionText" Foreground="White" FontSize="14" TextWrapping="Wrap" TextAlignment="Center" />
+                                            <TextBlock x:Name="LearnStepRemediationText" Foreground="#73FFFFFF" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0" />
+                                            <TextBlock x:Name="LearnStepWaitingText" Foreground="#4DFFFFFF" FontSize="10" TextAlignment="Center" Margin="0,10,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                                    <Button x:Name="LearnDoneButton" Content="Done" Click="LearnDoneButton_Click" />
+                                    <Button Content="Skip" Margin="8,0,0,0" Click="LearnSkipButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Teach-a-new-app overlay -->
+                            <Grid x:Name="LearnTeachPanel" Visibility="Collapsed" Background="#EE101216">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel MaxWidth="420" Margin="0,4,0,0">
+                                        <TextBlock Text="Teach a new app" Foreground="White" FontSize="13" FontWeight="Bold" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="App name" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" />
+                                        <TextBox x:Name="LearnAppNameBox" Height="26" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Process name (optional -- lets Mira detect when it's open)" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap" />
+                                        <TextBox x:Name="LearnProcessNameBox" Height="26" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="What do you want to learn? (optional -- leave blank for a basic walkthrough)" Foreground="#73FFFFFF" FontSize="11" Margin="0,0,0,4" TextWrapping="Wrap" />
+                                        <TextBox x:Name="LearnGoalBox" Height="50" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10" />
+
+                                        <TextBlock x:Name="LearnTeachStatusText" Foreground="#8CFFFFFF" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="LearnTeachSaveButton" Content="Create Lesson" Height="28" Click="LearnTeachSaveButton_Click" />
+                                            <Button Content="Cancel" Height="28" Width="70" Margin="8,0,0,0" Click="LearnTeachCancelButton_Click" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Chat -->
+                    <Grid x:Name="ChatPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer x:Name="Scroller" Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                            <ItemsControl x:Name="MessagesList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:ChatBubbleViewModel}">
+                                        <Border Margin="4" Padding="10,6" CornerRadius="10" MaxWidth="460"
+                                                HorizontalAlignment="{Binding IsUser, Converter={StaticResource BoolToAlignmentConverter}}"
+                                                Background="{Binding IsUser, Converter={StaticResource BoolToBubbleBrushConverter}}">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                       Foreground="{Binding IsUser, Converter={StaticResource BoolToBubbleForegroundConverter}}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Grid Grid.Row="1" x:Name="ChatComposerRow">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="InputBox" Grid.Column="0" Height="30" VerticalContentAlignment="Center"
+                                     KeyDown="InputBox_KeyDown" />
+                            <Button x:Name="VoiceMicButton" Grid.Column="1" Content="🎙" Width="34" Height="30" Margin="8,0,0,0"
+                                    Click="VoiceMicButton_Click" ToolTip="Start a voice session" />
+                            <Button x:Name="SendButton" Grid.Column="2" Content="Send" Width="60" Height="30" Margin="8,0,0,0"
+                                    Click="SendButton_Click" />
+                        </Grid>
+
+                        <!-- Voice-active composer: replaces the text row above while a realtime
+                             voice session is connecting or live, mirrors IslandChatView.swift's
+                             inlineFollowUpComposer/notchActivitySurface swap. Voice never opens a
+                             separate window; it always lives right here in the notch's Chat tab. -->
+                        <Grid Grid.Row="1" x:Name="VoiceComposerPanel" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="VoiceStatusText" Grid.Column="0" Text="Connecting…" Foreground="#ECEEED"
+                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button x:Name="VoiceCloseButton" Grid.Column="1" Content="✕" Width="34" Height="30" Margin="8,0,0,0"
+                                    Click="VoiceCloseButton_Click" ToolTip="End voice session" />
+                        </Grid>
+                    </Grid>
+
+                    <!-- Settings: restructured to mirror SettingsView.swift's collapsible-group
+                         layout (7 groups on Mac; only the 4 with real content on Windows are
+                         rendered here. Voice & Audio, Menu Bar, and Agents & Memory would be
+                         empty shells this pass, so they're omitted rather than shown hollow.
+                         See IMPLEMENTATION_PLAN.md for the full section-by-section scope decision. -->
+                    <ScrollViewer x:Name="SettingsScroller" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="SettingsPanel" MaxWidth="420" HorizontalAlignment="Left">
+
+                            <!-- General: Account + Appearance -->
+                            <Expander Header="General" IsExpanded="True" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Account" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+
+                                    <StackPanel x:Name="SettingsSignedOutPanel">
+                                        <TextBlock x:Name="ModeLabel" Text="Sign in" Foreground="#ECEEED" FontSize="14" Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Email" Foreground="#ADB5B2" FontSize="11" />
+                                        <TextBox x:Name="EmailBox" Margin="0,2,0,10" />
+
+                                        <TextBlock Text="Password" Foreground="#ADB5B2" FontSize="11" />
+                                        <PasswordBox x:Name="PasswordBox" Margin="0,2,0,10" />
+
+                                        <StackPanel x:Name="DisplayNamePanel" Visibility="Collapsed">
+                                            <TextBlock Text="Name" Foreground="#ADB5B2" FontSize="11" />
+                                            <TextBox x:Name="DisplayNameBox" Margin="0,2,0,10" />
+                                        </StackPanel>
+
+                                        <Button x:Name="PrimaryActionButton" Content="Sign In" Height="28" Click="PrimaryActionButton_Click" />
+
+                                        <Button x:Name="ToggleModeButton" Content="Need an account? Create one"
+                                                Background="Transparent" BorderThickness="0" Foreground="#ADB5B2" Cursor="Hand"
+                                                HorizontalAlignment="Left" Margin="0,8,0,0" Click="ToggleModeButton_Click" />
+
+                                        <TextBlock x:Name="ErrorText" Foreground="#F87171" TextWrapping="Wrap" Margin="0,10,0,0" />
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="SettingsSignedInPanel" Visibility="Collapsed">
+                                        <TextBlock x:Name="SignedInAsText" Foreground="#ECEEED" FontSize="13" Margin="0,0,0,4" />
+                                        <TextBlock x:Name="PlanText" Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,12" />
+
+                                        <Button Content="Refresh plan" Height="26" Width="110" HorizontalAlignment="Left"
+                                                Margin="0,0,0,14" Click="RefreshPlanButton_Click" />
+
+                                        <Button Content="Sign Out" Height="26" Width="90" HorizontalAlignment="Left" Click="SignOutButton_Click" />
+                                    </StackPanel>
+
+                                    <Border BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" Margin="0,16,0,12" />
+
+                                    <TextBlock Text="Appearance" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <CheckBox x:Name="CatModeCheckBox" Content="Cat mode 🐱 — Mira responds with feline energy"
+                                              Foreground="#ECEEED" Margin="0,0,0,8" Checked="CatModeCheckBox_Changed" Unchecked="CatModeCheckBox_Changed" />
+                                    <CheckBox x:Name="ShowInCaptureCheckBox" Content="Show in screen recordings"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="ShowInCaptureCheckBox_Changed" Unchecked="ShowInCaptureCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,8"
+                                               Text="When off, Mira's window is excluded from screen recordings and shares (you still see it normally)." />
+                                    <CheckBox x:Name="SoundEffectsCheckBox" Content="Sound effects"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="SoundEffectsCheckBox_Changed" Unchecked="SoundEffectsCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="Chimes for sending/receiving messages, agent tasks, and other UI events." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Voice &amp; Audio -->
+                            <Expander Header="Voice &amp; Audio" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Input" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="InputDeviceCombo" Height="26" SelectionChanged="InputDeviceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
+                                               Text="Which microphone Mira listens to during a voice session." />
+
+                                    <TextBlock Text="Output" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="OutputDeviceCombo" Height="26" SelectionChanged="OutputDeviceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
+                                               Text="Which speaker/headphones Mira's voice replies play through." />
+
+                                    <TextBlock Text="Mira Voice" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="MiraVoiceCombo" Height="26" SelectionChanged="MiraVoiceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
+                                               Text="Which voice Mira speaks with. Takes effect on the next voice session." />
+
+                                    <TextBlock Text="Hey Mira" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <TextBlock x:Name="WakeWordDeviceText" Foreground="#ADB5B2" FontSize="11" TextWrapping="Wrap" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,16"
+                                               Text="Windows' own on-device speech recognition powers the wake word and always listens through your Windows default communications microphone, not the Input device above — change it in Windows Sound settings if &quot;Hey Mira&quot; isn't hearing you." />
+
+                                    <TextBlock Text="Always-On" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <CheckBox x:Name="AlwaysOnCheckBox" Content="Keep Mira listening continuously"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="AlwaysOnCheckBox_Changed" Unchecked="AlwaysOnCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="Opens a voice session at launch and keeps it live, so you can just start talking without saying &quot;Hey Mira&quot; or clicking the mic first. Off by default." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Screen &amp; Guidance: Autonomy -->
+                            <Expander Header="Screen &amp; Guidance" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel x:Name="AutonomyGroupSignedInPanel" Margin="0,10,0,4" Visibility="Collapsed">
+                                    <TextBlock Text="Autonomous" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <Border BorderBrush="#E0A000" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <CheckBox x:Name="AutonomyCheckBox" Content="Allow Mira to control my screen (computer use)"
+                                                      Foreground="#ECEEED" Checked="AutonomyCheckBox_Changed" Unchecked="AutonomyCheckBox_Changed" />
+                                            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#C99A3E" Margin="0,4,0,0"
+                                                       Text="When on, chat requests can move your mouse, click, type, and take screenshots to complete tasks. Off by default." />
+                                        </StackPanel>
+                                    </Border>
+                                    <CheckBox x:Name="ConfirmRiskyCheckBox" Content="Confirm risky actions"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="ConfirmRiskyCheckBox_Changed" Unchecked="ConfirmRiskyCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap"
+                                               Text="Pause before anything hard to undo (send, delete, buy, submit…). Off = fully hands-off." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Shortcuts -->
+                            <Expander Header="Shortcuts" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Keyboard Shortcuts" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <TextBlock Foreground="#ADB5B2" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap"
+                                               Text="Expand for text: Ctrl+Alt+T. Start voice: Ctrl+Alt+V. (Not yet customizable on Windows.)" />
+
+                                    <TextBlock Text="Voice" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <CheckBox x:Name="WakeWordCheckBox" Content="&quot;Hey Mira&quot; wake word"
+                                              Foreground="#ECEEED" Margin="0,0,0,4" Checked="WakeWordCheckBox_Changed" Unchecked="WakeWordCheckBox_Changed" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,16"
+                                               Text="Always-on, on-device listening for &quot;hey mira&quot; (and close mishearings) to start a voice session hands-free." />
+
+                                    <TextBlock Text="Web Browser" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <ComboBox x:Name="BrowserPreferenceCombo" Height="26" SelectionChanged="BrowserPreferenceCombo_SelectionChanged" />
+                                    <TextBlock Foreground="#59FFFFFF" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="Which browser opens search results, videos, and links Mira finds for you." />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Agents &amp; Memory: Memory only this pass (Connected Apps, Import
+                                 Knowledge, Agent Folder, Transcripts Folder, and Radial Launcher all
+                                 need their own new subsystem and stay deferred, see IMPLEMENTATION_PLAN.md). -->
+                            <Expander Header="Agents &amp; Memory" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock Text="Memory" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" />
+                                        <Button x:Name="MemoryClearAllButton" Content="Clear All" HorizontalAlignment="Right"
+                                                Click="MemoryClearAllButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                    </Grid>
+
+                                    <StackPanel x:Name="MemoryClearConfirmPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                                        <TextBlock Text="Delete everything Mira remembers about you? This can't be undone."
+                                                   Foreground="#F87171" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="Yes, clear everything" Click="MemoryClearConfirmButton_Click" Style="{StaticResource LabsSubTabButtonStyle}" />
+                                            <Button Content="Cancel" Click="MemoryClearCancelButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <TextBlock x:Name="MemoryEmptyText" Visibility="Collapsed" Foreground="#59FFFFFF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
+                                               Text="Nothing remembered yet. Try telling Mira something like &quot;remember that my favorite editor is VS Code.&quot;" />
+
+                                    <StackPanel x:Name="MemoryList" />
+                                </StackPanel>
+                            </Expander>
+
+                            <!-- Advanced -->
+                            <Expander Header="Advanced" Style="{StaticResource SettingsGroupExpanderStyle}">
+                                <StackPanel Margin="0,10,0,4">
+                                    <TextBlock Text="Privacy" Foreground="#8CFFFFFF" FontSize="11" FontWeight="Bold" Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Privacy Policy" Click="PrivacyPolicyButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" />
+                                        <Button Content="Terms of Service" Click="TermsButton_Click" Style="{StaticResource LabsSubTabButtonStyleDim}" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Placeholder for the 6 not-yet-built tabs -->
+                    <StackPanel x:Name="PlaceholderPanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock x:Name="PlaceholderText" Foreground="#6B736F" FontSize="13"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

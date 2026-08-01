@@ -43,7 +43,7 @@ private struct IslandShape: Shape, Animatable {
 
 // MARK: - Tab enum
 
-enum IslandTab: Equatable { case home, chat, shelf, camera, agents, learn, settings, crons, labs, skills }
+enum IslandTab: Equatable { case home, chat, shelf, camera, agents, learn, settings, crons, labs, skills, modules }
 
 // MARK: - Main island view
 
@@ -59,6 +59,12 @@ struct MiraIslandView: View {
     @ObservedObject private var onboarding = NotchOnboardingManager.shared
     @ObservedObject private var engine     = ProjectEngine.shared
     @ObservedObject private var pointTo    = PointToService.shared
+    // Drives the module panel's height and selection (Phase 0 shell contract).
+    @ObservedObject private var moduleRegistry = NotchModuleRegistry.shared
+    // Rotating collapsed-strip activities (media / timer / next event).
+    @ObservedObject private var liveActivity   = LiveActivityService.shared
+    // Drives the brief widen-and-name when a new track starts.
+    @ObservedObject private var trackChange    = TrackChangeMonitor.shared
     // Observe the voice service DIRECTLY so listening/speaking drive the collapsed
     // pill even when the island is closed. (miraState.realtimeState is only mirrored
     // by IslandChatView, which exists only while expanded — so in always-on/closed
@@ -68,7 +74,6 @@ struct MiraIslandView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var selectedTab: IslandTab = .home
     @StateObject private var pillState = PillStateModel()
     // Agent flight burst — pulsing ring that fires on job launch
     @State private var showBurst       = false
@@ -83,13 +88,57 @@ struct MiraIslandView: View {
     // True whenever any non-idle visual indicator should appear in the collapsed pill.
     // Also true while the PointToService cursor is in flight so the pill stays wide.
     private var collapsedIndicatorActive: Bool {
-        pillState.mode != .idle || pointTo.isActive
+        // A rotating live activity also counts: without it the pill keeps notch
+        // width and the drop strip stays 0pt tall, so the activity text would be
+        // rendered into no space at all.
+        pillState.mode != .idle || pointTo.isActive || liveActivity.current != nil
+    }
+
+    /// True when the rotating strip's current item is media AND Mira has nothing
+    /// of its own to say — media then renders in the ears rather than below.
+    /// A notification inside its brief pop window.
+    ///
+    /// This exists to let an arriving alert outrank the agent-task COUNT and the
+    /// pointing badge in the collapsed pill. Those are ambient — a task badge can
+    /// sit there for the length of a build — and while one was showing, a text
+    /// did not merely arrive late, it never appeared in the closed notch at all.
+    ///
+    /// Deliberately does NOT outrank voice state or the HUD status text. The pill
+    /// is how you know Mira is listening, thinking or speaking, and that is not
+    /// something to paper over for ten seconds. Those two still win.
+    private var isNotificationPop: Bool {
+        liveActivity.current?.kind == .notification
+    }
+
+    private var isMediaActivity: Bool {
+        liveActivity.current?.kind == .media
+            && hudVM.statusText.isEmpty
+            && taskStore.tasks.isEmpty
+            && !pointTo.isActive
+            && voiceModeLabel == nil
     }
 
     // Widen the pill when active. Narrower for pure voice states (animation only, no text badge).
     private var pillW: CGFloat {
-        if isOnboarding || isExpanded { return AnimationController.expandedW }
+        if isOnboarding || isExpanded { return layout.expandedWidth }
         guard collapsedIndicatorActive else { return geometry.notchWidth }
+        if isMediaActivity {
+            // Ears need room for artwork on the left and the waveform on the
+            // right. On a track change MacNotch briefly grows to name what just
+            // started, then settles.
+            //
+            // The widened size is MEASURED: its pill goes 528 -> 841px, a ratio
+            // of 1.59. Applied to the compact form here (notchWidth + 96 = 296
+            // on a 200pt cutout) that lands at ~471, i.e. notchWidth + 271. The
+            // previous +190 was a guess and came out visibly too narrow to hold
+            // a track title.
+            return geometry.notchWidth + (trackChange.justChanged ? 271 : 96)
+        }
+        // A notification gets more room than the other collapsed states. It is
+        // replacing a macOS banner, which shows sender AND message in full, so
+        // truncating to "Marcus Webb: ho..." would make the notch a worse
+        // version of the thing it just suppressed.
+        if isNotificationPop { return geometry.notchWidth + 200 }
         return geometry.notchWidth + (hasCollapsedText ? 120 : 54)
     }
 
@@ -105,17 +154,47 @@ struct MiraIslandView: View {
         }
     }
     private var hasCollapsedText: Bool {
-        !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive || voiceModeLabel != nil
+        !hudVM.statusText.isEmpty || !taskStore.tasks.isEmpty || pointTo.isActive
+            || voiceModeLabel != nil || liveActivity.current != nil
     }
     // The physical notch occludes the top `notchHeight`, so collapsed content can't
     // render there. When active we grow the pill DOWNWARD and place the indicator +
     // label in this strip below the cutout (Dynamic-Island style).
-    private var collapsedDropH: CGFloat { (!isExpanded && collapsedIndicatorActive) ? 34 : 0 }
-    // Settings/agents/crons are content-dense — give them the tall panel.
-    private var expandedHeight: CGFloat {
-        selectedTab == .home ? AnimationController.expandedH
-                             : AnimationController.expandedTallH
+    // Media lives in the ears at notch height, so it needs no drop strip at all —
+    // that is what keeps the pill wide and shallow instead of tall with something
+    // dangling under it.
+    private var collapsedDropH: CGFloat {
+        guard !isExpanded, collapsedIndicatorActive else { return 0 }
+        return isMediaActivity ? 0 : 34
     }
+    // Settings/agents/crons are content-dense — give them the tall panel.
+    /// The selected module declares its own height. No per-tab special casing and
+    /// no nav bar to account for any more — the module IS the panel. The dock
+    /// floats outside the pill, so it adds nothing to the PANEL height.
+    private var expandedHeight: CGFloat {
+        moduleRegistry.currentHeight
+    }
+
+    /// Whether the detached dock strip is currently drawn. Must match the
+    /// condition inside NotchModuleDockStrip, or the hover zone and the visible
+    /// strip disagree.
+    private var dockVisible: Bool {
+        let pinned = moduleRegistry.pinnedModules.count
+        return pinned > 1 || moduleRegistry.visibleModules.count > pinned
+    }
+
+    /// Vertical space the dock occupies BELOW the pill: the measured 21pt gap
+    /// plus the strip itself (28pt circles + 12pt padding).
+    ///
+    /// This has to be included in the hover zone even though it isn't part of the
+    /// panel. The dock lives outside the pill, so without it the zone ends at the
+    /// panel's bottom edge and moving the cursor onto a dock icon reads as
+    /// leaving the island — which collapsed the notch the moment you tried to
+    /// click one.
+    private var dockOverhang: CGFloat { dockVisible ? 21 + 40 : 0 }
+
+    /// What the hover zone is sized from: panel + dock + a little slop.
+    private var hoverHeight: CGFloat { expandedHeight + dockOverhang }
     private var pillH: CGFloat {
         if isOnboarding { return animController.currentExpandedH }
         // Expanded: add the notch-height band on top so seating content below the
@@ -137,28 +216,50 @@ struct MiraIslandView: View {
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.40), value: pillState.mode)
             }
-            pill
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
-            if let tab = notif.object as? IslandTab {
-                withAnimation(.easeInOut(duration: 0.15)) { selectedTab = tab }
-            } else if let str = notif.userInfo?["tab"] as? String {
-                switch str {
-                case "agents": withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .agents }
-                case "labs":   withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs   }
-                default:       withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .home   }
+            // Dock floats DETACHED below the slab, 21pt clear of it (measured),
+            // exactly as MacNotch's does — it is not part of the panel.
+            VStack(spacing: 21) {
+                pill
+                if isExpanded {
+                    NotchModuleDockStrip()
+                        .transition(.opacity)
                 }
             }
         }
+        .onAppear {
+            registerTabModules()
+            // Seed the zone; otherwise it keeps AnimationController's 252pt
+            // default until something happens to change the height.
+            syncHoverZone()
+        }
+        // Existing "show me tab X" callers now select the matching MODULE, so
+        // every deep link across the app keeps working with the nav bar gone.
+        .onReceive(NotificationCenter.default.publisher(for: .miraTabSelected)) { notif in
+            if let tab = notif.object as? IslandTab {
+                moduleRegistry.select(Self.moduleID(for: tab))
+            } else if let str = notif.userInfo?["tab"] as? String {
+                moduleRegistry.select(str)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .miraShowLabsClipboard)) { _ in
-            withAnimation(.easeInOut(duration: 0.15)) { selectedTab = .labs }
+            moduleRegistry.select("labs")
         }
-        // Keep the hover zone in sync with the per-tab panel height — without
-        // this, moving the cursor into the lower half of a tall tab collapses it.
-        .onChange(of: selectedTab) { _, _ in
-            animController.currentExpandedH = expandedHeight
-            NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
+        // ⌃⌥← / ⌃⌥→ walk the carousel without the mouse.
+        .onReceive(NotificationCenter.default.publisher(for: .miraModulePrev)) { _ in
+            moduleRegistry.advance(by: -1)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .miraModuleNext)) { _ in
+            moduleRegistry.advance(by: 1)
+        }
+        // Keep the hover zone in sync with the panel + dock. Switching modules
+        // changes the height, and the dock appearing or disappearing changes how
+        // far below the panel the island still counts as "hovered".
+        //
+        // The previous version of the second handler was gated on
+        // `selectedTab == .modules`, which stopped being true the moment modules
+        // replaced tabs as the navigation — so the zone never resized at all.
+        .onChange(of: moduleRegistry.currentHeight) { _, _ in syncHoverZone() }
+        .onChange(of: dockVisible)                  { _, _ in syncHoverZone() }
         // Opt out of the macOS safe-area inset (menu bar height ≈ 33pt).
         // Without this the pill is pushed ~33pt below the notch, leaving a gap.
         .ignoresSafeArea()
@@ -236,11 +337,31 @@ struct MiraIslandView: View {
             } else if isExpanded {
                 expandedContent
                     .opacity(animController.contentVisible ? 1 : 0)
+                    // The moving half of frame-snap-then-animate-content. The frame
+                    // is already at its final size by the time this runs (expand()
+                    // delays contentVisible ~0.16s), so the content settles INTO a
+                    // stationary panel instead of riding it open. Small on purpose —
+                    // at more than a few points it reads as a slide-in.
+                    .offset(y: animController.contentVisible ? 0 : -7)
                     .animation(.easeInOut(duration: 0.14), value: animController.contentVisible)
+                    .animation(reduceMotion ? nil
+                                            : .spring(response: 0.30, dampingFraction: 0.85),
+                               value: animController.contentVisible)
             } else {
                 collapsedContent
                     .opacity(animController.contentVisible ? 0 : 1)
                     .animation(.easeInOut(duration: 0.10), value: animController.contentVisible)
+            }
+
+            // Media in the EARS — the menu-bar space either side of the camera
+            // cutout — at notch height. Content beside the cutout reads as part of
+            // the hardware; the same content hanging below it reads as a banner
+            // the app is showing you, which is what the drop-strip version did.
+            if !isExpanded && isMediaActivity {
+                CollapsedMediaEarsView(notchWidth: geometry.notchWidth)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .frame(height: geometry.notchHeight)
+                    .transition(.opacity)
             }
 
             // Always-mounted SharedStatusView — never recreated on expand/collapse because it
@@ -314,18 +435,36 @@ struct MiraIslandView: View {
             x: 0,
             y: isExpanded ? 22 : 6
         )
-        .animation(
-            reduceMotion
-                ? .easeInOut(duration: 0.10)
-                : (isExpanded
-                    ? .spring(response: 0.40, dampingFraction: 0.74, blendDuration: 0)
-                    : .spring(response: 0.30, dampingFraction: 0.82, blendDuration: 0)),
-            value: isExpanded
-        )
+        // FRAME SNAPS — measured behavior, not taste.
+        //
+        // Polling MacNotch's window server every 3ms across three hover cycles
+        // returned ZERO intermediate sizes: 930x112 -> 1080x230 in a single
+        // sample. A 300ms spring would have produced ~100 samples. Its panel
+        // does not resize over time at all; it jumps, and every bit of motion
+        // you perceive is content moving INSIDE the new frame.
+        //
+        // Mira sprang the frame here (response 0.40 expanding / 0.30 collapsing),
+        // which is why the panel read as inflating rather than as a surface that
+        // was simply already there. `nil` kills animation for the frame, shape,
+        // and shadow. Inner `.animation(_:value:)` modifiers sit closer to their
+        // leaves and still win, so the content keeps animating — that half is
+        // driven by animController.contentVisible, which is deliberately delayed
+        // ~0.16s past the frame change so content moves into a settled frame.
+        //
+        // reduceMotion gets the same snap: there is nothing to reduce.
+        .animation(nil, value: isExpanded)
         // Animate the width change when the collapsed indicator activates/deactivates.
         .animation(
             reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
             value: collapsedIndicatorActive
+        )
+        // The track-change widen DOES animate, unlike expand/collapse. It is a
+        // change of content within the collapsed state rather than the panel
+        // opening, and MacNotch visibly grows, overshoots and settles here.
+        // Spring constants solved from a 60fps capture — see TrackChangeMonitor.
+        .animation(
+            reduceMotion ? nil : TrackChangeMonitor.widenSpring,
+            value: trackChange.justChanged
         )
     }
 
@@ -334,6 +473,7 @@ struct MiraIslandView: View {
     // Only active states (voice, agent) render a visible indicator.
 
     @ObservedObject private var hudVM = HUDViewModel.shared
+    @ObservedObject private var layout = NotchLayoutService.shared
 
     // Supplementary left-side badge when an agent task or cursor action is active.
     // Voice states (listening/thinking/speaking) show no text — the centered animation speaks.
@@ -346,7 +486,7 @@ struct MiraIslandView: View {
                         .foregroundColor(.white.opacity(0.80))
                         .lineLimit(1)
                         .transition(.opacity)
-                } else if !taskStore.tasks.isEmpty {
+                } else if !taskStore.tasks.isEmpty && !isNotificationPop {
                     Text("\(taskStore.tasks.count)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
@@ -354,7 +494,7 @@ struct MiraIslandView: View {
                         .background(DS.Colors.accent)
                         .clipShape(Capsule())
                         .transition(.opacity)
-                } else if pointTo.isActive {
+                } else if pointTo.isActive && !isNotificationPop {
                     HStack(spacing: 5) {
                         Image(systemName: "triangle.fill")
                             .font(.system(size: 7, weight: .bold))
@@ -371,6 +511,19 @@ struct MiraIslandView: View {
                         .foregroundColor(collapsedAccent.opacity(0.9))
                         .lineLimit(1)
                         .transition(.opacity)
+                } else if isNotificationPop || !isMediaActivity {
+                    // Nothing of Mira's own to report — rotate live activities
+                    // (timer / next event) the way MacNotch's collapsed strip
+                    // does. Deliberately LAST in this chain: voice state, agent
+                    // tasks and pointing all preempt it, because those are Mira
+                    // telling you what it is doing and must never be rotated
+                    // past. Draws nothing when no source is active, so an idle
+                    // pill stays indistinguishable from the hardware notch.
+                    //
+                    // Media is excluded here because it renders in the EARS
+                    // instead (see mediaEars) — beside the cutout rather than
+                    // hanging below it.
+                    LiveActivityStrip()
                 }
             }
         }
@@ -383,6 +536,88 @@ struct MiraIslandView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: taskStore.tasks.count)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: pointTo.isActive)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: voiceModeLabel)
+    }
+
+    /// Publishes the current panel+dock height so NotchManager can resize the
+    /// hover activation rect.
+    private func syncHoverZone() {
+        animController.currentExpandedH = hoverHeight
+        NotificationCenter.default.post(name: .miraIslandHeightChanged, object: nil)
+    }
+
+    // MARK: - Tab → module migration
+
+    /// Maps the legacy tab enum onto module ids. Kept so deep links posted as
+    /// `IslandTab` values keep landing on the right panel.
+    private static func moduleID(for tab: IslandTab) -> String {
+        switch tab {
+        case .home:     return "home"
+        case .chat:     return "chat"
+        case .agents:   return "agents"
+        case .shelf:    return "shelf"
+        case .camera:   return "camera"
+        case .skills:   return "skills"
+        case .learn:    return "learn"
+        case .crons:    return "crons"
+        case .labs:     return "labs"
+        case .settings: return "settings"
+        case .modules:  return "weather"
+        }
+    }
+
+    /// Registers Mira's pre-existing panels as modules so the carousel is the only
+    /// navigation and nothing becomes unreachable when the nav bar goes away.
+    ///
+    /// Done here rather than in AppDelegate because several of these views need
+    /// dependencies that aren't singletons (miraState, overlay, capture, voice,
+    /// wakeWord, taskStore); registering from the view lets the closures capture
+    /// them. Registration is idempotent by id, so running on every appear is safe.
+    private func registerTabModules() {
+        moduleRegistry.register([
+            ViewModule(id: "home", title: "Home", icon: "house.fill",
+                       heightLevel: .standard) {
+                NotchHomeTabView()
+            },
+            ViewModule(id: "chat", title: "Chat", icon: "message.fill",
+                       heightLevel: .tall) {
+                IslandChatView(miraState: miraState, overlay: overlay,
+                               capture: capture, voice: voice, wakeWord: wakeWord)
+            },
+            ViewModule(id: "agents", title: "Agents", icon: "cpu.fill",
+                       heightLevel: .tall) {
+                AgentsTabView(taskStore: taskStore, miraState: miraState,
+                              overlay: overlay, capture: capture, voice: voice)
+            },
+            // Shelf is a real NotchModule now (ShelfModule), registered in
+            // AppDelegate with the rest. Leaving the ViewModule wrapper here
+            // would put two Shelves in the carousel — the old vertical list and
+            // the carousel — both writing to the same FileShelfService.
+            // FileShelfLabsView still backs the Labs tab.
+            ViewModule(id: "camera", title: "Camera", icon: "camera.fill",
+                       heightLevel: .standard) {
+                NotchCameraTabView()
+            },
+            ViewModule(id: "skills", title: "Skills", icon: "puzzlepiece.extension.fill",
+                       heightLevel: .tall) {
+                SkillsTabView(miraState: miraState)
+            },
+            ViewModule(id: "learn", title: "Learn", icon: "graduationcap.fill",
+                       heightLevel: .tall) {
+                LessonsTabView()
+            },
+            ViewModule(id: "crons", title: "Crons", icon: "clock.fill",
+                       heightLevel: .tall) {
+                CronsTabView()
+            },
+            ViewModule(id: "labs", title: "Labs", icon: "sparkles",
+                       heightLevel: .tall) {
+                LabsTabView()
+            },
+            ViewModule(id: "settings", title: "Settings", icon: "gearshape.fill",
+                       heightLevel: .tall) {
+                SettingsView(state: miraState, embedded: true)
+            }
+        ])
     }
 
     private var collapsedAccent: Color {
@@ -410,10 +645,11 @@ struct MiraIslandView: View {
 
             ZStack(alignment: .top) {
                 VStack(spacing: 0) {
-                    navBar
-                    Rectangle()
-                        .fill(Color.white.opacity(0.07))
-                        .frame(height: 0.5)
+                    // NO NAV BAR. MacNotch has no tab strip — the modules ARE the
+                    // navigation, reached by swiping the carousel or tapping the
+                    // dock below the slab. Mira's old row of ten tabs across the
+                    // top was the single largest structural difference, and every
+                    // module built inside it inherited that difference.
                     if let summary = miraState.hoverSummary {
                         hoverSummaryBar(summary)
                         Rectangle()
@@ -422,8 +658,10 @@ struct MiraIslandView: View {
                     }
                     continuationBanner
                     SidecarSuggestionBanner()
-                    tabContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    NotchModuleShellView(notchBandHeight: 0) {
+                        animController.collapse()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 // Phase 2: HUD overlay — sits on top of tabs, invisible when idle
@@ -471,7 +709,7 @@ struct MiraIslandView: View {
                     Button {
                         let prompt = ProjectEngine.shared.buildResumePrompt(for: project)
                         engine.dismissContinuation()
-                        selectedTab = .home
+                        moduleRegistry.select("home")
                         NotificationCenter.default.post(
                             name: .miraChipPromptSelected,
                             object: nil,
@@ -534,8 +772,8 @@ struct MiraIslandView: View {
                 result: result,
                 chipService: chipService,
                 onChipTapped: { prompt in
-                    // Fix 3: route chip prompt into the chat tab
-                    selectedTab = .home
+                    // Fix 3: route chip prompt into the home module
+                    moduleRegistry.select("home")
                     animController.clearHUD()
                     NotificationCenter.default.post(
                         name: .miraChipPromptSelected,
@@ -620,131 +858,6 @@ struct MiraIslandView: View {
         .padding(.vertical, 7)
     }
 
-    // MARK: - Inline nav bar
-
-    private var navBar: some View {
-        HStack(spacing: 4) {
-            navTab(icon: "house.fill",         label: "Home",     tab: .home)
-            navTab(icon: "message.fill",       label: "Chat",     tab: .chat)
-            navTab(icon: "tray.full",          label: "Shelf",    tab: .shelf)
-            navTab(icon: "camera.fill",        label: "Camera",   tab: .camera)
-            navTab(icon: "cpu.fill",           label: "Agents",   tab: .agents)
-            navTab(icon: "sparkles",           label: "Labs",     tab: .labs)
-            navTab(icon: "puzzlepiece.extension.fill", label: "Skills", tab: .skills)
-            navTab(icon: "graduationcap.fill", label: "Learn",    tab: .learn)
-            navTab(icon: "clock.fill",         label: "Crons",    tab: .crons)
-
-            Spacer()
-
-            if hudVM.state.isActive {
-                Button { hudVM.send(.cancelRequested) } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(red: 1.0, green: 0.35, blue: 0.35))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Stop agent")
-            }
-
-            if !miraState.isPro {
-                Text("\(miraState.dailyUsageCount)/\(MiraState.freeLimit)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
-                    .padding(.trailing, 2)
-            }
-
-            NotchBatteryIndicator()
-                .padding(.trailing, 2)
-
-            // Pinned to the far right, clear of the physical notch (the center
-            // gap created by the Spacer above is where the notch sits).
-            navTab(icon: "gearshape.fill",     label: "Settings", tab: .settings)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 38)
-    }
-
-    private func navTab(icon: String, label: String, tab: IslandTab) -> some View {
-        let selected = selectedTab == tab
-        let accent   = DS.Colors.accent
-        return Button {
-            withAnimation(reduceMotion
-                ? .easeInOut(duration: 0.10)
-                : .spring(response: 0.25, dampingFraction: 0.80)
-            ) { selectedTab = tab }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: selected ? 11 : 12, weight: .semibold))
-                    .accessibilityHidden(true)
-                if selected {
-                    Text(label)
-                        .font(.system(size: 12, weight: .semibold))
-                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .leading)))
-                }
-            }
-            .foregroundColor(selected ? .white : .white.opacity(0.35))
-            .padding(.horizontal, selected ? 10 : 7)
-            .padding(.vertical, 5)
-            .background(selected ? accent.opacity(0.22) : Color.clear)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(PressScaleButtonStyle())
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    // MARK: - Battery indicator (compact — plain % + charging glyph, matches
-    // TheBoringNotch's reference layout; the dock's ring gauge doesn't fit
-    // this cramped nav-bar space)
-
-
-    // MARK: - Tab content
-
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
-        case .home:
-            NotchHomeTabView()
-        case .chat:
-            IslandChatView(
-                miraState: miraState,
-                overlay:   overlay,
-                capture:   capture,
-                voice:     voice,
-                wakeWord:  wakeWord
-            )
-        case .agents:
-            AgentsTabView(
-                taskStore: taskStore,
-                miraState: miraState,
-                overlay:   overlay,
-                capture:   capture,
-                voice:     voice
-            )
-        case .shelf:
-            FileShelfLabsView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .camera:
-            NotchCameraTabView()
-        case .labs:
-            LabsTabView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .skills:
-            SkillsTabView(miraState: miraState)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .learn:
-            LessonsTabView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .crons:
-            CronsTabView()
-        case .settings:
-            SettingsView(state: miraState, embedded: true)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
 }
 
 private struct NotchBatteryIndicator: View {

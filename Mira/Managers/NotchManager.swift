@@ -125,6 +125,25 @@ final class NotchManager {
         NotificationCenter.default.addObserver(forName: .miraActivateText, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.expandForShortcut() }
         }
+
+        // Snooze turning ON collapses the island immediately.
+        //
+        // The guard inside hoverManager.onEnter only fires on a TRANSITION into
+        // the hover zone, so snoozing while the panel was already open did
+        // nothing visible — you got "snoozed" while staring at an open panel,
+        // which is incoherent, and it also meant the setting appeared broken
+        // until you happened to move away and back. Collapsing on the state
+        // change is what makes the mode legible.
+        NotificationCenter.default.addObserver(forName: .miraSnoozeChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard NotchSnoozeService.shared.isSnoozed else { return }
+                self.collapseWork?.cancel()
+                self.collapseWork = nil
+                self.animController.collapse()
+                self.hoverManager.update(activationRect: self.collapsedZone())
+            }
+        }
         // A file drag entered the notch drop zone — open the island straight to
         // the Shelf tab so the user can see where the file is about to land.
         // queue: nil + DispatchQueue.main.async (not .main OperationQueue) so this
@@ -281,6 +300,10 @@ final class NotchManager {
                 NSLog("[Mira] hoverManager.onEnter suppressed — PTT active")
                 return
             }
+            // Snoozed: stop opening on the cursor. Voice, agents and the
+            // collapsed strip all keep running — this is "stop opening on me",
+            // not "stop working".
+            guard !NotchSnoozeService.shared.isSnoozed else { return }
             collapseGeneration += 1   // invalidate any pending collapse retries
             collapseWork?.cancel()
             collapseWork = nil
@@ -386,7 +409,10 @@ final class NotchManager {
         let padH: CGFloat = 60   // horizontal slop
         let padV: CGFloat = 50   // vertical below the panel bottom
         let s = geometry.screen
-        let w = AnimationController.expandedW + padH * 2
+        // Follows the maximized state — a hover zone sized to the narrow panel
+        // would end partway across a maximized one, closing the island while the
+        // pointer is still inside it.
+        let w = NotchLayoutService.shared.expandedWidth + padH * 2
         let h = animController.currentExpandedH + geometry.notchHeight + padV
         return CGRect(
             x:      s.frame.midX - w / 2,

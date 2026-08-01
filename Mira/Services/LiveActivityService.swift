@@ -1,0 +1,478 @@
+// LiveActivityService.swift
+// The rotating collapsed strip — MacNotch's "Live Activities": when the notch is
+// closed it cycles media, timers, calendar, Bluetooth and app updates rather than
+// sitting inert. You spend most of your time looking at the collapsed state, so
+// this is disproportionately what "feels like MacNotch" means.
+//
+// Priority order is MacNotch's own, decoded from its `liveActivityPriorityOrderData`
+// preference (a plist blob): loading, bluetooth, appUpdates, systemHUD, media,
+// pomodoro, event, todo. Mira has real sources for media, pomodoro and event today;
+// the rest are declared so the ordering doesn't change when they land.
+//
+// IMPORTANT — voice preempts everything. Mira's collapsed pill is how you know it
+// is listening, thinking, or speaking, and that is not decoration to rotate past.
+// So this drives the pill ONLY while voice is idle; MiraIslandView gives the
+// existing voice/agent/pointing states priority and falls through to here.
+
+import SwiftUI
+import Combine
+import EventKit
+
+// MARK: - Model
+
+struct LiveActivity: Equatable, Identifiable {
+    enum Kind: Int, CaseIterable {
+        // Declaration order IS priority order (MacNotch's, verbatim), with
+        // `notification` inserted second: an alert that just landed outranks
+        // everything except a spinner, because it is the only source here that
+        // is time-critical rather than ambient.
+        // `systemHUD` and `power` are both physical-feedback sources — you just
+        // pressed a key or plugged in a cable — so they sit high: an
+        // acknowledgement that arrives after the ambient rotation gets to it is
+        // not an acknowledgement. MacNotch gives its plug/unplug strips "clearer
+        // priority" for the same reason.
+        case loading, systemHUD, notification, power, deviceChange, bluetooth, appUpdates, media, pomodoro, event, todo
+    }
+
+    let kind: Kind
+    let icon: String
+    let text: String
+    /// Tint for the icon. Nil uses the neutral secondary colour.
+    var tint: Color?
+    /// Posting app, when there is one. The strip draws that app's real icon
+    /// instead of an SF Symbol — "the app icon and name" is most of what makes
+    /// a notification glance readable at a glance.
+    var appName: String?
+    /// Bundle identifier when the source knows it. Exact, so it beats resolving
+    /// by name; empty for anything read off the accessibility tree, which only
+    /// carries the display name.
+    var bundleID: String = ""
+
+    var id: Int { kind.rawValue }
+}
+
+// MARK: - Service
+
+@MainActor
+final class LiveActivityService: ObservableObject {
+
+    static let shared = LiveActivityService()
+
+    /// The activity currently on screen, or nil when there is nothing to show.
+    @Published private(set) var current: LiveActivity?
+
+    /// Everything with something to say right now, in priority order. Published
+    /// so the expanded panel can list what the strip is rotating through —
+    /// previously this was computed privately on each tick and thrown away, so
+    /// the only way to learn what was active was to watch the strip cycle.
+    @Published private(set) var active: [LiveActivity] = []
+
+    /// Pinned activity. While set the strip stops rotating and shows only this
+    /// one — MacNotch's per-activity Focus toggle. Nil is the normal rotation.
+    @Published private(set) var focusedKind: LiveActivity.Kind?
+
+    private let focusKey = "mira_live_activity_focus_v2"
+
+    /// Pin an activity, or unpin it if it is already pinned. Focusing something
+    /// that then goes quiet falls back to the rotation rather than leaving the
+    /// strip blank — a pin is a preference about attention, not a promise that
+    /// the source will keep talking.
+    func toggleFocus(_ kind: LiveActivity.Kind) {
+        focusedKind = (focusedKind == kind) ? nil : kind
+        if let focusedKind {
+            UserDefaults.standard.set(focusedKind.rawValue, forKey: focusKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: focusKey)
+        }
+        refresh(advance: false)
+    }
+
+    /// Seconds each activity holds before rotating. MacNotch widens briefly on a
+    /// track change; a fixed dwell is the honest first version of that.
+    private static let dwell: TimeInterval = 4.0
+
+    private var rotationIndex = 0
+    private var timer: Timer?
+    private var cancellables = Set<AnyCancellable>()
+
+    /// The last volume/brightness change, and when. Short-lived by design — a
+    /// HUD is an acknowledgement, not a status line.
+    private var systemHUD: (symbol: String, level: Double, at: Date)?
+    private static let hudDuration: TimeInterval = 1.8
+    private var hudClearTask: Task<Void, Never>?
+
+    /// Whether the notch shows the volume/brightness HUD instead of the floating
+    /// overlay window. On by default: intercepting the keys and then drawing the
+    /// result somewhere other than where the user is looking is half a feature.
+    static var showsSystemHUDInNotch: Bool {
+        UserDefaults.standard.object(forKey: "mira_system_hud_in_notch") as? Bool ?? true
+    }
+
+    private func observeSystemHUD() {
+        for (name, symbol) in [(Notification.Name.miraVolumeHUDChanged, "speaker.wave.2.fill"),
+                               (Notification.Name.miraBrightnessHUDChanged, "sun.max.fill")] {
+            NotificationCenter.default.publisher(for: name)
+                .sink { [weak self] note in
+                    guard let self, Self.showsSystemHUDInNotch else { return }
+                    // Connecting a display or switching audio output changes the
+                    // output device and often its volume with it. Without this,
+                    // plugging in a monitor fires a volume HUD and a brightness
+                    // HUD on top of the "Display connected" notice you actually
+                    // wanted — three strips fighting over one event.
+                    guard Date() >= DeviceChangeActivityService.shared.hudQuietUntil else { return }
+                    let level = (note.userInfo?["level"] as? Double)
+                        ?? Double(note.userInfo?["level"] as? Float ?? 0)
+                    // Mute reads as zero volume, and a speaker icon at 0% is not
+                    // the same statement as a crossed-out one.
+                    let icon = (symbol == "speaker.wave.2.fill" && level <= 0.001)
+                        ? "speaker.slash.fill" : symbol
+                    self.systemHUD = (icon, level, Date())
+                    self.refresh(advance: false)
+
+                    // Nothing else ticks fast enough to retire it: the rotation
+                    // timer runs on a 4s dwell, so without this the HUD would
+                    // linger well past its 1.8s window.
+                    self.hudClearTask?.cancel()
+                    self.hudClearTask = Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: UInt64(Self.hudDuration * 1_000_000_000))
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { self?.refresh(advance: false) }
+                    }
+                }
+                .store(in: &cancellables)
+        }
+    }
+
+    private let nowPlaying = NowPlayingService.shared
+    private let pomodoro   = PomodoroService.shared
+    private let calendar   = CalendarTodayService.shared
+
+    private init() {
+        if let raw = UserDefaults.standard.object(forKey: "mira_live_activity_focus_v2") as? Int {
+            focusedKind = LiveActivity.Kind(rawValue: raw)
+        }
+
+        // Recompute immediately when a source changes rather than waiting for the
+        // next tick — a track change should be visible now, not up to 4s later.
+        observeSystemHUD()
+
+        for publisher in [nowPlaying.objectWillChange,
+                          pomodoro.objectWillChange,
+                          calendar.objectWillChange,
+                          // Plugging a cable in should register now, not on the
+                          // next 4s tick.
+                          PowerActivityService.shared.objectWillChange,
+                          DeviceChangeActivityService.shared.objectWillChange,
+                          // Without this a notification would wait up to the
+                          // 4s dwell before the notch reacted, which for the
+                          // one time-critical source here is too late to be
+                          // a pop at all.
+                          SystemNotificationsService.shared.objectWillChange] {
+            publisher
+                .sink { [weak self] _ in
+                    DispatchQueue.main.async { self?.refresh(advance: false) }
+                }
+                .store(in: &cancellables)
+        }
+    }
+
+    // MARK: - Lifecycle
+
+    func start() {
+        guard timer == nil else { return }
+        refresh(advance: false)
+        let t = Timer(timeInterval: Self.dwell, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refresh(advance: true) }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        current = nil
+    }
+
+    // MARK: - Rotation
+
+    /// Rebuilds the active set and picks what to show. `advance` moves to the next
+    /// one; a source change refreshes in place so the strip doesn't skip ahead.
+    private func refresh(advance: Bool) {
+        let active = activeActivities()
+        if active != self.active { self.active = active }
+
+        guard !active.isEmpty else {
+            current = nil
+            rotationIndex = 0
+            return
+        }
+
+        // A NOTIFICATION TAKES THE STRIP THE MOMENT IT LANDS, jumping the
+        // rotation to it rather than waiting its turn.
+        //
+        // Without this the strip showed whatever `rotationIndex` already pointed
+        // at. With two other sources active and the index sitting at 1, an
+        // arriving text waited a full dwell to appear; at index 2 it waited two,
+        // so a notification could be up to eight seconds late to the one place
+        // it is supposed to be immediate. It looked correct in testing only
+        // because a single competing source keeps the index pinned at 0.
+        //
+        // Safe to do unconditionally: notificationActivity() returns nil outside
+        // the pop window, so `.notification` being present already MEANS fresh,
+        // and the strip returns to the rotation on its own when it expires.
+        // Deliberately above the focus pin — pinning is a standing preference
+        // about ambient sources, not an instruction to sit on an alert.
+        // Everything here is a response to something that JUST happened — a key
+        // press, an alert, a cable. A plug/unplug notice preempts, but a standing
+        // low-battery warning does not: it would pin the strip indefinitely and
+        // block every other source, which is a status line, not a notice.
+        var preempting: [LiveActivity.Kind] = [.systemHUD, .notification, .deviceChange]
+        if PowerActivityService.shared.recentEvent != nil { preempting.append(.power) }
+
+        for kind in preempting {
+            if let index = active.firstIndex(where: { $0.kind == kind }) {
+                rotationIndex = index
+                if active[index] != current { current = active[index] }
+                return
+            }
+        }
+
+        // A focused activity holds the strip for as long as it has something to
+        // say. If it goes quiet the rotation resumes rather than the strip
+        // sitting empty, and the pin is kept for when it comes back.
+        if let focusedKind, let pinned = active.first(where: { $0.kind == focusedKind }) {
+            if pinned != current { current = pinned }
+            return
+        }
+
+        if advance {
+            rotationIndex = (rotationIndex + 1) % active.count
+        } else if rotationIndex >= active.count {
+            rotationIndex = 0
+        }
+        let next = active[rotationIndex]
+        // Avoid a pointless crossfade when the content is unchanged.
+        if next != current { current = next }
+    }
+
+    /// Everything with something to say right now, in MacNotch's priority order.
+    private func activeActivities() -> [LiveActivity] {
+        var out: [LiveActivity] = []
+
+        if let hud    = systemHUDActivity()    { out.append(hud)    }
+        if let device = deviceChangeActivity() { out.append(device) }
+        if let note  = notificationActivity() { out.append(note) }
+        if let power = powerActivity()       { out.append(power) }
+        if let bt    = bluetoothActivity()   { out.append(bt)    }
+        if let media = mediaActivity()       { out.append(media) }
+        if let pom   = pomodoroActivity()    { out.append(pom)   }
+        if let event = nextEventActivity()   { out.append(event) }
+
+        return out.sorted { $0.kind.rawValue < $1.kind.rawValue }
+    }
+
+    /// A display or audio device that just appeared or went away.
+    private func deviceChangeActivity() -> LiveActivity? {
+        guard let notice = DeviceChangeActivityService.shared.notice else { return nil }
+        return LiveActivity(kind: .deviceChange,
+                            icon: notice.icon,
+                            text: notice.text,
+                            tint: Color(red: 0.60, green: 0.78, blue: 1.0))
+    }
+
+    /// Volume, brightness and mute, in the notch itself.
+    ///
+    /// Mira already intercepted the media keys and suppressed the macOS HUD, but
+    /// drew its replacement in a SEPARATE floating window — so the notch, the
+    /// thing you are looking at, stayed empty during the one interaction that is
+    /// pure visual feedback. MacNotch presents it as a collapsed activity, and
+    /// its own copy is explicit that this is the point of intercepting the keys.
+    private func systemHUDActivity() -> LiveActivity? {
+        guard let hud = systemHUD, Date().timeIntervalSince(hud.at) < Self.hudDuration else {
+            return nil
+        }
+        return LiveActivity(kind: .systemHUD,
+                            icon: hud.symbol,
+                            text: "\(Int((hud.level * 100).rounded()))%",
+                            tint: Color(red: 0.85, green: 0.87, blue: 0.95))
+    }
+
+    /// Plug/unplug as a passing notice, low battery as a standing one.
+    private func powerActivity() -> LiveActivity? {
+        let power = PowerActivityService.shared
+        if let event = power.recentEvent {
+            return LiveActivity(
+                kind: .power,
+                icon: event == .pluggedIn ? "powerplug.fill" : "battery.50",
+                text: event == .pluggedIn
+                    ? "Plugged in · \(power.percent)%"
+                    : "Unplugged · \(power.percent)%",
+                tint: event == .pluggedIn
+                    ? Color(red: 0.40, green: 0.85, blue: 0.55)
+                    : Color(red: 0.85, green: 0.85, blue: 0.90))
+        }
+        guard power.isLow else { return nil }
+        return LiveActivity(kind: .power,
+                            icon: "battery.25",
+                            text: "Low battery · \(power.percent)%",
+                            tint: Color(red: 1.0, green: 0.45, blue: 0.45))
+    }
+
+    /// Only surfaces a LOW battery, never a healthy one. MacNotch lists Bluetooth
+    /// as a rotation source, but "AirPods 82%" in a strip you glance at is noise —
+    /// the actionable state is the one that will strand you mid-call.
+    private func bluetoothActivity() -> LiveActivity? {
+        let low = BluetoothService.shared.devices
+            .filter { $0.isConnected && $0.isLowBattery && $0.batteryPercent != nil }
+            .min { ($0.batteryPercent ?? 100) < ($1.batteryPercent ?? 100) }
+        guard let device = low, let pct = device.batteryPercent else { return nil }
+        return LiveActivity(kind: .bluetooth,
+                            icon: device.icon,
+                            text: "\(device.name) \(pct)%",
+                            tint: Color(red: 1.0, green: 0.45, blue: 0.45))
+    }
+
+    // MARK: - Sources
+
+    private func mediaActivity() -> LiveActivity? {
+        let info = nowPlaying.info
+        guard info.isPlaying, !info.title.isEmpty else { return nil }
+        let text = info.artist.isEmpty ? info.title : "\(info.title) — \(info.artist)"
+        return LiveActivity(kind: .media,
+                            icon: "music.note",
+                            text: text,
+                            tint: Color(red: 0.40, green: 0.85, blue: 0.55))
+    }
+
+    /// Two states, deliberately different.
+    ///
+    /// For the first few seconds after something lands, the closed notch shows
+    /// THAT notification — app, and the line itself. After the pop window it
+    /// falls back to a count, because a message from twenty minutes ago sitting
+    /// permanently in the notch is not a notification any more, it's wallpaper.
+    ///
+    /// iPhone notifications appear here too, but NOT for the reason an earlier
+    /// version of this comment gave. It claimed Continuity delivers them into the
+    /// same store Mira reads, so they arrived "without anything extra". That was
+    /// wrong: the database holds only Mac apps — checked directly, zero rows for
+    /// the mirrored apps that were on screen at the time. They arrive because
+    /// NotificationBannerWatcher reads the banner itself, which is the only
+    /// source that sees them at all.
+    private func notificationActivity() -> LiveActivity? {
+        let service = SystemNotificationsService.shared
+        guard service.isTrusted else { return nil }
+
+        // A notification takes the closed notch ONLY while it is fresh, and only
+        // if it hasn't been cleared. Then the notch goes back to whatever it
+        // normally shows.
+        //
+        // An earlier version left a standing "N notifications" count sitting
+        // there. That is a badge, not a notification: once you have seen the
+        // thing, a permanent reminder that it happened is just the notch
+        // refusing to go quiet. The count still lives in the panel, where you go
+        // when you actually want the list.
+        guard service.isPopping, let latest = service.latest, service.isVisible(latest) else {
+            return nil
+        }
+        // The title carries the SENDER on the sources that have one, and dropping
+        // it was leaving the strip saying "Messages · are we still on for 7?" —
+        // which is the half of a banner you can least afford to lose. Included
+        // only when it isn't just the app name repeated.
+        let headline = latest.title.trimmingCharacters(in: .whitespaces)
+        let text: String
+        if !headline.isEmpty, headline.caseInsensitiveCompare(latest.app) != .orderedSame,
+           headline != latest.message {
+            text = "\(latest.app) · \(headline): \(latest.message)"
+        } else {
+            text = "\(latest.app) · \(latest.message)"
+        }
+
+        return LiveActivity(kind: .notification,
+                            icon: latest.icon,
+                            text: text,
+                            tint: Color(red: 0.55, green: 0.70, blue: 1.0),
+                            appName: latest.app,
+                            bundleID: latest.bundleID)
+    }
+
+    private func pomodoroActivity() -> LiveActivity? {
+        guard pomodoro.isRunning else { return nil }
+        let m = pomodoro.secondsLeft / 60
+        let s = pomodoro.secondsLeft % 60
+        let label: String
+        switch pomodoro.phase {
+        case .focus:      label = "Focus"
+        case .shortBreak: label = "Break"
+        case .longBreak:  label = "Long break"
+        }
+        return LiveActivity(kind: .pomodoro,
+                            icon: "timer",
+                            text: String(format: "%@ %d:%02d", label, m, s),
+                            tint: Color(red: 0.98, green: 0.62, blue: 0.35))
+    }
+
+    /// The next event starting within the hour — beyond that it isn't glanceable
+    /// information, it's noise.
+    private func nextEventActivity() -> LiveActivity? {
+        guard calendar.permitted else { return nil }
+        let now = Date()
+        let events = calendar.eventsByDay[Calendar.current.startOfDay(for: now)] ?? []
+        let upcoming = events
+            .filter { !$0.isAllDay && $0.startDate > now && $0.startDate < now.addingTimeInterval(3600) }
+            .sorted { $0.startDate < $1.startDate }
+        guard let next = upcoming.first, let title = next.title else { return nil }
+
+        let mins = max(1, Int(next.startDate.timeIntervalSince(now) / 60))
+        return LiveActivity(kind: .event,
+                            icon: "calendar",
+                            text: "\(title) in \(mins)m",
+                            tint: Color(red: 0.55, green: 0.70, blue: 1.0))
+    }
+}
+
+// MARK: - View
+
+/// Renders the current activity in the collapsed pill. Draws nothing when there is
+/// no activity, so an idle Mac keeps the pill indistinguishable from the hardware
+/// notch — which is the behavior the collapsed pill already relied on.
+struct LiveActivityStrip: View {
+
+    @ObservedObject private var service = LiveActivityService.shared
+
+    var body: some View {
+        if let activity = service.current {
+            HStack(spacing: 5) {
+                // An activity that names an app draws that app's real icon, the
+                // way a native banner does. Everything else (timer, event,
+                // battery) has no app and keeps its SF Symbol.
+                if let appName = activity.appName, !appName.isEmpty {
+                    NotificationAppIcon(appName: appName,
+                                        bundleID: activity.bundleID,
+                                        fallbackSymbol: activity.icon,
+                                        size: 14,
+                                        tint: activity.tint ?? .white.opacity(0.65))
+                } else {
+                    Image(systemName: activity.icon)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(activity.tint ?? .white.opacity(0.65))
+                }
+                Text(activity.text)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.82))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            // A cap, not a reservation — the parent pill still truncates to
+            // whatever it actually has. Raised from 200 because a notification
+            // now carries the sender as well as the message, and the pill widens
+            // to match; the shorter sources are unaffected.
+            .frame(maxWidth: 300, alignment: .leading)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .animation(.easeInOut(duration: 0.28), value: activity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(activity.text)
+        }
+    }
+
+}

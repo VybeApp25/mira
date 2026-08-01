@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Mira.Windows.App/Mira.Windows.App.csproj" />
+  <Project Path="Mira.Windows.Core.Tests/Mira.Windows.Core.Tests.csproj" />
+  <Project Path="Mira.Windows.Core/Mira.Windows.Core.csproj" />
+</Solution>

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/assemblyai-proxy.schema.json",
+  "title": "AssemblyAIProxy",
+  "description": "supabase/functions/assemblyai-proxy/index.ts. A PATH-FORWARDING proxy, unlike the single-endpoint anthropic/openai proxies: the client calls <functionsBase>/assemblyai-proxy/v2/<anything> and the function strips the /assemblyai-proxy prefix and forwards the remainder (must start with /v2/) plus the original method/body/query string to https://api.assemblyai.com. Used for pre-recorded FILE transcription (/v2/upload, /v2/transcript, /v2/transcript/:id) — NOT the realtime streaming path, which uses mint-assemblyai-token instead. Billed by audio minutes, not tokens, so this meters one request rather than a token count. No fixed request/response body shape at the proxy level — every /v2/* AssemblyAI REST endpoint has its own contract (upload accepts raw audio bytes; POST /v2/transcript accepts {audio_url, ...options}; GET /v2/transcript/:id returns a transcript object with a status field). Out of scope to redefine AssemblyAI's own API surface here; only the proxy's own request-routing constraint and error shape are modeled below. (Deliberately no root `type`/`properties` here beyond $defs — quicktype's JSON Schema resolver chokes on a bare `type: object` root with no `properties`, even when a specific $def is targeted instead of the root.)",
+  "$defs": {
+    "AssemblyAIProxyErrorResponse": {
+      "title": "AssemblyAIProxyErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "AssemblyAIProxyErrorCode", "type": "string", "enum": ["unauthenticated", "path_not_allowed", "ASSEMBLYAI_API_KEY secret not set"] },
+            "path": { "type": "string", "description": "Present only alongside error=path_not_allowed; echoes the rejected subpath." }
+          }
+        }
+      ]
+    }
+  }
+}

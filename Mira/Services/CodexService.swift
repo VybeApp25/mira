@@ -10,6 +10,22 @@ final class CodexService {
     static let shared = CodexService()
     private init() {}
 
+    // MARK: - Safety
+
+    /// UserDefaults key controlling whether Codex runs with its OWN approval +
+    /// sandbox bypassed. Single source of truth so the CLI and computer-use paths
+    /// can never disagree on this security property.
+    nonisolated static let sandboxBypassKey = "mira_codex_bypass_sandbox"
+
+    /// Whether to pass `--dangerously-bypass-approvals-and-sandbox`. Default **OFF**
+    /// (safe): bypass is an explicit opt-in in Settings › Developer Tools. When off,
+    /// Codex keeps its own sandbox (`--full-auto` for the CLI, no bypass flag for
+    /// computer-use); Mira's own gates (RouterService danger-confirm + MiraMCPServer
+    /// dangerous-tool prompt) still apply on top.
+    nonisolated static var sandboxBypassEnabled: Bool {
+        UserDefaults.standard.bool(forKey: sandboxBypassKey)   // absent → false
+    }
+
     struct CodexResult {
         let success:  Bool
         let output:   String
@@ -77,11 +93,12 @@ final class CodexService {
         let effort = EntitlementService.shared.plan.codexReasoningEffort
         let effortFlag = " -c model_reasoning_effort=\(effort)"
 
-        // Bypass Codex's own approval+sandbox so it can use MCP tools (incl. Mira's own
-        // via the bidirectional bridge); only the full bypass clears MCP elicitation in
-        // non-interactive exec (verified 2026-06-17). Mira owns safety via its own gates.
-        // Kill switch mira_codex_bypass_sandbox falls back to the prior --full-auto.
-        let autoFlag = (UserDefaults.standard.object(forKey: "mira_codex_bypass_sandbox") as? Bool ?? true)
+        // Codex's own approval+sandbox is kept ON by default (safe): `--full-auto`
+        // runs sandboxed. The full bypass — needed for MCP tools incl. Mira's own via
+        // the bidirectional bridge to clear elicitation in non-interactive exec
+        // (verified 2026-06-17) — is now an explicit opt-in (Settings › Developer
+        // Tools). Mira's own gates apply regardless. See CodexService.sandboxBypassEnabled.
+        let autoFlag = Self.sandboxBypassEnabled
             ? " --dangerously-bypass-approvals-and-sandbox" : " --full-auto"
 
         let escapedPrompt = prompt.replacingOccurrences(of: "'", with: "'\\''")

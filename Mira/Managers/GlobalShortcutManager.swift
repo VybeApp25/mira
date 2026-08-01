@@ -23,6 +23,11 @@ extension Notification.Name {
     static let miraDictateEnded           = Notification.Name("miraDictateEnded")
     // Draw-on-screen spatial context (⌃⌥D) — toggles the freehand draw overlay
     static let miraDrawModeToggled        = Notification.Name("miraDrawModeToggled")
+    static let miraToggleCursorCompanion  = Notification.Name("miraToggleCursorCompanion")
+    // Module carousel navigation + notch snooze (MacNotch parity: it binds both).
+    static let miraModulePrev             = Notification.Name("miraModulePrev")
+    static let miraModuleNext             = Notification.Name("miraModuleNext")
+    static let miraToggleSnooze           = Notification.Name("miraToggleSnooze")
     // Notch-based onboarding flow
     static let miraOnboardingStarted      = Notification.Name("miraOnboardingStarted")
     // Show/hide the island in screenshots & screen recordings (demo mode)
@@ -98,6 +103,21 @@ private func miraHotKeyHandler(
             } else {
                 NotificationCenter.default.post(name: .miraDictateBegan, object: nil)
             }
+        case 6:
+            if !isRelease {
+                NotificationCenter.default.post(name: .miraToggleCursorCompanion, object: nil)
+            }
+        // These three are edge-triggered, so they MUST ignore the release.
+        // This handler is installed for pressed AND released (push-to-talk needs
+        // both), so an unguarded case fires twice per keypress: the carousel
+        // skipped every other module, and ⌃⌥Z toggled snooze on and then
+        // straight back off, which read as the shortcut being dead.
+        case 7:
+            if !isRelease { NotificationCenter.default.post(name: .miraModulePrev,   object: nil) }
+        case 8:
+            if !isRelease { NotificationCenter.default.post(name: .miraModuleNext,   object: nil) }
+        case 9:
+            if !isRelease { NotificationCenter.default.post(name: .miraToggleSnooze, object: nil) }
         default: break
         }
     }
@@ -115,6 +135,10 @@ final class GlobalShortcutManager {
     private var drawRef:      EventHotKeyRef?
     private var dictateRef:   EventHotKeyRef?
     private var clipboardRef: EventHotKeyRef?
+    private var cursorRef:    EventHotKeyRef?
+    private var prevRef:      EventHotKeyRef?
+    private var nextRef:      EventHotKeyRef?
+    private var snoozeRef:    EventHotKeyRef?
     private var handlerRef:   EventHandlerRef?
 
     // "MIRA" encoded as OSType
@@ -155,6 +179,26 @@ final class GlobalShortcutManager {
         // keyCode 9 = V, carbonMods = cmdKey | controlKey
         RegisterEventHotKey(9, UInt32(cmdKey | controlKey),
                             clipHKID, GetApplicationEventTarget(), 0, &clipboardRef)
+        // ⌘⇧M — dock/undock the cursor companion (hardcoded, keyCode 46 = M)
+        let cursorHKID = EventHotKeyID(signature: Self.sig, id: 6)
+        RegisterEventHotKey(46, UInt32(cmdKey | shiftKey),
+                            cursorHKID, GetApplicationEventTarget(), 0, &cursorRef)
+
+        // Module carousel: ⌃⌥← / ⌃⌥→ (keyCodes 123/124). With 26 modules
+        // registered, reaching a non-pinned one meant opening the browser every
+        // time; arrows make the carousel usable without the mouse.
+        RegisterEventHotKey(123, UInt32(controlKey | optionKey),
+                            EventHotKeyID(signature: Self.sig, id: 7),
+                            GetApplicationEventTarget(), 0, &prevRef)
+        RegisterEventHotKey(124, UInt32(controlKey | optionKey),
+                            EventHotKeyID(signature: Self.sig, id: 8),
+                            GetApplicationEventTarget(), 0, &nextRef)
+
+        // ⌃⌥Z — snooze the notch. MacNotch binds this too: sometimes you want
+        // the top of the screen to stop reacting to your cursor for a while.
+        RegisterEventHotKey(6, UInt32(controlKey | optionKey),
+                            EventHotKeyID(signature: Self.sig, id: 9),
+                            GetApplicationEventTarget(), 0, &snoozeRef)
     }
 
     private func apply(_ config: ShortcutConfig, id: UInt32, into ref: inout EventHotKeyRef?) {
@@ -169,10 +213,18 @@ final class GlobalShortcutManager {
         if let r = drawRef      { UnregisterEventHotKey(r) }
         if let r = dictateRef   { UnregisterEventHotKey(r) }
         if let r = clipboardRef { UnregisterEventHotKey(r) }
+        if let r = cursorRef    { UnregisterEventHotKey(r) }
+        if let r = prevRef      { UnregisterEventHotKey(r) }
+        if let r = nextRef      { UnregisterEventHotKey(r) }
+        if let r = snoozeRef    { UnregisterEventHotKey(r) }
         voiceRef     = nil
         textRef      = nil
         drawRef      = nil
         dictateRef   = nil
         clipboardRef = nil
+        cursorRef    = nil
+        prevRef      = nil
+        nextRef      = nil
+        snoozeRef    = nil
     }
 }

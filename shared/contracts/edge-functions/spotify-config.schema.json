@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/spotify-config.schema.json",
+  "title": "SpotifyConfig",
+  "description": "supabase/functions/spotify-config/index.ts. Self-contained (no _shared/auth.ts import), authenticated (manually verifies the JWT inline rather than via requireUser/EntitlementService). Returns the PUBLIC Spotify OAuth client ID so the client can run the user-authorization PKCE flow itself (needed for favorite/add-to-playlist/follow-artist, which need a per-user token that Client Credentials — used by spotify-search — can't grant). The client ID is not a secret by design (it appears in every Spotify OAuth authorize URL); the client SECRET never leaves this function's environment.",
+  "$defs": {
+    "SpotifyConfigResponse": {
+      "title": "SpotifyConfigResponse",
+      "type": "object",
+      "properties": {
+        "client_id": { "type": "string" }
+      },
+      "required": ["client_id"],
+      "additionalProperties": false
+    },
+    "SpotifyConfigErrorResponse": {
+      "title": "SpotifyConfigErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "SpotifyConfigErrorCode", "type": "string", "enum": ["SPOTIFY_CLIENT_ID secret not set", "unauthenticated"] }
+          }
+        }
+      ]
+    }
+  }
+}

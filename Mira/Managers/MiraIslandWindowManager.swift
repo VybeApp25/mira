@@ -9,6 +9,36 @@ import SwiftUI
 private final class IslandPanel: NSPanel {
     override var canBecomeKey:  Bool { true  }
     override var canBecomeMain: Bool { false }
+
+    /// Routes ⌘V/⌘C/⌘X/⌘A/⌘Z to the focused text field ourselves.
+    ///
+    /// Typing into a field in the notch worked, but PASTING did nothing. Command
+    /// keys are key EQUIVALENTS, and macOS dispatches those through the menu bar
+    /// of the ACTIVE application. This panel deliberately never activates Mira
+    /// (canBecomeMain = false, makeKey without activation) so it doesn't steal
+    /// focus — which means ⌘V was being offered to whatever app the user was
+    /// actually in, and never reached the field they were typing in.
+    ///
+    /// Sending the action to nil walks the responder chain from the first
+    /// responder, so it lands on the focused NSTextView. This is exactly the
+    /// case that made pasting a GitHub token impossible: a value you cannot
+    /// reasonably retype by hand.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods == .command, let key = event.charactersIgnoringModifiers?.lowercased() {
+            let action: Selector?
+            switch key {
+            case "v": action = #selector(NSText.paste(_:))
+            case "c": action = #selector(NSText.copy(_:))
+            case "x": action = #selector(NSText.cut(_:))
+            case "a": action = #selector(NSText.selectAll(_:))
+            case "z": action = Selector(("undo:"))
+            default:  action = nil
+            }
+            if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// NSHostingView subclass that delivers the first mouse-down directly to
@@ -29,7 +59,11 @@ private final class FirstMouseHostingView<Content: View>: NSHostingView<Content>
 final class MiraIslandWindowManager {
 
     // Maximum window dimensions — must contain the expanded island + shadow room.
-    static let windowW: CGFloat = 760
+    // 1080 rather than 760 so the MAXIMIZED panel (1000pt) still fits with
+    // shadow room. The window is transparent and sized to the maximum the panel
+    // can ever be, not to its current size — resizing it on every toggle would
+    // fight the panel's own spring animation.
+    static let windowW: CGFloat = 1080
     // Tall enough for expandedTallH (500) + notch + shadow margin
     static let windowH: CGFloat = 560
 

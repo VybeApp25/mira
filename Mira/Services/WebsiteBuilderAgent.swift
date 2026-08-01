@@ -1551,8 +1551,10 @@ enum ResearchAgent {
         try? await Task.sleep(nanoseconds: 400_000_000)
         await store.updateStep(id: jobId, stepTitle: "Gathering information", progress: 0.25, stepIndex: 1)
 
+        // Ground on what the user was doing when they asked (frozen at enqueue).
+        let contextBlock = await store.job(id: jobId)?.context?.promptBlock() ?? ""
         let researchPrompt = """
-        Conduct thorough research on: "\(prompt)"
+        \(contextBlock.isEmpty ? "" : contextBlock + "\n\n")Conduct thorough research on: "\(prompt)"
 
         Format as a structured report:
         # Executive Summary
@@ -1621,10 +1623,14 @@ enum ContentAgent {
         try? await Task.sleep(nanoseconds: 300_000_000)
         await store.updateStep(id: jobId, stepTitle: "Writing content", progress: 0.45, stepIndex: 2)
 
+        // Ground on what the user was doing when they asked (frozen at enqueue).
+        let contextBlock = await store.job(id: jobId)?.context?.promptBlock() ?? ""
+        let fullPrompt = contextBlock.isEmpty ? prompt : "\(contextBlock)\n\n---\n\n\(prompt)"
+
         let content: String
         do {
             content = try await claude.ask(
-                prompt: prompt,
+                prompt: fullPrompt,
                 system: "You are a professional content writer. Produce polished, engaging content tailored to the request.",
                 modelOverride: "claude-sonnet-4-6",
                 maxTokensOverride: 2000
@@ -1920,9 +1926,13 @@ enum GenericAgent {
         let claude = ClaudeService(apiKey: apiKey)
         await store.updateStep(id: jobId, stepTitle: "Processing request", progress: 0.20, stepIndex: 0)
 
+        // Ground on what the user was doing when they asked (frozen at enqueue).
+        let contextBlock = await store.job(id: jobId)?.context?.promptBlock() ?? ""
+        let fullPrompt = contextBlock.isEmpty ? prompt : "\(contextBlock)\n\n---\n\n\(prompt)"
+
         let reply: String
         do {
-            reply = try await claude.ask(prompt: prompt,
+            reply = try await claude.ask(prompt: fullPrompt,
                                          system: "You are Mira, a capable AI assistant. Complete the user's request thoroughly.",
                                          maxTokensOverride: 800)
         } catch {

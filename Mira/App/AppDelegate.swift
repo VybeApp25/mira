@@ -77,8 +77,102 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = NotchManager()
         manager.setup()
         notchManager = manager
-        MiraCursorManager.shared.activate()
+        CursorCompanionController.shared.start()   // honors the dock/undock preference
         AgentHUDWindowManager.shared.start()
+
+        // Phase 0 notch modules. Registration order is the initial carousel order;
+        // the user's saved order takes over once they reorder anything.
+        NotchModuleRegistry.shared.register([
+            DashboardModule(),
+            WeatherModule(),
+            MediaModule(),
+            CalendarModule(),
+            TodoModule(),
+            NotesModule(),
+            PomodoroModule(),
+            SnapZoneModule(),
+            DropActionsModule(),
+            ShelfModule(),
+            ScreenTimeModule(),
+            DayProgressModule(),
+            TranslationModule(),
+            CodeHostingModule(),
+            AICodingModule(),
+            NotificationsModule(),
+            BluetoothModule(),
+            LiveActivitiesModule(),
+            SystemModule(),
+            ModuleBrowserModule()
+        ])
+
+        // Bluetooth polls independently of its module being visible, because the
+        // low-battery warning it feeds into the collapsed strip is only useful if
+        // it fires when you AREN'T looking at the Bluetooth panel.
+        // Screen Time must run from LAUNCH, not from didAppear: usage cannot be
+        // backfilled, so a minute not recorded is gone.
+        ScreenTimeService.shared.start()
+
+        BluetoothService.shared.start()
+
+        // Keeps every Mira window out of capture, not just the island. The
+        // preference has existed for a while but only one window honoured it.
+        ScreenCapturePrivacyService.shared.start()
+
+        // Meeting alerts have to be watching before you open the notch — the
+        // whole point is that it interrupts you.
+        MeetingAlertService.shared.start()
+
+        // AI Coding has two halves with different costs, so they start on
+        // different terms.
+        //
+        // The transcript watcher is the zero-setup path and runs whenever Claude
+        // Code has ever been used on this Mac — it's a lazy poll over files that
+        // already exist, and it has to be warm before the panel is opened or the
+        // first frame shows an empty list.
+        if ClaudeCodeSessionWatcher.shared.isAvailable {
+            ClaudeCodeSessionWatcher.shared.start(interval: 6)
+        }
+
+        // The socket only listens once the CLI hook exists — otherwise every
+        // user pays for a socket server for a feature they never set up. It also
+        // has to be running before the module is opened: a permission ask
+        // arrives while you're in the terminal, and the point is that the notch
+        // lights up without you going looking for it.
+        if AICodingHookInstaller.shared.isInstalled {
+            AICodingBridgeService.shared.start()
+        }
+
+        // Snap Zones watches for window drags reaching the top of the screen.
+        SnapZoneService.shared.start()
+
+        // Notification polling runs from launch, not from the panel opening.
+        // The point of the feature is that an alert pops on the CLOSED notch,
+        // which is precisely when nobody has the Notifications panel open.
+        SystemNotificationsService.shared.start()
+
+        // The banner observer: catches every alert the moment it is drawn —
+        // including iPhone ones, which reach no database — and hides the native
+        // banner when the user has asked for that. Independent of the poll above,
+        // which now only supplies history.
+        NotificationBannerWatcher.shared.start()
+
+        // Plug/unplug and low-battery notices for the collapsed notch. Started
+        // before the strip so the first read establishes a baseline rather than
+        // announcing "plugged in" just because the laptop is on a charger.
+        PowerActivityService.shared.start()
+
+        // Volume HUD for changes that did NOT come from the media keys —
+        // Control Center, a script, a headset button.
+        SystemVolumeObserver.shared.start()
+
+        // Display connect/disconnect and audio output changes.
+        DeviceChangeActivityService.shared.start()
+
+        // Rotating collapsed strip. Voice/agent state preempts it in the pill.
+        LiveActivityService.shared.start()
+
+        // Notch snooze (⌃⌥Z). Instantiated so it observes the hotkey notification.
+        _ = NotchSnoozeService.shared
 
         // Dictate-anywhere (⌃⌥S): hold-to-talk transcription into any app's focused
         // field, plus its "Dictating…" pill. Wiring only — hotkey is registered by

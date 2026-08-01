@@ -45,6 +45,8 @@ struct SettingsView: View {
     @AppStorage("mira_draw_context_enabled") private var drawContextEnabled = true
     @AppStorage(WakeWordService.enabledKey) private var wakeWordEnabled = true
     @AppStorage("mira_codex_transport") private var codexTransport = "exec"
+    @AppStorage(CodexService.sandboxBypassKey) private var codexBypassSandbox = false
+    @AppStorage(CursorCompanionController.dockedKey) private var cursorDocked = false
     @AppStorage("mira_cat_mode")           private var catMode           = false
     @AppStorage("mira_transparent_panes")  private var transparentPanes  = false
     @AppStorage(MiraIslandWindowManager.showInCaptureKey) private var showInCapture = false
@@ -100,6 +102,7 @@ struct SettingsView: View {
                         settingsGroup("General", icon: "gearshape.fill") {
                             accountSection
                             accentColorSection
+                            permissionsSection
                             appearanceSection
                             updatesSection
                         }
@@ -713,6 +716,31 @@ struct SettingsView: View {
                     .onChange(of: screenCompanionEnabled) {
                         NotificationCenter.default.post(name: .miraScreenCompanionChanged, object: nil)
                     }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            // Cursor companion (dock / undock)
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Show cursor companion")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.80))
+                    Text("Display Mira's companion bubble near your cursor. Docking hides it — voice and agents keep running. ⌘⇧M toggles it.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { !cursorDocked },
+                    set: { cursorDocked = !$0; CursorCompanionController.shared.apply() }
+                ))
+                .toggleStyle(.switch)
+                .tint(accent)
+                .labelsHidden()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1832,9 +1860,32 @@ struct SettingsView: View {
             VStack(spacing: 6) {
                 devToolRow(label: "Codex CLI", status: codexStatus, installCmd: "npm install -g @openai/codex")
                 devToolRow(label: "Claude Code", status: claudeCodeStatus, installCmd: "npm install -g @anthropic-ai/claude-code")
+                codexBypassRow
             }
         }
         .task { await checkDevTools() }
+    }
+
+    /// Explicit opt-in for the Codex sandbox bypass (default off / safe).
+    private var codexBypassRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Bypass Codex sandbox")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                Text("Advanced. Lets Codex skip its own approval + sandbox so it can run MCP/computer-use tools non-interactively. Mira's own safety gates still apply. Leave off unless a Codex task needs it.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.35))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: $codexBypassSandbox)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(codexBypassSandbox ? 0.06 : 0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private func devToolRow(label: String, status: String, installCmd: String) -> some View {
@@ -2150,6 +2201,28 @@ struct SettingsView: View {
                     : Color(red: 1.0,  green: 0.60, blue: 0.20)
     }
 
+    // MARK: - Permissions section
+
+    /// The whole picture in one place. Individual features still ask at the
+    /// moment they're used — that's the behaviour worth copying from MacNotch —
+    /// but there has to be somewhere that answers "what does Mira have access
+    /// to, and what is switched off because it doesn't?".
+    private var permissionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Permissions", systemImage: "hand.raised.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+
+            Text("Mira asks for each of these when a feature needs it, not up front. "
+                 + "Anything not granted just means that feature stays off.")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.40))
+                .fixedSize(horizontal: false, vertical: true)
+
+            PermissionsListView()
+        }
+    }
+
     // MARK: - Appearance section (Cat Mode + Transparent panes)
 
     private var appearanceSection: some View {
@@ -2174,12 +2247,17 @@ struct SettingsView: View {
                 binding: $catMode
             )
 
-            // Show the notch island in screenshots & screen recordings (for demos).
-            // Off by default so Mira's chrome stays out of the user's captures.
+            // Show Mira in screenshots & screen recordings (for demos). Off by
+            // default so Mira's chrome stays out of the user's captures.
+            //
+            // Subtitle says "everything Mira draws" because it now genuinely
+            // does — dock, HUDs, overlays, agent chips and Settings, not just
+            // the island. It previously covered only the island while claiming
+            // the same thing.
             toggleRow(
                 icon: "record.circle",
                 title: "Show in screen recordings",
-                subtitle: "Let the Mira island appear in screenshots & screen captures (for demos)",
+                subtitle: "Let everything Mira draws appear in screenshots, recordings & screen sharing (for demos)",
                 binding: $showInCapture
             )
             .onChange(of: showInCapture) {

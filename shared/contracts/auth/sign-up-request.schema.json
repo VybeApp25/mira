@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/auth/sign-up-request.schema.json",
+  "title": "SupabaseSignUpRequest",
+  "description": "Request body Mira sends to Supabase GoTrue's POST /auth/v1/signup. Confirmed from Mira/Services/SupabaseService.swift's signUp(email:password:name:). A 200 response with no access_token means signup succeeded but email confirmation is pending (not an error) — see SupabaseAuthResponse for the success shape, and note the client must treat 'no session in the response' as a distinct, non-error outcome.",
+  "type": "object",
+  "properties": {
+    "email": { "type": "string", "format": "email" },
+    "password": { "type": "string" },
+    "data": {
+      "type": "object",
+      "properties": {
+        "display_name": { "type": "string" }
+      },
+      "required": ["display_name"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["email", "password", "data"],
+  "additionalProperties": false
+}

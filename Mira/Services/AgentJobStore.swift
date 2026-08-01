@@ -21,6 +21,18 @@ final class AgentJobStore: ObservableObject {
     // agent (URLSession honors Task cancellation), keyed by job id.
     private var runnerTasks: [UUID: Task<Void, Never>] = [:]
 
+    // Bounded worker pool (Background Agents spec §3/§6): cap how many heavy agent
+    // runners execute at once so long jobs never starve the user's foreground apps,
+    // and let short tasks jump ahead of long ones. Runners execute at .utility QoS.
+    private let maxConcurrentRunners = 3
+    private var runningCount = 0
+    private struct PendingRun {
+        let jobId: UUID
+        let estimatedDuration: TimeInterval   // shorter → higher priority
+        let start: () -> Void
+    }
+    private var pendingRuns: [PendingRun] = []
+
     // In-memory only. Jobs the user has paused; the runner suspends at its next
     // step boundary (see updateStep → waitWhilePaused) until Resume or Stop.
     @Published private(set) var pausedJobs: Set<UUID> = []
@@ -46,28 +58,42 @@ final class AgentJobStore: ObservableObject {
         job.referenceImagePaths = referenceImagePaths
         job.steps = Self.buildSteps(for: type, mode: buildMode)
         job.estimatedDuration = buildMode?.estimatedDuration ?? Self.estimatedDuration(for: type)
+        // Freeze the user's working context AT enqueue (fast fields, synchronous) so
+        // the worker never has to interrupt later to ask "which window?". The heavy
+        // screenshot is attached a moment later, off the enqueue path.
+        job.context = TaskContextCapture.shared.captureFast()
         jobs.insert(job, at: 0)
         save()
         AudioCueService.shared.playAgentLaunch()
         NotificationCenter.default.post(name: .miraAgentFlightLaunched, object: nil)
 
         let jobId = job.id
-        let runner = Task.detached(priority: .userInitiated) { [weak self] in
-            guard let store = self else { return }
-            await store.markRunning(id: jobId)
-            switch type {
-            case .websiteBuilder:
-                await WebsiteBuilderAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store,
-                                               buildMode: buildMode ?? .pro, referenceImagePaths: referenceImagePaths)
-            case .deepResearch:
-                await ResearchAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
-            case .contentGeneration:
-                await ContentAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
-            default:
-                await GenericAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
+        Task { [weak self] in
+            if let path = await TaskContextCapture.shared.captureScreenshot(jobId: jobId) {
+                self?.attachContextScreenshot(id: jobId, path: path)
             }
         }
-        runnerTasks[jobId] = runner
+        // Route through the bounded pool: the job stays .queued until a slot frees.
+        enqueueRun(jobId: jobId, estimatedDuration: job.estimatedDuration) { [weak self] in
+            guard let self else { return }
+            let runner = Task.detached(priority: .utility) { [weak self] in
+                guard let store = self else { return }
+                await store.markRunning(id: jobId)
+                switch type {
+                case .websiteBuilder:
+                    await WebsiteBuilderAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store,
+                                                   buildMode: buildMode ?? .pro, referenceImagePaths: referenceImagePaths)
+                case .deepResearch:
+                    await ResearchAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
+                case .contentGeneration:
+                    await ContentAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
+                default:
+                    await GenericAgent.run(jobId: jobId, prompt: prompt, apiKey: apiKey, store: store)
+                }
+                await store.runnerFinished(id: jobId)   // free the slot, pump the queue
+            }
+            self.runnerTasks[jobId] = runner
+        }
 
         return job
     }
@@ -84,7 +110,7 @@ final class AgentJobStore: ObservableObject {
         TelemetryService.shared.track(.publishStarted(jobId: job.id, provider: target.rawValue))
 
         let jobId = job.id
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let store = self else { return }
             await store.markRunning(id: jobId)
             await PublishingAgent.run(
@@ -109,7 +135,7 @@ final class AgentJobStore: ObservableObject {
         save()
 
         let jobId = job.id
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let store = self else { return }
             await store.markRunning(id: jobId)
             await WebsiteEditorAgent.run(
@@ -135,7 +161,7 @@ final class AgentJobStore: ObservableObject {
         TelemetryService.shared.track(.improvementRequested(jobId: job.id, sourceEntryId: outputEntryId))
 
         let jobId = job.id
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let store = self else { return }
             await store.markRunning(id: jobId)
             await WebsiteImprovementAgent.run(
@@ -158,7 +184,7 @@ final class AgentJobStore: ObservableObject {
         save()
 
         let jobId = job.id
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let store = self else { return }
             await store.markRunning(id: jobId)
             await WebsiteHealthAgent.run(jobId: jobId, outputEntryId: outputEntryId, apiKey: apiKey, store: store)
@@ -241,6 +267,9 @@ final class AgentJobStore: ObservableObject {
             job.completedAt = Date()
             job.currentStep = "Cancelled"
         }
+        // If it was still queued behind the concurrency cap, drop it from the pool.
+        // (A running job frees its own slot via runnerFinished when it unwinds.)
+        pendingRuns.removeAll { $0.jobId == id }
         runnerTasks.removeValue(forKey: id)
         pausedJobs.remove(id)
     }
@@ -434,7 +463,7 @@ final class AgentJobStore: ObservableObject {
         let prompt = job.prompt
         let mode = job.buildMode
         let refs = job.referenceImagePaths
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let store = self else { return }
             switch job.type {
             case .websiteBuilder:
@@ -566,6 +595,40 @@ final class AgentJobStore: ObservableObject {
                 jobId: job.id, jobType: job.type.rawValue, reason: resolution.userMessage
             ))
         }
+    }
+
+    /// Attaches the pre-captured screenshot path to a job's frozen context.
+    func attachContextScreenshot(id: UUID, path: String) {
+        update(id) { $0.context?.screenshotPath = path }
+    }
+
+    // MARK: - Bounded worker pool
+
+    /// Queues a runner behind the concurrency cap. `start` is invoked (on the main
+    /// actor) only once a slot is free; until then the job stays `.queued`.
+    private func enqueueRun(jobId: UUID, estimatedDuration: TimeInterval, start: @escaping () -> Void) {
+        pendingRuns.append(PendingRun(jobId: jobId, estimatedDuration: estimatedDuration, start: start))
+        pumpRuns()
+    }
+
+    /// Launches as many queued runners as the cap allows, shortest-first.
+    private func pumpRuns() {
+        pendingRuns.sort { $0.estimatedDuration < $1.estimatedDuration }   // short jumps long
+        while runningCount < maxConcurrentRunners, !pendingRuns.isEmpty {
+            let next = pendingRuns.removeFirst()
+            // Skip anything cancelled/removed while it waited in the queue.
+            guard jobs.contains(where: { $0.id == next.jobId && !$0.status.isTerminal }) else { continue }
+            runningCount += 1
+            next.start()
+        }
+    }
+
+    /// Called by a runner when it finishes (success, failure, or cancellation) to
+    /// free its slot and let the next queued job start.
+    func runnerFinished(id: UUID) {
+        runnerTasks.removeValue(forKey: id)
+        runningCount = max(0, runningCount - 1)
+        pumpRuns()
     }
 
     // MARK: - Private Helpers

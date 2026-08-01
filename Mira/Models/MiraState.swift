@@ -15,6 +15,15 @@ class MiraState: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "mira_api_key") }
     }
 
+    /// Same resolution as `effectiveAPIKey`, reachable without a MiraState
+    /// instance. Notch modules are constructed in AppDelegate where no MiraState
+    /// exists, and duplicating the user-override-then-bundled-key rule in each
+    /// caller is how the two quietly drift apart.
+    static var effectiveAPIKeyStatic: String {
+        let user = UserDefaults.standard.string(forKey: "mira_api_key") ?? ""
+        return user.isEmpty ? AppSecrets.anthropicAPIKey : user
+    }
+
     // The key actually used for requests: user override first, then bundled key.
     var effectiveAPIKey: String {
         let user = userAPIKey

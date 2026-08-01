@@ -22,8 +22,18 @@ final class AnimationController: ObservableObject {
     private let geometry: NotchGeometry
     private var hudResetTask: Task<Void, Never>?
 
-    // Expanded target dimensions
-    static let expandedW:  CGFloat = 700
+    // Expanded target dimensions.
+    // 724 is MEASURED from MacNotch's shipped UI, not chosen: a pixel scan of its
+    // expanded slab puts the visible edges at 502..1225.5pt, centred on 863.8
+    // against a screen centre of 864. (Its *window* is 1080pt wide — the surplus
+    // is hover hit-area and shadow room, so window bounds are the wrong thing to
+    // copy.) Mira's previous 700 was close but not it.
+    static let expandedW:  CGFloat = 724
+    /// Maximized width, for the corner control that widens the panel. Sized to
+    /// sit inside MacNotch's own 1080pt window with the same shadow room the
+    /// note above describes, so a maximized Mira panel and a maximized MacNotch
+    /// panel occupy the same span of screen.
+    static let expandedWideW: CGFloat = 1000
     static let expandedH:  CGFloat = 252
     // Content-dense tabs (settings, agents, crons) get a taller panel —
     // 252pt showed ~190pt of a 1400-line settings page through a scroll slot.
@@ -41,7 +51,10 @@ final class AnimationController: ObservableObject {
     static let collapsedTopR:  CGFloat = 0
     static let collapsedBotR:  CGFloat = 10
     static let expandedTopR:   CGFloat = 0
-    static let expandedBotR:   CGFloat = 20
+    // Measured from MacNotch: its bottom corner curve begins ~35pt above the slab's
+    // bottom edge. Read as a `.continuous` (squircle) corner, which insets less
+    // than a circular one of the same radius — matching the observed profile.
+    static let expandedBotR:   CGFloat = 35
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry

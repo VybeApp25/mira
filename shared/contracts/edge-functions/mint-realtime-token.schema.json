@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/mint-realtime-token.schema.json",
+  "title": "MintRealtimeToken",
+  "description": "supabase/functions/mint-realtime-token/index.ts. Mints a short-lived OpenAI Realtime ephemeral client secret so the raw OpenAI key never reaches the client. Requires a verified Supabase JWT AND that the caller is within their daily voice quota (checkVoiceQuota, throws 429 voice_quota_exceeded BEFORE minting — a stolen session can't rack up cost even once past auth). Voice is free-tier: every plan (free/pro/ultra) may call this, gated only by the daily session/seconds cap. On success, the client uses the returned token to connect directly to wss://api.openai.com/v1/realtime — this function does not proxy the realtime socket itself, only the token mint (Pattern B in docs/architecture/backend_secrets_proxy.md: ephemeral-token minting, not reverse-proxying, because a realtime audio socket can't be cheaply proxied).",
+  "$defs": {
+    "MintRealtimeTokenRequest": {
+      "title": "MintRealtimeTokenRequest",
+      "type": "object",
+      "properties": {
+        "voice": { "type": "string", "description": "Optional; defaults to \"alloy\" server-side if omitted. Not validated against an allowlist in this function (contrast with openai-tts-proxy, which does allowlist voices)." }
+      },
+      "additionalProperties": false
+    },
+    "MintRealtimeTokenResponse": {
+      "title": "MintRealtimeTokenResponse",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "The ephemeral OpenAI Realtime client secret (payload.value from OpenAI's own /v1/realtime/client_secrets response). Empty string if OpenAI's response omitted it." },
+        "expires_at": { "type": "integer", "description": "Unix timestamp; 0 if OpenAI's response omitted it." },
+        "model": { "title": "MintRealtimeTokenModel", "type": "string", "const": "gpt-realtime", "description": "Hardcoded server-side; not client-selectable today." }
+      },
+      "required": ["token", "expires_at", "model"],
+      "additionalProperties": false
+    },
+    "MintRealtimeTokenErrorResponse": {
+      "title": "MintRealtimeTokenErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "description": "Either a string code (unauthenticated, upgrade_required, voice_quota_exceeded, OPENAI_API_KEY secret not set) OR, on an upstream OpenAI failure, the raw OpenAI error object forwarded as-is (the function does { error: payload } in that branch) — this field's shape genuinely varies by failure mode; treat as a union client-side rather than assuming it's always a string."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

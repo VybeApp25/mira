@@ -1,0 +1,16 @@
+﻿<Application x:Class="Mira.Windows.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Mira.Windows.App"
+             ShutdownMode="OnExplicitShutdown">
+    <!--
+      No StartupUri: the app starts as a tray icon with no window at all (see
+      App.xaml.cs), matching the macOS app's background-agent-first design —
+      opening a window is something the user does from the tray, not something
+      that happens automatically on launch. ShutdownMode=OnExplicitShutdown so
+      closing that window doesn't quit the app while the tray icon is still up.
+    -->
+    <Application.Resources>
+
+    </Application.Resources>
+</Application>

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/check-device.schema.json",
+  "title": "CheckDevice",
+  "description": "supabase/functions/check-device/index.ts. PUBLIC endpoint, no auth required (called before an account exists, so there's no JWT to check yet) — auth here is intentionally absent, not an oversight. Lets the client check whether a device_hash already owns a free-tier account BEFORE attempting signup, so signup never creates an orphan user that then gets rejected by register-device. The device_hash is the client-computed SHA-256(hardware serial + persisted UUID) — see tables/profile-row.schema.json's device_id_hash field and SECURITY_AND_PRIVACY.md for the Windows-equivalent scheme needed.",
+  "$defs": {
+    "CheckDeviceRequest": {
+      "title": "CheckDeviceRequest",
+      "type": "object",
+      "properties": {
+        "device_hash": { "type": "string" }
+      },
+      "required": ["device_hash"],
+      "additionalProperties": false
+    },
+    "CheckDeviceResponse": {
+      "title": "CheckDeviceResponse",
+      "type": "object",
+      "properties": {
+        "available": { "type": "boolean", "description": "True if no free-tier account currently owns this device_hash. false-y/absent count-mismatch defaults to true (fail-open on a DB error is NOT the behavior here — a db_error is returned as an explicit error instead, see error schema)." }
+      },
+      "required": ["available"],
+      "additionalProperties": false
+    },
+    "CheckDeviceErrorResponse": {
+      "title": "CheckDeviceErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "CheckDeviceErrorCode", "type": "string", "enum": ["device_hash required", "db_error"] }
+          }
+        }
+      ]
+    }
+  }
+}

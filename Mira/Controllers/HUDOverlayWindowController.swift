@@ -32,6 +32,13 @@ final class HUDOverlayWindowController {
     }
 
     private func show(symbol: String, level: Double) {
+        // The notch draws it instead, unless the notch is snoozed — in which
+        // case there is nothing on screen to draw it and this floating panel is
+        // the only thing standing between the user and no feedback at all.
+        // Showing both would be two HUDs for one key press.
+        if LiveActivityService.showsSystemHUDInNotch, !NotchSnoozeService.shared.isSnoozed {
+            return
+        }
         hideWork?.cancel()
         ensurePanel()
         guard let p = panel else { return }

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/report-voice-usage.schema.json",
+  "title": "ReportVoiceUsage",
+  "description": "supabase/functions/report-voice-usage/index.ts. The client POSTs the duration of a just-ended realtime voice session so the daily seconds cap (the soft half of the voice throttle, alongside mint-realtime-token's hard session-count cap) accumulates real usage. A client can only under-report (bounded by the hard session cap), so this is trusted for cost-shaping despite being client-reported. Values are clamped server-side to a max of 3600 seconds per report.",
+  "$defs": {
+    "ReportVoiceUsageRequest": {
+      "title": "ReportVoiceUsageRequest",
+      "type": "object",
+      "properties": {
+        "seconds": { "type": "number", "description": "Session duration in seconds. Non-finite or <= 0 values are silently treated as 0 (still returns {status:\"ok\"}, no error). Clamped server-side to 3600 max." }
+      },
+      "additionalProperties": false
+    },
+    "ReportVoiceUsageResponse": {
+      "title": "ReportVoiceUsageResponse",
+      "type": "object",
+      "properties": {
+        "status": { "title": "ReportVoiceUsageStatus", "type": "string", "const": "ok" }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/skills-catalog.schema.json",
+  "title": "SkillsCatalog",
+  "description": "supabase/functions/skills-catalog/index.ts. PUBLIC (deployed --no-verify-jwt) — only ever returns already-approved, public rows from community_skills, so no auth is needed by design. GET with an optional ?q= query param (case-insensitive substring match against name OR tagline). Returns up to 200 rows ordered by downloads desc.",
+  "$defs": {
+    "SkillsCatalogResponse": {
+      "title": "SkillsCatalogResponse",
+      "type": "object",
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CommunitySkillRow" }
+        }
+      },
+      "required": ["skills"],
+      "additionalProperties": false
+    },
+    "CommunitySkillRow": {
+      "title": "CommunitySkillRow",
+      "type": "object",
+      "description": "A single community_skills row as exposed by this endpoint (status/author_id/moderation_reason are deliberately NOT selected here — those are internal-only fields visible to the author via a different query path, not this public catalog read).",
+      "properties": {
+        "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,60}$" },
+        "name": { "type": "string" },
+        "tagline": { "type": "string" },
+        "category": { "title": "CommunitySkillCategory", "type": "string", "enum": ["Productivity", "Engineering", "Communication", "Creative"] },
+        "icon": { "type": "string" },
+        "body": { "type": "string", "description": "The literal text injected into Claude's system prompt when this skill is activated. Stored in-row (no storage bucket)." },
+        "author_handle": { "type": "string" },
+        "downloads": { "type": "integer" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "name", "tagline", "category", "icon", "body", "author_handle", "downloads", "created_at"],
+      "additionalProperties": false
+    },
+    "SkillsCatalogErrorResponse": {
+      "title": "SkillsCatalogErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "SkillsCatalogErrorCode", "type": "string", "const": "query_failed" },
+            "detail": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

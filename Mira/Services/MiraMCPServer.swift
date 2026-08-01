@@ -80,6 +80,14 @@ final class MiraMCPServer: ObservableObject {
                         print("[MiraMCPServer] listening on http://127.0.0.1:\(p)/mcp")
                         // Register with Codex now that we know the actual bound port.
                         CodexBridgeConfig.reconcile(port: p)
+                        // …and with Claude Code, which speaks the same transport.
+                        // Mira has served MCP for a while but only ever told
+                        // Codex about it, so Claude Code could drive Mira's tools
+                        // in principle and had no way to discover them.
+                        ClaudeBridgeConfig.reconcile(port: p, token: self.token)
+                        // …and Claude Desktop, which takes stdio connectors
+                        // rather than URLs, so it goes through a relay shim.
+                        ClaudeDesktopBridge.reconcile(port: p, token: self.token)
                     case .failed:
                         // Port likely in use — try the next candidate.
                         self.isRunning = false

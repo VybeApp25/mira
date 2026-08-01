@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/skills-publish.schema.json",
+  "title": "SkillsPublish",
+  "description": "supabase/functions/skills-publish/index.ts. Authenticated. The client submits a full SKILL.md-format markdown document (frontmatter + body). The function's frontmatter parser deliberately mirrors MiraSkillLoader's client-side parser line-for-line, per its own header comment, so the same file validates identically on both sides — a Windows client's own parser must match this same grammar (--- key: value pairs --- then the body) rather than reimplementing it independently. Runs a Claude Haiku moderation pass server-side before inserting the row; the client never sees or influences the moderation prompt.",
+  "$defs": {
+    "SkillsPublishRequest": {
+      "title": "SkillsPublishRequest",
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 8000,
+          "description": "Full SKILL.md content: a --- frontmatter block (must include at least `name:`, kebab-case, ^[a-z0-9][a-z0-9-]{1,60}$) followed by a closing --- and then the body (min 10 chars after trimming). Recognized frontmatter keys: name (required, becomes slug), title (becomes display name, falls back to slug), tagline/description (becomes tagline, truncated to 120 chars, tagline takes precedence if both present), category (one of Productivity/Engineering/Communication/Creative, defaults to Productivity if absent/invalid), icon (defaults to \"sparkles\")."
+        }
+      },
+      "required": ["markdown"],
+      "additionalProperties": false
+    },
+    "SkillsPublishResponse": {
+      "title": "SkillsPublishResponse",
+      "type": "object",
+      "properties": {
+        "status": { "title": "SkillsPublishStatus", "type": "string", "enum": ["approved", "rejected", "pending"], "description": "approved = AI moderation verdict \"approve\", auto-listed immediately. rejected = verdict \"reject\". pending = verdict \"review\" (ambiguous, awaits human review) OR the ANTHROPIC_API_KEY secret was unset server-side (moderation unavailable falls back to pending, not a hard error)." },
+        "reason": { "type": "string", "description": "One-sentence moderation rationale from the Claude moderation call, truncated to 300 chars. \"moderation could not be completed\" if the moderation call itself failed." },
+        "slug": { "type": "string" }
+      },
+      "required": ["status", "reason", "slug"],
+      "additionalProperties": false
+    },
+    "SkillsPublishErrorResponse": {
+      "title": "SkillsPublishErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "SkillsPublishErrorCode", "type": "string", "enum": ["method_not_allowed", "unauthenticated", "invalid_markdown", "malformed_skill", "invalid_name", "empty_body", "slug_taken", "insert_failed"] },
+            "detail": { "type": "string", "description": "Present alongside malformed_skill, invalid_name, slug_taken, insert_failed — a human-readable elaboration." }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/register-device.schema.json",
+  "title": "RegisterDevice",
+  "description": "supabase/functions/register-device/index.ts. Authenticated (JWT required) — called immediately after every successful sign-in/sign-up. Idempotent: if the caller's profile already has this exact device_id_hash, returns {status:\"ok\"} with no write. Paid users (plan != free) can register any device_hash freely (no lock). Free-tier users are blocked with 409 device_already_registered if another free-tier profile already owns this device_hash. AccountService.swift signs the user back out on a 409 with this specific error string.",
+  "$defs": {
+    "RegisterDeviceRequest": {
+      "title": "RegisterDeviceRequest",
+      "type": "object",
+      "properties": {
+        "device_hash": { "type": "string" }
+      },
+      "required": ["device_hash"],
+      "additionalProperties": false
+    },
+    "RegisterDeviceResponse": {
+      "title": "RegisterDeviceResponse",
+      "type": "object",
+      "properties": {
+        "status": { "title": "RegisterDeviceStatus", "type": "string", "const": "ok" }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
+    "RegisterDeviceErrorResponse": {
+      "title": "RegisterDeviceErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "RegisterDeviceErrorCode", "type": "string", "enum": ["unauthenticated", "device_hash required", "device_already_registered"], "description": "device_already_registered is returned with HTTP 409, not the usual 400/401/402/429 pattern used elsewhere." }
+          }
+        }
+      ]
+    }
+  }
+}

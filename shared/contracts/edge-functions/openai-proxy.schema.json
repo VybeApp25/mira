@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mira.app/schemas/edge-functions/openai-proxy.schema.json",
+  "title": "OpenAIProxy",
+  "description": "supabase/functions/openai-proxy/index.ts. POST only. Same shape/pattern as anthropic-proxy: transparent reverse proxy of OpenAI's POST /v1/chat/completions, validating only `model` (allowlist) and capping `max_tokens`. Streaming responses are metered by an input-token estimate (OpenAI does not return usage on a stream without stream_options) that deliberately skips image_url content parts (charged a flat ~1024-token allowance instead) so a base64 image can't blow the estimate.",
+  "$defs": {
+    "OpenAIProxyRequest": {
+      "title": "OpenAIProxyRequest",
+      "type": "object",
+      "description": "Passthrough of the OpenAI chat/completions request body; only model and max_tokens are inspected server-side.",
+      "properties": {
+        "model": {
+          "title": "OpenAIProxyModel",
+          "type": "string",
+          "enum": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
+          "description": "Server-side allowlist (ALLOWED_MODELS) — treat as a live value to re-derive from source, not frozen."
+        },
+        "max_tokens": { "type": "integer", "description": "Capped server-side (free: 1500, pro: 8000, ultra: 16000)." },
+        "stream": { "type": "boolean" },
+        "messages": {
+          "type": "array",
+          "description": "Passed through unchanged; shape follows the OpenAI chat/completions messages array (role + content, where content may be a string or an array of {type, text} / {type: image_url, image_url} parts).",
+          "items": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "required": ["model"],
+      "additionalProperties": true
+    },
+    "OpenAIProxyErrorResponse": {
+      "title": "OpenAIProxyErrorResponse",
+      "allOf": [
+        { "$ref": "../common/error-response.schema.json" },
+        {
+          "type": "object",
+          "properties": {
+            "error": { "title": "OpenAIProxyErrorCode", "type": "string", "enum": ["method_not_allowed", "unauthenticated", "upgrade_required", "quota_exceeded", "invalid_body", "model_not_allowed", "OPENAI_API_KEY secret not set"] },
+            "model": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}
