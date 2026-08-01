@@ -259,6 +259,7 @@
 		A84B1CB21924343222471E43 /* WakeWordService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E550071C015B2092E04A1 /* WakeWordService.swift */; };
 		A86BC74E8A27B141F9C8924D /* VoicePreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D113AC6430C7DCCF0D20698D /* VoicePreviewService.swift */; };
 		A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0ACABB44793DCD72302E5A /* AudioCueService.swift */; };
+		A9A4B629FD1B662627A51743 /* AudioSpectrumService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A98CC3F2F980908637FC5062 /* AudioSpectrumService.swift */; };
 		AB7308DAFDAAC1A7213DF99E /* HUDOverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15EE928CDBBA87B6E0A4919 /* HUDOverlayWindowController.swift */; };
 		ABB7E307AE79F2B775ECE1DB /* MiraState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5914547C8201C6C6241551 /* MiraState.swift */; };
 		AC57AB563CEFA28AF69D5B15 /* NotchOnboardingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6209F47E18BFBBE3B05470E6 /* NotchOnboardingManager.swift */; };
@@ -667,6 +668,7 @@
 		A7EBAF3F04EE160A8334FC63 /* HoverSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverSummaryService.swift; sourceTree = "<group>"; };
 		A87E9511523BE886A2FCD84F /* WebhookServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookServer.swift; sourceTree = "<group>"; };
 		A8E27FBC6806718D814D6642 /* AICodingBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICodingBridgeService.swift; sourceTree = "<group>"; };
+		A98CC3F2F980908637FC5062 /* AudioSpectrumService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSpectrumService.swift; sourceTree = "<group>"; };
 		AA4E11CF5B42FCB584B4C8A2 /* ocr-and-documents.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "ocr-and-documents.md"; sourceTree = "<group>"; };
 		AA5914547C8201C6C6241551 /* MiraState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiraState.swift; sourceTree = "<group>"; };
 		AA6244FFA12A2ECF6F640E44 /* ProposalMetricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalMetricsView.swift; sourceTree = "<group>"; };
@@ -1070,6 +1072,7 @@
 				2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */,
 				ED0ACABB44793DCD72302E5A /* AudioCueService.swift */,
 				441E2879045DBA47ABFEB563 /* AudioOutputRoute.swift */,
+				A98CC3F2F980908637FC5062 /* AudioSpectrumService.swift */,
 				299758A12C64451C7C8799E5 /* AXActuationService.swift */,
 				4C74197FF06C9B604A66F22D /* BackgroundScheduler.swift */,
 				BA711D9AA5638570AB2E66EC /* BannerIconCapture.swift */,
@@ -1549,6 +1552,7 @@
 				533E0F40A415406A3DE99756 /* AttentionEngine.swift in Sources */,
 				A97057FE2723A372630C42A3 /* AudioCueService.swift in Sources */,
 				D53BE4353E6BF74135431739 /* AudioOutputRoute.swift in Sources */,
+				A9A4B629FD1B662627A51743 /* AudioSpectrumService.swift in Sources */,
 				941D5549A8E31FC3B610A41F /* AuthView.swift in Sources */,
 				FA20CC2BF05443E9FFEE8EA3 /* BackgroundScheduler.swift in Sources */,
 				5F60855FF21CE00749D0ED74 /* BannerIconCapture.swift in Sources */,
