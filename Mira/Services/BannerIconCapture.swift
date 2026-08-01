@@ -131,7 +131,8 @@ final class BannerIconCapture: ObservableObject {
             guard relative.minX >= 0, relative.minY >= 0,
                   relative.maxX <= CGFloat(shot.width), relative.maxY <= CGFloat(shot.height),
                   let bannerImage = shot.cropping(to: relative),
-                  let iconImage = Self.extractIcon(from: bannerImage) else { return }
+                  let iconImage = Self.extractIcon(from: bannerImage,
+                                                   pointHeight: frame.height) else { return }
 
             let image = NSImage(cgImage: iconImage,
                                 size: NSSize(width: iconImage.width / 2, height: iconImage.height / 2))
@@ -180,7 +181,7 @@ final class BannerIconCapture: ObservableObject {
     /// The scan band skips the rounded corners: they come back OPAQUE BLACK in
     /// the capture, not transparent, so including them made the trim select the
     /// entire square. That was the first version, and it silently "worked".
-    private static func extractIcon(from banner: CGImage) -> CGImage? {
+    private static func extractIcon(from banner: CGImage, pointHeight: CGFloat) -> CGImage? {
         guard let data = banner.dataProvider?.data,
               let bytes = CFDataGetBytePtr(data) else { return nil }
         let bytesPerRow = banner.bytesPerRow
@@ -203,23 +204,47 @@ final class BannerIconCapture: ObservableObject {
             p.3 > 40 && abs(p.0 - background.0) + abs(p.1 - background.1) + abs(p.2 - background.2) > 40
         }
 
-        let xLow  = Int(Double(height) * 0.14)
-        let yLow  = Int(Double(height) * 0.10)
-        let yHigh = height - yLow
+        // SCAN IN POINTS, NOT IN FRACTIONS OF THE BANNER.
+        //
+        // The first version scanned the leading square — width equal to the
+        // banner's height — on the assumption the icon scales with the banner.
+        // It does not: the icon stays about 38pt whatever the alert's height,
+        // so on a tall banner (a Time Sensitive alert carries an extra header
+        // row) the square reached well into the message text.
+        //
+        // Measured on real captures: 11 of 17 icons collected in a day of normal
+        // use were overshoots — Burger King at 181x159, X at 181x150, TikTok at
+        // 120x93 containing the icon plus "St…" and two heart glyphs. Only six
+        // were clean. A fraction of the height cannot fix that; a fixed point
+        // window can.
+        let scale = CGFloat(height) / max(pointHeight, 1)
+        let xLow  = Int(8 * scale)
+        let xHigh = min(banner.width, Int(54 * scale))
+        let yLow  = max(0, Int((pointHeight - 46) / 2 * scale))
+        let yHigh = min(height, height - yLow)
+        guard xHigh > xLow, yHigh > yLow else { return nil }
         var minX = height, maxX = 0, minY = height, maxY = 0
         for y in yLow..<yHigh {
-            for x in xLow..<height where isContent(pixel(x, y)) {
+            for x in xLow..<xHigh where isContent(pixel(x, y)) {
                 minX = min(minX, x); maxX = max(maxX, x)
                 minY = min(minY, y); maxY = max(maxY, y)
             }
         }
         guard maxX > minX, maxY > minY else { return nil }
 
-        let width = maxX - minX + 1, tall = maxY - minY + 1
-        // An icon is square-ish. Anything wildly off is the trim having latched
-        // onto text or a divider, and a wrong crop is worse than no icon.
+        var width = maxX - minX + 1
+        let tall = maxY - minY + 1
+
+        // App icons are square. A wider result means the trim still caught
+        // something to the right of it, so clamp back to a square anchored at
+        // the icon's own left edge rather than returning the overshoot.
+        if width > tall { width = tall }
+
+        // Tightened from 1.4, which passed the 1.29 TikTok overshoot. Near-square
+        // only: a wrong icon misattributes who messaged you, so a miss (and a
+        // monogram) is the better failure.
         let ratio = Double(width) / Double(tall)
-        guard ratio > 0.7, ratio < 1.4, width > height / 4 else { return nil }
+        guard ratio > 0.85, ratio < 1.18, width > height / 5 else { return nil }
 
         return banner.cropping(to: CGRect(x: minX, y: minY, width: width, height: tall))
     }
