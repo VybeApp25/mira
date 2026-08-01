@@ -26,7 +26,12 @@ struct LiveActivity: Equatable, Identifiable {
         // `notification` inserted second: an alert that just landed outranks
         // everything except a spinner, because it is the only source here that
         // is time-critical rather than ambient.
-        case loading, notification, bluetooth, appUpdates, systemHUD, media, pomodoro, event, todo
+        // `systemHUD` and `power` are both physical-feedback sources — you just
+        // pressed a key or plugged in a cable — so they sit high: an
+        // acknowledgement that arrives after the ambient rotation gets to it is
+        // not an acknowledgement. MacNotch gives its plug/unplug strips "clearer
+        // priority" for the same reason.
+        case loading, systemHUD, notification, power, bluetooth, appUpdates, media, pomodoro, event, todo
     }
 
     let kind: Kind
@@ -90,6 +95,48 @@ final class LiveActivityService: ObservableObject {
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
+    /// The last volume/brightness change, and when. Short-lived by design — a
+    /// HUD is an acknowledgement, not a status line.
+    private var systemHUD: (symbol: String, level: Double, at: Date)?
+    private static let hudDuration: TimeInterval = 1.8
+    private var hudClearTask: Task<Void, Never>?
+
+    /// Whether the notch shows the volume/brightness HUD instead of the floating
+    /// overlay window. On by default: intercepting the keys and then drawing the
+    /// result somewhere other than where the user is looking is half a feature.
+    static var showsSystemHUDInNotch: Bool {
+        UserDefaults.standard.object(forKey: "mira_system_hud_in_notch") as? Bool ?? true
+    }
+
+    private func observeSystemHUD() {
+        for (name, symbol) in [(Notification.Name.miraVolumeHUDChanged, "speaker.wave.2.fill"),
+                               (Notification.Name.miraBrightnessHUDChanged, "sun.max.fill")] {
+            NotificationCenter.default.publisher(for: name)
+                .sink { [weak self] note in
+                    guard let self, Self.showsSystemHUDInNotch else { return }
+                    let level = (note.userInfo?["level"] as? Double)
+                        ?? Double(note.userInfo?["level"] as? Float ?? 0)
+                    // Mute reads as zero volume, and a speaker icon at 0% is not
+                    // the same statement as a crossed-out one.
+                    let icon = (symbol == "speaker.wave.2.fill" && level <= 0.001)
+                        ? "speaker.slash.fill" : symbol
+                    self.systemHUD = (icon, level, Date())
+                    self.refresh(advance: false)
+
+                    // Nothing else ticks fast enough to retire it: the rotation
+                    // timer runs on a 4s dwell, so without this the HUD would
+                    // linger well past its 1.8s window.
+                    self.hudClearTask?.cancel()
+                    self.hudClearTask = Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: UInt64(Self.hudDuration * 1_000_000_000))
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { self?.refresh(advance: false) }
+                    }
+                }
+                .store(in: &cancellables)
+        }
+    }
+
     private let nowPlaying = NowPlayingService.shared
     private let pomodoro   = PomodoroService.shared
     private let calendar   = CalendarTodayService.shared
@@ -101,9 +148,14 @@ final class LiveActivityService: ObservableObject {
 
         // Recompute immediately when a source changes rather than waiting for the
         // next tick — a track change should be visible now, not up to 4s later.
+        observeSystemHUD()
+
         for publisher in [nowPlaying.objectWillChange,
                           pomodoro.objectWillChange,
                           calendar.objectWillChange,
+                          // Plugging a cable in should register now, not on the
+                          // next 4s tick.
+                          PowerActivityService.shared.objectWillChange,
                           // Without this a notification would wait up to the
                           // 4s dwell before the notch reacted, which for the
                           // one time-critical source here is too late to be
@@ -164,10 +216,19 @@ final class LiveActivityService: ObservableObject {
         // and the strip returns to the rotation on its own when it expires.
         // Deliberately above the focus pin — pinning is a standing preference
         // about ambient sources, not an instruction to sit on an alert.
-        if let index = active.firstIndex(where: { $0.kind == .notification }) {
-            rotationIndex = index
-            if active[index] != current { current = active[index] }
-            return
+        // Everything here is a response to something that JUST happened — a key
+        // press, an alert, a cable. A plug/unplug notice preempts, but a standing
+        // low-battery warning does not: it would pin the strip indefinitely and
+        // block every other source, which is a status line, not a notice.
+        var preempting: [LiveActivity.Kind] = [.systemHUD, .notification]
+        if PowerActivityService.shared.recentEvent != nil { preempting.append(.power) }
+
+        for kind in preempting {
+            if let index = active.firstIndex(where: { $0.kind == kind }) {
+                rotationIndex = index
+                if active[index] != current { current = active[index] }
+                return
+            }
         }
 
         // A focused activity holds the strip for as long as it has something to
@@ -192,13 +253,53 @@ final class LiveActivityService: ObservableObject {
     private func activeActivities() -> [LiveActivity] {
         var out: [LiveActivity] = []
 
+        if let hud   = systemHUDActivity()   { out.append(hud)   }
         if let note  = notificationActivity() { out.append(note) }
+        if let power = powerActivity()       { out.append(power) }
         if let bt    = bluetoothActivity()   { out.append(bt)    }
         if let media = mediaActivity()       { out.append(media) }
         if let pom   = pomodoroActivity()    { out.append(pom)   }
         if let event = nextEventActivity()   { out.append(event) }
 
         return out.sorted { $0.kind.rawValue < $1.kind.rawValue }
+    }
+
+    /// Volume, brightness and mute, in the notch itself.
+    ///
+    /// Mira already intercepted the media keys and suppressed the macOS HUD, but
+    /// drew its replacement in a SEPARATE floating window — so the notch, the
+    /// thing you are looking at, stayed empty during the one interaction that is
+    /// pure visual feedback. MacNotch presents it as a collapsed activity, and
+    /// its own copy is explicit that this is the point of intercepting the keys.
+    private func systemHUDActivity() -> LiveActivity? {
+        guard let hud = systemHUD, Date().timeIntervalSince(hud.at) < Self.hudDuration else {
+            return nil
+        }
+        return LiveActivity(kind: .systemHUD,
+                            icon: hud.symbol,
+                            text: "\(Int((hud.level * 100).rounded()))%",
+                            tint: Color(red: 0.85, green: 0.87, blue: 0.95))
+    }
+
+    /// Plug/unplug as a passing notice, low battery as a standing one.
+    private func powerActivity() -> LiveActivity? {
+        let power = PowerActivityService.shared
+        if let event = power.recentEvent {
+            return LiveActivity(
+                kind: .power,
+                icon: event == .pluggedIn ? "powerplug.fill" : "battery.50",
+                text: event == .pluggedIn
+                    ? "Plugged in · \(power.percent)%"
+                    : "Unplugged · \(power.percent)%",
+                tint: event == .pluggedIn
+                    ? Color(red: 0.40, green: 0.85, blue: 0.55)
+                    : Color(red: 0.85, green: 0.85, blue: 0.90))
+        }
+        guard power.isLow else { return nil }
+        return LiveActivity(kind: .power,
+                            icon: "battery.25",
+                            text: "Low battery · \(power.percent)%",
+                            tint: Color(red: 1.0, green: 0.45, blue: 0.45))
     }
 
     /// Only surfaces a LOW battery, never a healthy one. MacNotch lists Bluetooth

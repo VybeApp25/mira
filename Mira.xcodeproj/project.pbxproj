@@ -244,6 +244,7 @@
 		A27ED327A6F5061ED6D27309 /* CodexHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEAB792D4182E7DAA8F9CCEF /* CodexHUD.swift */; };
 		A28CFD943DA3A6976D4615A1 /* RouterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B2C1A5B3D357A621F2541F /* RouterService.swift */; };
 		A3A6C9CEA34DDE03F1206AED /* github-auth.md in Resources */ = {isa = PBXBuildFile; fileRef = BE3D56CFC79D44D585294CE6 /* github-auth.md */; };
+		A3DA846A8391C982F1A46426 /* SystemVolumeObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5E705F6B2C5AD8B18DDE19 /* SystemVolumeObserver.swift */; };
 		A3DAE65741A1B34B9FF019F0 /* HUDViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820B0BC89E84B6FE3F191D98 /* HUDViewModel.swift */; };
 		A51FF4A8B940A0489C642CCE /* HoverTooltipController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8034147C5CAFCD792E0CB8 /* HoverTooltipController.swift */; };
 		A6BCC47EFE83944A8B55BDC4 /* CorrelationInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = BADFDB17A53387AA9FBC4867 /* CorrelationInsight.swift */; };
@@ -270,6 +271,7 @@
 		B67F17EFCB9B3D38E0590E0D /* QualityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A1297EEE877A44731A4D04 /* QualityStore.swift */; };
 		B6FBAEC1A253E003CA0C0913 /* ContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BAF16D6CB27982CEA34F14 /* ContextService.swift */; };
 		B6FD05C67725A28D39059685 /* ClipboardHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07BE5F22FD61903D21DB7A6 /* ClipboardHistoryView.swift */; };
+		B70A65DA6E580C099F230C9F /* PowerActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C154861E3B578799597C0C /* PowerActivityService.swift */; };
 		B84A1AE6B16D765C51D2D8BA /* github-issues.md in Resources */ = {isa = PBXBuildFile; fileRef = 4EFFBF922DC370825297F52C /* github-issues.md */; };
 		B8A30732977529D4BF431B35 /* MenuBarIconManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D67D51F8B863530212BE3B1 /* MenuBarIconManager.swift */; };
 		B91B57492F7E09F4C0A1B48B /* googlecalendar.md in Resources */ = {isa = PBXBuildFile; fileRef = 7855C1B7B22D68EA3409F341 /* googlecalendar.md */; };
@@ -478,6 +480,7 @@
 		380708383A28192B655CE505 /* CallTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriptView.swift; sourceTree = "<group>"; };
 		3896768D02C66B87623C95A0 /* CommunityBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityBrowseView.swift; sourceTree = "<group>"; };
 		39B2C1A5B3D357A621F2541F /* RouterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterService.swift; sourceTree = "<group>"; };
+		39C154861E3B578799597C0C /* PowerActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerActivityService.swift; sourceTree = "<group>"; };
 		3B97699AE03CD97A53FB0E0C /* AgentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCoordinator.swift; sourceTree = "<group>"; };
 		3BBFDE25BB931F07CEF930FF /* KnowledgeImportPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeImportPrompts.swift; sourceTree = "<group>"; };
 		3D3263BDB62DACABB0645CE6 /* CausalInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CausalInsight.swift; sourceTree = "<group>"; };
@@ -703,6 +706,7 @@
 		CA700DD1C27CA8DEA372F8E2 /* NotchModuleRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchModuleRegistry.swift; sourceTree = "<group>"; };
 		CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationCanvasService.swift; sourceTree = "<group>"; };
 		CB38BBEE5A82A00325431A23 /* docx_rw.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = docx_rw.py; sourceTree = "<group>"; };
+		CB5E705F6B2C5AD8B18DDE19 /* SystemVolumeObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVolumeObserver.swift; sourceTree = "<group>"; };
 		CC4757965DB5A1F44360BDBA /* narration-2poocvt5yla18.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "narration-2poocvt5yla18.mp3"; sourceTree = "<group>"; };
 		CC85C65ED890060037FF65B8 /* TextExpansionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextExpansionService.swift; sourceTree = "<group>"; };
 		CCA7F227FA6D4C8C1D3F8FFC /* ClipboardMonitorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMonitorService.swift; sourceTree = "<group>"; };
@@ -1136,6 +1140,7 @@
 				8E083C8E866382DAE42CF266 /* PolicyWeightStore.swift */,
 				0800B7B735BDF4C6D5139A98 /* PomodoroService.swift */,
 				C651FB15781FEA6544A06C24 /* PostHogService.swift */,
+				39C154861E3B578799597C0C /* PowerActivityService.swift */,
 				FC6BD74FF30A5B057920BD99 /* PreferenceEngine.swift */,
 				5786D3FADFD26CC82DF64A2D /* ProjectEngine.swift */,
 				FE89AA4E41C972A58C582686 /* ProposalStore.swift */,
@@ -1160,6 +1165,7 @@
 				70F49814EE23560DC880AF05 /* SupabaseService.swift */,
 				16910211171E9C8F0190DBD8 /* SystemStats.swift */,
 				97DDDB02E420ABF8DBFE372C /* SystemVolumeControl.swift */,
+				CB5E705F6B2C5AD8B18DDE19 /* SystemVolumeObserver.swift */,
 				93237F9C8CE985B51E1E1062 /* TaskAnnouncer.swift */,
 				CFF958B5FD4E56A9C7FAD9C1 /* TaskContextCapture.swift */,
 				5F7B8008851E1B5BF3C377C9 /* TaskRunLedger.swift */,
@@ -1694,6 +1700,7 @@
 				C40BCBB02ECED949CBC4CCC9 /* PomodoroModule.swift in Sources */,
 				825330BA14EA4E341A1E7CDE /* PomodoroService.swift in Sources */,
 				956F2F42D976FA6EC4E2E24C /* PostHogService.swift in Sources */,
+				B70A65DA6E580C099F230C9F /* PowerActivityService.swift in Sources */,
 				2458F6AF7B9C93871E0CD473 /* PreferenceEngine.swift in Sources */,
 				DEB927FF2923FA768D56E060 /* ProjectEngine.swift in Sources */,
 				D9000B1F5D5817FE0E25FB6C /* ProjectEvent.swift in Sources */,
@@ -1739,6 +1746,7 @@
 				F7C95FAD33EB68AE8FDC725E /* SystemModule.swift in Sources */,
 				2FC60DCF59BF127C97B0EB6D /* SystemStats.swift in Sources */,
 				54B4D7164B0307CA0AA8DB8F /* SystemVolumeControl.swift in Sources */,
+				A3DA846A8391C982F1A46426 /* SystemVolumeObserver.swift in Sources */,
 				7576041D738DD83C41157C44 /* TaskAnnouncer.swift in Sources */,
 				BF372E184A15C8EB98F9C7B8 /* TaskContextCapture.swift in Sources */,
 				7FC3E90009139606A47CB42F /* TaskRunLedger.swift in Sources */,

@@ -156,6 +156,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // which now only supplies history.
         NotificationBannerWatcher.shared.start()
 
+        // Plug/unplug and low-battery notices for the collapsed notch. Started
+        // before the strip so the first read establishes a baseline rather than
+        // announcing "plugged in" just because the laptop is on a charger.
+        PowerActivityService.shared.start()
+
+        // Volume HUD for changes that did NOT come from the media keys —
+        // Control Center, a script, a headset button.
+        SystemVolumeObserver.shared.start()
+
         // Rotating collapsed strip. Voice/agent state preempts it in the pill.
         LiveActivityService.shared.start()
 
