@@ -186,10 +186,45 @@ final class CodeHostingService: ObservableObject {
         return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
     }
 
+    /// Cached for the life of the process, and that is the entire point.
+    ///
+    /// THE PROMPT THIS FIXES. Reading with `kSecReturnData` consults the item's
+    /// ACL, and the ACL is bound to the code signature of whatever built the
+    /// item. Any subsequently re-signed build of Mira is, to the Keychain, a
+    /// different program — so macOS puts up "Mira wants to access key
+    /// mira.codehosting… enter the login keychain password".
+    ///
+    /// That alone would be a one-time annoyance. What made it a defect is that
+    /// `refresh()` reads the token and runs on a FIVE-MINUTE TIMER, so the
+    /// dialog came back every five minutes for as long as the app was open.
+    /// Caching means the Keychain is touched at most once per launch.
+    ///
+    /// (The same signature-binding is why the microphone TCC grant stopped
+    /// applying — worth recognising the shape when a permission that was
+    /// definitely granted starts reporting as ungranted.)
+    private nonisolated(unsafe) static var cachedToken: String?
+    /// Set when the user dismisses the dialog. Without it, "denied" and "no
+    /// token yet" are indistinguishable and the timer asks again forever —
+    /// which is precisely the behaviour that trains people to click Always
+    /// Allow on dialogs they have not read.
+    private nonisolated(unsafe) static var readDenied = false
+    private static let tokenLock = NSLock()
+
+    nonisolated static func clearTokenCache() {
+        tokenLock.lock(); defer { tokenLock.unlock() }
+        cachedToken = nil
+        readDenied = false
+    }
+
     /// `nonisolated` so it can be called off the main actor — see `refresh()`
     /// for why it must be. It touches no actor state; the Keychain query is
     /// built from constants.
     nonisolated static func readToken() -> String? {
+        tokenLock.lock()
+        if let cachedToken { tokenLock.unlock(); return cachedToken }
+        if readDenied { tokenLock.unlock(); return nil }
+        tokenLock.unlock()
+
         let q: [CFString: Any] = [
             kSecClass:              kSecClassGenericPassword,
             kSecAttrService:        kcService,
@@ -198,14 +233,31 @@ final class CodeHostingService: ObservableObject {
             kSecReturnData:         true,
         ]
         var item: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
+
+        tokenLock.lock(); defer { tokenLock.unlock() }
+
+        // The user said no, or the ACL rejected this build. Either way, stop
+        // asking for this launch.
+        if status == errSecAuthFailed || status == errSecUserCanceled
+            || status == errSecInteractionNotAllowed {
+            readDenied = true
+            return nil
+        }
+
+        guard status == errSecSuccess,
               let data = item as? Data,
               let s = String(data: data, encoding: .utf8), !s.isEmpty
         else { return nil }
+
+        cachedToken = s
         return s
     }
 
     func setToken(_ token: String) {
+        // Reconnecting must invalidate the cache, or the old token survives the
+        // rest of the launch and the user's fix appears not to have worked.
+        Self.clearTokenCache()
         Self.writeToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
         hasToken = Self.tokenExists()
         pullRequests = []
