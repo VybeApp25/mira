@@ -628,10 +628,11 @@ private struct NotificationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
-            Image(systemName: note.icon)
-                .font(.system(size: 12))
-                .foregroundColor(accent.opacity(0.85))
-                .frame(width: 18)
+            NotificationAppIcon(appName: note.app,
+                                bundleID: note.bundleID,
+                                fallbackSymbol: note.icon,
+                                size: 18,
+                                tint: accent.opacity(0.85))
 
             VStack(alignment: .leading, spacing: 1) {
                 // App, then sender. Same reason as the collapsed strip: without

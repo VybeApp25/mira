@@ -86,6 +86,7 @@
 		344D95E382740D9C5F18B221 /* MiraMCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F1050BC7A38484ACA089C0 /* MiraMCPServer.swift */; };
 		344E90E12D4892683DF73CC0 /* narration-32avewxye1iet.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7EABAFC55507CAA7A38F7F58 /* narration-32avewxye1iet.mp3 */; };
 		3485F74889771FC04FA0AFB3 /* NotchModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7CBB0F6BBD35FC69EF348B /* NotchModule.swift */; };
+		35284522AB7658901578BD8C /* AppIconResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E704BE5155B7B1A32C18399D /* AppIconResolver.swift */; };
 		36110D09C884756AACDDC0D8 /* ChatWidgetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1AEB713ACF9A3F9B5F5080 /* ChatWidgetService.swift */; };
 		373C68AA6EF019FE3AC80567 /* WorkspaceReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77428E1C00142D230E8329 /* WorkspaceReview.swift */; };
 		378B4EFC70F258DEFA0B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94EB42557307F47F93C50C46 /* ConversationStore.swift */; };
@@ -735,6 +736,7 @@
 		E5298E4DE78C50A514F1EF15 /* HoverInsightModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInsightModel.swift; sourceTree = "<group>"; };
 		E60A3BC0F1CEC3BC60BC98A7 /* WorkspaceReviewAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReviewAgent.swift; sourceTree = "<group>"; };
 		E631734099EB92C31D4A0F8E /* NotchSnoozeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchSnoozeService.swift; sourceTree = "<group>"; };
+		E704BE5155B7B1A32C18399D /* AppIconResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconResolver.swift; sourceTree = "<group>"; };
 		E7CC8948A6B01CB2781B9B00 /* findmy.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = findmy.md; sourceTree = "<group>"; };
 		E7E9AEEB9C06278460466850 /* DashboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModule.swift; sourceTree = "<group>"; };
 		E814E13E9DB836D50FA2620E /* AgentHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHUDView.swift; sourceTree = "<group>"; };
@@ -1032,6 +1034,7 @@
 				D73278851B4A9186CFAFF3F6 /* AICodingHookInstaller.swift */,
 				CA96F82E7C6B6E368756D462 /* AnnotationCanvasService.swift */,
 				6F772483B2BBEC52FD2ADF43 /* AppContextService.swift */,
+				E704BE5155B7B1A32C18399D /* AppIconResolver.swift */,
 				9F9FC52894E6781F1F7A96F4 /* AssemblyAIService.swift */,
 				8969DD0E91D63DF2CD68BDED /* AssemblyAIStreamingService.swift */,
 				2AA27837C290A2F5CB00CCC7 /* AttentionEngine.swift */,
@@ -1495,6 +1498,7 @@
 				0AF830434EA77952F5C4D82C /* AnnotationCanvasService.swift in Sources */,
 				672D0A3D7C0666D0587DB0C3 /* AppContextService.swift in Sources */,
 				F0D87835F713093C1687DD76 /* AppDelegate.swift in Sources */,
+				35284522AB7658901578BD8C /* AppIconResolver.swift in Sources */,
 				7173157023ACF18C2D2F2942 /* AppSecrets.swift in Sources */,
 				77D6454BBE135552947BC1F8 /* AssemblyAIService.swift in Sources */,
 				26F353AEAA6B96BA0C721AA9 /* AssemblyAIStreamingService.swift in Sources */,

@@ -38,6 +38,10 @@ struct LiveActivity: Equatable, Identifiable {
     /// instead of an SF Symbol — "the app icon and name" is most of what makes
     /// a notification glance readable at a glance.
     var appName: String?
+    /// Bundle identifier when the source knows it. Exact, so it beats resolving
+    /// by name; empty for anything read off the accessibility tree, which only
+    /// carries the display name.
+    var bundleID: String = ""
 
     var id: Int { kind.rawValue }
 }
@@ -270,7 +274,8 @@ final class LiveActivityService: ObservableObject {
                             icon: latest.icon,
                             text: text,
                             tint: Color(red: 0.55, green: 0.70, blue: 1.0),
-                            appName: latest.app)
+                            appName: latest.app,
+                            bundleID: latest.bundleID)
     }
 
     private func pomodoroActivity() -> LiveActivity? {
@@ -320,10 +325,15 @@ struct LiveActivityStrip: View {
     var body: some View {
         if let activity = service.current {
             HStack(spacing: 5) {
-                if let appIcon = Self.icon(forApp: activity.appName) {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .frame(width: 13, height: 13)
+                // An activity that names an app draws that app's real icon, the
+                // way a native banner does. Everything else (timer, event,
+                // battery) has no app and keeps its SF Symbol.
+                if let appName = activity.appName, !appName.isEmpty {
+                    NotificationAppIcon(appName: appName,
+                                        bundleID: activity.bundleID,
+                                        fallbackSymbol: activity.icon,
+                                        size: 14,
+                                        tint: activity.tint ?? .white.opacity(0.65))
                 } else {
                     Image(systemName: activity.icon)
                         .font(.system(size: 9, weight: .semibold))
@@ -347,16 +357,4 @@ struct LiveActivityStrip: View {
         }
     }
 
-    /// Real icon for the posting app, matched by the display name Notification
-    /// Center gives us — that is the only identifier the accessibility tree
-    /// exposes, so there is no bundle id to look up. Falls back to the SF
-    /// Symbol when the app isn't running or the name doesn't match, which is
-    /// why the symbol is still chosen for every notification.
-    static func icon(forApp name: String?) -> NSImage? {
-        guard let name, !name.isEmpty else { return nil }
-        guard let app = NSWorkspace.shared.runningApplications.first(where: {
-            $0.localizedName?.caseInsensitiveCompare(name) == .orderedSame
-        }), let icon = app.icon else { return nil }
-        return icon
-    }
 }
