@@ -71,6 +71,7 @@
 		2984C9424D7B8E9A636ADAE5 /* AgentOutputsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42036566FF695AD6554E8E01 /* AgentOutputsView.swift */; };
 		29FFDF091455E96338C17ADD /* ClaudeCoworkSessionWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BEE1A25EB8B1FA65497C82 /* ClaudeCoworkSessionWatcher.swift */; };
 		2AC0A79B1C9F25ACE71A1EBF /* gmail.md in Resources */ = {isa = PBXBuildFile; fileRef = 44B3A75742D4282073152A2A /* gmail.md */; };
+		2B44D21EA4225E44197AA0FB /* DesktopAppBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB577E24EB39E3FD426CEB3 /* DesktopAppBridge.swift */; };
 		2BC76E2CC98B202D34533CAE /* ActionChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B706458B64024088E8769D /* ActionChipsView.swift */; };
 		2CB842A914171B3FBE05C76B /* SystemHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF1DAA7C22977CB338F58CE2 /* SystemHUDView.swift */; };
 		2CD31292CD2EE71A3191CC39 /* agent-close.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7101F70E0818E0AA673FD29A /* agent-close.mp3 */; };
@@ -444,6 +445,7 @@
 		1CC06F43C9819E4894E14159 /* BluetoothModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothModule.swift; sourceTree = "<group>"; };
 		1CEE217E50B8D0A07CCF763F /* ComputerUseTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUseTabView.swift; sourceTree = "<group>"; };
 		1D67D51F8B863530212BE3B1 /* MenuBarIconManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconManager.swift; sourceTree = "<group>"; };
+		1EB577E24EB39E3FD426CEB3 /* DesktopAppBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopAppBridge.swift; sourceTree = "<group>"; };
 		1F3971B5E467CC08CB2DB4FE /* BatteryStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryStatus.swift; sourceTree = "<group>"; };
 		1F7CBB0F6BBD35FC69EF348B /* NotchModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchModule.swift; sourceTree = "<group>"; };
 		202153A0D5CD38BE3CE8FFD6 /* IslandChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandChatView.swift; sourceTree = "<group>"; };
@@ -1095,6 +1097,7 @@
 				CF2462FB71CB608ADB4E8DA2 /* CronScheduler.swift */,
 				B9CA3F4D87726EE90EFAC327 /* CursorBubbleService.swift */,
 				07352DA506773E3BD68EC826 /* CursorCompanionManager.swift */,
+				1EB577E24EB39E3FD426CEB3 /* DesktopAppBridge.swift */,
 				81D42A4E6441243BC17C65E6 /* DeviceChangeActivityService.swift */,
 				BCA1642B67ECD8E3E876DBAC /* DeviceFingerprintService.swift */,
 				326B7D6321AF51C46504B103 /* DictationAnywhereService.swift */,
@@ -1600,6 +1603,7 @@
 				442F102DD6A49D8BD0BF9EFF /* DashboardProfile.swift in Sources */,
 				295B88FB781A51D2F8319CCB /* DayProgressModule.swift in Sources */,
 				EC2B348DCE797B43A9E9AAEA /* DesignSystem.swift in Sources */,
+				2B44D21EA4225E44197AA0FB /* DesktopAppBridge.swift in Sources */,
 				DC8DF651F4B82DD4158347A7 /* DeviceChangeActivityService.swift in Sources */,
 				80C550ECBF46E28954AA4041 /* DeviceFingerprintService.swift in Sources */,
 				09D8ACCC8D4B80ABE6938560 /* DictationAnywhereService.swift in Sources */,
